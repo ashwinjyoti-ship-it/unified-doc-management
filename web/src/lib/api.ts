@@ -167,6 +167,21 @@ class ApiClient {
       '/sync', { method: 'POST', body: JSON.stringify({ operations }) }
     );
   }
+
+  async uploadFile(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+    const res = await fetch(`${API_BASE}/uploads`, { method: 'POST', headers, body: formData });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Upload failed');
+    }
+    return res.json() as Promise<{ url: string; filename: string; contentType: string; size: number }>;
+  }
 }
 
 export const api = new ApiClient();

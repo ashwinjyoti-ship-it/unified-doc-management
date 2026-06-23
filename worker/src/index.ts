@@ -8,6 +8,7 @@ import databaseRoutes from './routes/database';
 import commentsRoutes from './routes/comments';
 import searchRoutes from './routes/search';
 import notificationsRoutes from './routes/notifications';
+import uploadsRoutes from './routes/uploads';
 export { CollabRoom } from './collab-room';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -28,6 +29,12 @@ app.use('/api/*', async (c, next) => {
   if (publicPaths.includes(c.req.path)) {
     return next();
   }
+  if (c.req.path.startsWith('/api/ws/')) {
+    return next();
+  }
+  if (c.req.method === 'GET' && c.req.path.startsWith('/api/uploads/')) {
+    return next();
+  }
   if (c.req.path === '/api/auth/me' || c.req.path === '/api/auth/logout') {
     return next();
   }
@@ -39,6 +46,7 @@ app.route('/api', databaseRoutes);
 app.route('/api', commentsRoutes);
 app.route('/api/search', searchRoutes);
 app.route('/api/notifications', notificationsRoutes);
+app.route('/api', uploadsRoutes);
 
 app.get('/api/ws/:pageId', async (c) => {
   const pageId = c.req.param('pageId');

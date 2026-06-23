@@ -8,7 +8,8 @@
     {
       "binding": "DB",
       "database_name": "unified-doc-db",
-      "database_id": "a01602e1-1253-442c-960f-0802f5c0920e"
+      "database_id": "a01602e1-1253-442c-960f-0802f5c0920e",
+      "migrations_dir": "migrations"
     }
   ],
   "durable_objects": {
@@ -19,5 +20,11 @@
         "script_name": "ash-doc"
       }
     ]
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "unified-doc-uploads"
+    }
+  ]
 }
