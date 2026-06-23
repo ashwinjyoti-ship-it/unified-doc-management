@@ -1,0 +1,23 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --external:cloudflare:workers",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply unified-doc-db --remote",
+    "db:migrate:local": "wrangler d1 migrations apply unified-doc-db --local",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "hono": "^4.7.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250317.0",
+    "esbuild": "^0.25.1",
+    "typescript": "^5.8.2",
+    "wrangler": "^4.5.0"
+  }
+}

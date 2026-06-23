@@ -1,0 +1,41 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "unified-doc-management",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "unified-doc-db",
+      "database_id": "00000000-0000-0000-0000-000000000001",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COLLAB_ROOM",
+        "class_name": "CollabRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["CollabRoom"]
+    }
+  ],
+  "vars": {
+    "JWT_SECRET": "dev-secret-change-in-production"
+  }
+}
