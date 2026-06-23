@@ -10,7 +10,7 @@ import type { Block, Comment, Tag } from '../types';
 import { jsPDF } from 'jspdf';
 import {
   Menu, History, MessageSquare, FileCode, Link2, Send, RotateCcw,
-  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus,
+  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
@@ -34,12 +34,16 @@ export default function PageView() {
   const [versions, setVersions] = useState<Array<{ id: string; title: string; created_at: number; author_name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [importing, setImporting] = useState(false);
   const [pageTags, setPageTags] = useState<Tag[]>([]);
   const [favorited, setFavorited] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
+  const editorJsonRef = useRef<object | null>(null);
+  const editorHtmlRef = useRef<string>('');
 
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
@@ -65,6 +69,8 @@ export default function PageView() {
         setBacklinks(data.backlinks);
         setEditorContent(blocksToTiptapHtml(data.blocks));
         await cachePage(pageId, data);
+        setDirty(false);
+        setLastSaved(new Date());
       } else {
         const cached = await getCachedPage(pageId) as { page: { title: string; type: string; visibility: string }; blocks: Block[] } | undefined;
         if (cached) {
@@ -77,6 +83,12 @@ export default function PageView() {
       }
     } catch (err) {
       console.error(err);
+      const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
+      if (remaining.length > 0) {
+        navigate(`/page/${remaining[0].id}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     } finally {
       setLoading(false);
     }
@@ -129,16 +141,14 @@ export default function PageView() {
 
   const saveTitle = async (newTitle: string) => {
     if (!pageId) return;
-    setTitle(newTitle);
     if (online) {
       await api.updatePage(pageId, { title: newTitle });
       loadPages();
     }
   };
 
-  const saveBlocks = useCallback(async (html: string, json: object) => {
+  const persistBlocks = useCallback(async (html: string, json: object) => {
     if (!pageId) return;
-    setEditorContent(html);
     const blockData = tiptapJsonToBlocks(json as Record<string, unknown>).map((b, i) => ({
       ...b,
       id: blocks[i]?.id,
@@ -150,6 +160,9 @@ export default function PageView() {
       try {
         const { blocks: saved } = await api.saveBlocks(pageId, blockData);
         setBlocks(saved);
+        setEditorContent(html);
+        setDirty(false);
+        setLastSaved(new Date());
         loadVersionHistory();
       } finally {
         setSaving(false);
@@ -161,11 +174,50 @@ export default function PageView() {
         entityId: pageId,
         payload: { pageId, blocks: blockData },
       });
+      setDirty(false);
+      setLastSaved(new Date());
     }
   }, [pageId, blocks, online]);
 
+  const handleEditorChange = useCallback((html: string, json: object) => {
+    editorHtmlRef.current = html;
+    editorJsonRef.current = json;
+    setDirty(true);
+  }, []);
+
+  const saveNow = useCallback(async () => {
+    if (!pageId || saving) return;
+    await saveTitle(title);
+    if (markdownMode) {
+      setSaving(true);
+      try {
+        await api.saveMarkdown(pageId, markdown);
+        setDirty(false);
+        setLastSaved(new Date());
+        await loadPage();
+        loadVersionHistory();
+      } finally {
+        setSaving(false);
+      }
+    } else if (editorJsonRef.current) {
+      await persistBlocks(editorHtmlRef.current, editorJsonRef.current);
+    }
+  }, [pageId, saving, title, markdownMode, markdown, persistBlocks]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveNow();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [saveNow]);
+
   const toggleMarkdown = async () => {
     if (!pageId) return;
+    if (dirty) await saveNow();
     if (!markdownMode) {
       const { markdown: md } = await api.getMarkdown(pageId);
       setMarkdown(md);
@@ -302,9 +354,16 @@ export default function PageView() {
     if (!pageId) return;
     const confirmed = window.confirm(`Delete "${title || 'Untitled'}"? This cannot be undone.`);
     if (!confirmed) return;
+    const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
     await api.deletePage(pageId);
     await loadPages();
-    navigate('/');
+    await loadFavorites();
+    await loadRecent();
+    if (remaining.length > 0) {
+      navigate(`/page/${remaining[0].id}`, { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
   };
 
   if (loading) {
@@ -321,20 +380,54 @@ export default function PageView() {
         onChange={handleImport}
       />
 
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-green-mist bg-warm-white/80 backdrop-blur sticky top-0 z-10">
-        <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1">
-          <Menu className="w-5 h-5" />
-        </button>
+      <header className="flex flex-col gap-2 px-4 py-3 border-b border-green-mist bg-warm-white/80 backdrop-blur sticky top-0 z-10">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 shrink-0">
+            <Menu className="w-5 h-5" />
+          </button>
 
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={(e) => saveTitle(e.target.value)}
-          className="flex-1 text-xl font-semibold bg-transparent border-none outline-none text-charcoal"
-          placeholder="Untitled"
-        />
+          <input
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
+            onBlur={(e) => saveTitle(e.target.value)}
+            className="flex-1 min-w-0 text-xl font-semibold bg-transparent border-none outline-none text-charcoal"
+            placeholder="Untitled"
+          />
 
-        <div className="flex items-center gap-2">
+          {/* Save + status + delete — always visible, never scrolled away */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {saving ? (
+              <span className="text-xs text-mid-gray whitespace-nowrap">Saving...</span>
+            ) : dirty ? (
+              <span className="text-xs text-amber-600 whitespace-nowrap">Unsaved</span>
+            ) : lastSaved ? (
+              <span className="text-xs text-sage whitespace-nowrap hidden sm:inline-flex items-center gap-1">
+                <Check className="w-3 h-3" /> Saved
+              </span>
+            ) : null}
+
+            <Tooltip text="Save page (Ctrl+S) — saves title and content">
+              <button
+                onClick={saveNow}
+                disabled={saving}
+                className={`p-2 rounded-lg flex items-center gap-1 text-sm font-medium ${
+                  dirty ? 'bg-forest text-white hover:bg-dark-teal' : 'hover:bg-linen text-charcoal'
+                }`}
+              >
+                <Save className="w-4 h-4" />
+                <span className="hidden sm:inline">Save</span>
+              </button>
+            </Tooltip>
+
+            <Tooltip text="Permanently delete this page">
+              <button onClick={deletePage} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
           {presence.length > 0 && (
             <div className="flex items-center gap-1.5 mr-1">
               <div className="flex -space-x-2">
@@ -355,8 +448,7 @@ export default function PageView() {
             </div>
           )}
 
-          {saving && <span className="text-xs text-mid-gray">Saving...</span>}
-          {importing && <span className="text-xs text-mid-gray">Importing...</span>}
+          {importing && <span className="text-xs text-mid-gray shrink-0">Importing...</span>}
 
           <Tooltip text="Who can see this page: Private, Shared, or Public">
             <select
@@ -451,12 +543,6 @@ export default function PageView() {
               <MessageSquare className="w-4 h-4" />
             </button>
           </Tooltip>
-
-          <Tooltip text="Permanently delete this page">
-            <button onClick={deletePage} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
-              <Trash2 className="w-4 h-4" />
-            </button>
-          </Tooltip>
         </div>
       </header>
 
@@ -499,13 +585,12 @@ export default function PageView() {
           ) : markdownMode ? (
             <textarea
               value={markdown}
-              onChange={(e) => setMarkdown(e.target.value)}
-              onBlur={() => api.saveMarkdown(pageId!, markdown).then(() => { loadPage(); loadVersionHistory(); })}
+              onChange={(e) => { setMarkdown(e.target.value); setDirty(true); }}
               className="w-full min-h-[400px] font-mono text-sm bg-linen/50 rounded-xl p-4 border-none outline-none resize-none"
               placeholder="Write markdown here..."
             />
           ) : (
-            <BlockEditor content={editorContent} onChange={saveBlocks} />
+            <BlockEditor content={editorContent} onChange={handleEditorChange} />
           )}
 
           {backlinks.length > 0 && (
