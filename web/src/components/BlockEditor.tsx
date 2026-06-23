@@ -7,11 +7,13 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload,
 } from 'lucide-react';
+import { SlashCommands } from './SlashCommands';
+import { api } from '../lib/api';
 
 const lowlight = createLowlight(common);
 
@@ -22,6 +24,13 @@ interface BlockEditorProps {
 }
 
 export default function BlockEditor({ content, onChange, editable = true }: BlockEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadImage = useCallback(async (file: File): Promise<string> => {
+    const result = await api.uploadFile(file);
+    return result.url;
+  }, []);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
@@ -31,6 +40,7 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
       CodeBlockLowlight.configure({ lowlight }),
+      SlashCommands.configure({ onImageUpload: uploadImage }),
     ],
     content,
     editable,
@@ -46,9 +56,22 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
   }, [content, editor]);
 
   const addImage = useCallback(() => {
-    const url = window.prompt('Image URL:');
-    if (url && editor) editor.chain().focus().setImage({ src: url }).run();
-  }, [editor]);
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editor) return;
+    try {
+      const url = await uploadImage(file);
+      editor.chain().focus().setImage({ src: url, alt: file.name }).run();
+    } catch (err) {
+      console.error('Upload failed:', err);
+      const url = window.prompt('Upload failed. Enter image URL instead:');
+      if (url) editor.chain().focus().setImage({ src: url }).run();
+    }
+    e.target.value = '';
+  }, [editor, uploadImage]);
 
   const addLink = useCallback(() => {
     const url = window.prompt('Link URL:');
@@ -69,6 +92,13 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
 
   return (
     <div className="relative">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.pdf,.doc,.docx,.txt,.md"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
       {editable && (
         <div className="flex flex-wrap gap-1 mb-4 p-2 bg-linen/50 rounded-xl sticky top-0 z-10">
           <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
@@ -113,8 +143,11 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
             <Code className="w-4 h-4" />
           </ToolbarButton>
           <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton onClick={addImage}>
+          <ToolbarButton onClick={addImage} active={editor.isActive('image')}>
             <ImageIcon className="w-4 h-4" />
+          </ToolbarButton>
+          <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Upload file">
+            <Upload className="w-4 h-4" />
           </ToolbarButton>
           <ToolbarButton onClick={addLink} active={editor.isActive('link')}>
             <Link2 className="w-4 h-4" />

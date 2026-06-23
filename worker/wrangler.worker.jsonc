@@ -32,5 +32,11 @@
       "tag": "v1",
       "new_classes": ["CollabRoom"]
     }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS",
+      "bucket_name": "unified-doc-uploads"
+    }
   ]
 }

@@ -1,6 +1,7 @@
 export interface Env {
   DB: D1Database;
   COLLAB_ROOM: DurableObjectNamespace;
+  UPLOADS: R2Bucket;
   ASSETS: Fetcher;
   JWT_SECRET: string;
 }
