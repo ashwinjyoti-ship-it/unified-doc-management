@@ -8,7 +8,7 @@ import DatabaseView from './DatabaseView';
 import type { Block, Comment } from '../types';
 import {
   Menu, History, MessageSquare, FileCode, Link2, Send, RotateCcw,
-  Download, Upload, X,
+  Download, Upload, X, Trash2,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
@@ -203,6 +203,15 @@ export default function PageView() {
     setSidePanel((current) => (current === panel ? null : panel));
   };
 
+  const deletePage = async () => {
+    if (!pageId) return;
+    const confirmed = window.confirm(`Delete "${title || 'Untitled'}"? This cannot be undone.`);
+    if (!confirmed) return;
+    await api.deletePage(pageId);
+    await loadPages();
+    navigate('/');
+  };
+
   if (loading) {
     return <div className="flex-1 flex items-center justify-center text-mid-gray">Loading...</div>;
   }
@@ -302,6 +311,13 @@ export default function PageView() {
             title="Comments"
           >
             <MessageSquare className="w-4 h-4" />
+          </button>
+          <button
+            onClick={deletePage}
+            className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+            title="Delete page"
+          >
+            <Trash2 className="w-4 h-4" />
           </button>
         </div>
       </header>
