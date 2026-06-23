@@ -19,7 +19,7 @@
     {
       "binding": "DB",
       "database_name": "unified-doc-db",
-      "database_id": "00000000-0000-0000-0000-000000000001",
+      "database_id": "a01602e1-1253-442c-960f-0802f5c0920e",
       "migrations_dir": "migrations"
     }
   ],
