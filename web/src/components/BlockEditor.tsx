@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
 import { api } from '../lib/api';
+import Tooltip from './Tooltip';
 
 const lowlight = createLowlight(common);
 
@@ -80,14 +81,16 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
 
   if (!editor) return null;
 
-  const ToolbarButton = ({ onClick, active, children }: { onClick: () => void; active?: boolean; children: React.ReactNode }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`p-1.5 rounded-md transition-colors ${active ? 'bg-sage/40 text-forest' : 'hover:bg-linen text-charcoal'}`}
-    >
-      {children}
-    </button>
+  const ToolbarButton = ({ onClick, active, tooltip, children }: { onClick: () => void; active?: boolean; tooltip: string; children: React.ReactNode }) => (
+    <Tooltip text={tooltip}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`p-1.5 rounded-md transition-colors ${active ? 'bg-sage/40 text-forest' : 'hover:bg-linen text-charcoal'}`}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -101,55 +104,55 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       />
       {editable && (
         <div className="flex flex-wrap gap-1 mb-4 p-2 bg-linen/50 rounded-xl sticky top-0 z-10">
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
+          <ToolbarButton tooltip="Bold (Ctrl+B)" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
             <Bold className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
+          <ToolbarButton tooltip="Italic (Ctrl+I)" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
             <Italic className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
+          <ToolbarButton tooltip="Strikethrough" onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
             <Strikethrough className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive('code')}>
+          <ToolbarButton tooltip="Inline code" onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive('code')}>
             <Code className="w-4 h-4" />
           </ToolbarButton>
           <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })}>
+          <ToolbarButton tooltip="Heading 1 — large section title" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })}>
             <Heading1 className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })}>
+          <ToolbarButton tooltip="Heading 2 — medium section title" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })}>
             <Heading2 className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })}>
+          <ToolbarButton tooltip="Heading 3 — small section title" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })}>
             <Heading3 className="w-4 h-4" />
           </ToolbarButton>
           <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
+          <ToolbarButton tooltip="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
             <List className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
+          <ToolbarButton tooltip="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
             <ListOrdered className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
+          <ToolbarButton tooltip="To-do checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
             <CheckSquare className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
+          <ToolbarButton tooltip="Block quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
             <Quote className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+          <ToolbarButton tooltip="Horizontal divider line" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
             <Minus className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
+          <ToolbarButton tooltip="Code block with syntax highlighting" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
             <Code className="w-4 h-4" />
           </ToolbarButton>
           <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton onClick={addImage} active={editor.isActive('image')}>
+          <ToolbarButton tooltip="Insert image from file or URL" onClick={addImage} active={editor.isActive('image')}>
             <ImageIcon className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Upload file">
+          <ToolbarButton tooltip="Upload a file (image, PDF, document)" onClick={() => fileInputRef.current?.click()}>
             <Upload className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton onClick={addLink} active={editor.isActive('link')}>
+          <ToolbarButton tooltip="Insert a hyperlink" onClick={addLink} active={editor.isActive('link')}>
             <Link2 className="w-4 h-4" />
           </ToolbarButton>
         </div>
