@@ -50,9 +50,11 @@ function AppLayout() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <div className="md:hidden flex items-center p-3 border-b border-green-mist bg-warm-white">
-          <button onClick={() => setSidebarOpen(true)} className="p-1">
-            <Menu className="w-5 h-5" />
-          </button>
+          <Tooltip text="Open navigation sidebar">
+            <button onClick={() => setSidebarOpen(true)} className="p-1">
+              <Menu className="w-5 h-5" />
+            </button>
+          </Tooltip>
           <span className="ml-2 font-semibold text-forest text-sm">Unified Doc Management</span>
         </div>
         <Routes>
