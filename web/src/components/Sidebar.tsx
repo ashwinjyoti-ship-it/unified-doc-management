@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useStore } from '../lib/store';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
+import { pageItemClass, pageTreeRowClass } from '../lib/pageSelection';
+import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
+import OperationBanner from './OperationBanner';
+import { applyImportContent } from '../lib/importContent';
 import type { Page } from '../types';
 import {
   Plus, ChevronRight, ChevronDown, FileText, Database,
@@ -26,12 +30,12 @@ function PageTreeItem({
   const children = pages.filter((p) => p.parent_id === page.id);
   const isSelected = selected?.has(page.id);
 
+  const isActive = pageId === page.id;
+
   return (
     <div>
       <div
-        className={`w-full flex items-center gap-1 rounded-lg text-sm transition-colors ${
-          pageId === page.id ? 'bg-sage/30 text-forest font-medium' : 'hover:bg-linen text-charcoal'
-        }`}
+        className={pageTreeRowClass(isActive)}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {bulkMode && (
@@ -94,9 +98,7 @@ function PageListSection({ title, icon, pages, tooltip }: { title: string; icon:
           <button
             key={p.id}
             onClick={() => navigate(`/page/${p.id}`)}
-            className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              pageId === p.id ? 'bg-sage/30 text-forest font-medium' : 'hover:bg-linen text-charcoal'
-            }`}
+            className={pageItemClass(pageId === p.id, 'py-1.5')}
           >
             <span>{p.icon || '📄'}</span>
             <span className="truncate flex-1 text-left">{p.title}</span>
@@ -114,12 +116,20 @@ export default function Sidebar() {
     loadPages, loadFavorites, loadRecent,
   } = useStore();
   const navigate = useNavigate();
+  const { pageId } = useParams();
   const rootPages = pages.filter((p) => !p.parent_id);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [importingUrl, setImportingUrl] = useState(false);
+  const [operationLabel, setOperationLabel] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const [importModal, setImportModal] = useState<{
+    sourceLabel: string;
+    sourceType: 'file' | 'url';
+    content: string;
+    suggestedTitle?: string;
+  } | null>(null);
 
   const handleNewPage = async (type: string = 'page') => {
     const page = await createPage({ type, title: type === 'database' ? 'New Database' : 'Untitled' });
@@ -156,19 +166,63 @@ export default function Sidebar() {
     await loadPages();
   };
 
-  const handleImportUrl = async () => {
-    const url = window.prompt('Enter URL to import as a new page:');
-    if (!url || !workspace) return;
-    setImportingUrl(true);
+  const cancelOperation = () => {
+    abortRef.current?.abort();
+    setOperationLabel(null);
+    setImportModal(null);
+  };
+
+  const runImport = async (mode: ImportMode) => {
+    if (!importModal || !workspace) return;
+    const modal = importModal;
+    setImportModal(null);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setOperationLabel('Importing...');
     try {
-      const { page } = await api.importFromUrlAsPage(url, workspace.id);
+      const targetId = await applyImportContent({
+        content: modal.content,
+        mode,
+        pageId: pageId,
+        workspaceId: workspace.id,
+        suggestedTitle: modal.suggestedTitle,
+        signal: controller.signal,
+      });
       await loadPages();
       await loadRecent();
-      navigate(`/page/${page.id}`);
+      if (mode === 'new' || targetId !== pageId) {
+        navigate(`/page/${targetId}`);
+      }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       alert(err instanceof Error ? err.message : 'Import failed');
     } finally {
-      setImportingUrl(false);
+      setOperationLabel(null);
+      abortRef.current = null;
+    }
+  };
+
+  const handleImportUrl = async () => {
+    const url = window.prompt('Enter URL to import:');
+    if (!url || !workspace) return;
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setOperationLabel('Fetching URL...');
+    try {
+      const { title, markdown } = await api.importFromUrl(url, controller.signal);
+      setImportModal({
+        sourceLabel: url,
+        sourceType: 'url',
+        content: markdown,
+        suggestedTitle: title,
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
+      alert(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setOperationLabel(null);
+      abortRef.current = null;
     }
   };
 
@@ -196,8 +250,8 @@ export default function Sidebar() {
                 <Database className="w-4 h-4" />
               </button>
             </Tooltip>
-            <Tooltip text="Import a web page from a URL as a new note">
-              <button onClick={handleImportUrl} disabled={importingUrl} className="btn-secondary text-sm p-2">
+            <Tooltip text="Import a web page from a URL">
+              <button onClick={handleImportUrl} disabled={!!operationLabel} className="btn-secondary text-sm p-2">
                 <Link2 className="w-4 h-4" />
               </button>
             </Tooltip>
@@ -290,6 +344,19 @@ export default function Sidebar() {
           </Tooltip>
         </div>
       </aside>
+
+      {importModal && (
+        <ImportOptionsModal
+          open
+          sourceLabel={importModal.sourceLabel}
+          sourceType={importModal.sourceType}
+          onClose={() => setImportModal(null)}
+          onConfirm={runImport}
+        />
+      )}
+      {operationLabel && (
+        <OperationBanner label={operationLabel} onCancel={cancelOperation} />
+      )}
     </>
   );
 }

@@ -6,6 +6,9 @@ import { useCollab } from '../hooks/useCollab';
 import BlockEditor, { tiptapJsonToBlocks, blocksToTiptapHtml } from './BlockEditor';
 import DatabaseView from './DatabaseView';
 import Tooltip from './Tooltip';
+import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
+import OperationBanner from './OperationBanner';
+import { applyImportContent } from '../lib/importContent';
 import type { Block, Comment, Tag } from '../types';
 import { jsPDF } from 'jspdf';
 import {
@@ -19,7 +22,7 @@ type SidePanel = 'comments' | 'history' | null;
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags } = useStore();
+  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace } = useStore();
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -37,6 +40,16 @@ export default function PageView() {
   const [dirty, setDirty] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [operationLabel, setOperationLabel] = useState<string | null>(null);
+  const [importModal, setImportModal] = useState<{
+    sourceLabel: string;
+    sourceType: 'file' | 'url';
+    content: string;
+    suggestedTitle?: string;
+  } | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const operationCancelledRef = useRef(false);
   const [pageTags, setPageTags] = useState<Tag[]>([]);
   const [favorited, setFavorited] = useState(false);
   const [newTag, setNewTag] = useState('');
@@ -229,35 +242,109 @@ export default function PageView() {
     setMarkdownMode(!markdownMode);
   };
 
+  const cancelOperation = () => {
+    abortRef.current?.abort();
+    operationCancelledRef.current = true;
+    setOperationLabel(null);
+    setImporting(false);
+    setExporting(false);
+    setImportModal(null);
+  };
+
+  const startOperation = (label: string) => {
+    abortRef.current = new AbortController();
+    operationCancelledRef.current = false;
+    setOperationLabel(label);
+  };
+
+  const runImport = async (mode: ImportMode) => {
+    if (!importModal || !workspace) return;
+    const modal = importModal;
+    setImportModal(null);
+    setImporting(true);
+    startOperation('Importing...');
+    try {
+      const targetId = await applyImportContent({
+        content: modal.content,
+        mode,
+        pageId,
+        workspaceId: workspace.id,
+        suggestedTitle: modal.suggestedTitle,
+        signal: abortRef.current?.signal,
+      });
+      if (mode === 'new' || targetId !== pageId) {
+        navigate(`/page/${targetId}`);
+      } else {
+        await loadPage();
+        loadVersionHistory();
+        if (markdownMode) {
+          const { markdown: md } = await api.getMarkdown(pageId!);
+          setMarkdown(md);
+        }
+      }
+      await loadPages();
+      await loadRecent();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
+      alert(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setImporting(false);
+      setOperationLabel(null);
+      abortRef.current = null;
+    }
+  };
+
   const exportPage = async () => {
     if (!pageId) return;
-    const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${pageTitle || 'untitled'}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
     setShowExportMenu(false);
+    setExporting(true);
+    startOperation('Exporting Markdown...');
+    try {
+      const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
+      if (operationCancelledRef.current) return;
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${pageTitle || 'untitled'}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+      setOperationLabel(null);
+      abortRef.current = null;
+    }
   };
 
   const exportPdf = async () => {
     if (!pageId) return;
-    const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(pageTitle || 'Untitled', 10, 15);
-    doc.setFontSize(10);
-    const lines = doc.splitTextToSize(md, 180);
-    let y = 25;
-    for (const line of lines) {
-      if (y > 280) { doc.addPage(); y = 15; }
-      doc.text(line, 10, y);
-      y += 5;
-    }
-    doc.save(`${pageTitle || 'untitled'}.pdf`);
     setShowExportMenu(false);
+    setExporting(true);
+    startOperation('Generating PDF...');
+    try {
+      const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
+      if (operationCancelledRef.current) return;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text(pageTitle || 'Untitled', 10, 15);
+      doc.setFontSize(10);
+      const lines = doc.splitTextToSize(md, 180);
+      let y = 25;
+      for (const line of lines) {
+        if (operationCancelledRef.current) return;
+        if (y > 280) { doc.addPage(); y = 15; }
+        doc.text(line, 10, y);
+        y += 5;
+      }
+      if (!operationCancelledRef.current) {
+        doc.save(`${pageTitle || 'untitled'}.pdf`);
+      }
+    } finally {
+      setExporting(false);
+      setOperationLabel(null);
+      abortRef.current = null;
+    }
   };
 
   const duplicatePage = async () => {
@@ -294,40 +381,44 @@ export default function PageView() {
   };
 
   const importFromUrl = async () => {
-    const url = window.prompt('Enter URL to import into this page:');
-    if (!url || !pageId) return;
+    const url = window.prompt('Enter URL to import:');
+    if (!url) return;
     setImporting(true);
+    startOperation('Fetching URL...');
     try {
-      const { markdown: md } = await api.importFromUrl(url);
-      await api.saveMarkdown(pageId, md);
-      await loadPage();
-      loadVersionHistory();
+      const { title, markdown: md } = await api.importFromUrl(url, abortRef.current?.signal);
+      if (operationCancelledRef.current) return;
+      setImportModal({
+        sourceLabel: url,
+        sourceType: 'url',
+        content: md,
+        suggestedTitle: title,
+      });
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
+      if (err instanceof Error && err.name === 'AbortError') return;
       alert(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setImporting(false);
+      setOperationLabel(null);
+      abortRef.current = null;
     }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !pageId) return;
-    setImporting(true);
+    e.target.value = '';
+    if (!file) return;
     try {
       const text = await file.text();
-      await api.saveMarkdown(pageId, text);
-      await loadPage();
-      loadVersionHistory();
-      if (markdownMode) {
-        const { markdown: md } = await api.getMarkdown(pageId);
-        setMarkdown(md);
-      }
-    } catch (err) {
-      console.error('Import failed:', err);
-      alert('Import failed. Please check the file format.');
-    } finally {
-      setImporting(false);
-      e.target.value = '';
+      setImportModal({
+        sourceLabel: file.name,
+        sourceType: 'file',
+        content: text,
+        suggestedTitle: file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported',
+      });
+    } catch {
+      alert('Could not read file');
     }
   };
 
@@ -449,6 +540,7 @@ export default function PageView() {
           )}
 
           {importing && <span className="text-xs text-mid-gray shrink-0">Importing...</span>}
+          {exporting && <span className="text-xs text-mid-gray shrink-0">Exporting...</span>}
 
           <Tooltip text="Who can see this page: Private, Shared, or Public">
             <select
@@ -481,7 +573,8 @@ export default function PageView() {
             <Tooltip text="Download this page as Markdown or PDF">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
-                className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
+                disabled={!!operationLabel}
+                className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
@@ -499,18 +592,19 @@ export default function PageView() {
             )}
           </div>
 
-          <Tooltip text="Import content from a Markdown file on your computer">
+          <Tooltip text="Import a file or URL — choose to append, overwrite, or create new page">
             <button
               onClick={() => importInputRef.current?.click()}
-              className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
+              disabled={!!operationLabel}
+              className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
               <span className="hidden sm:inline">Import</span>
             </button>
           </Tooltip>
 
-          <Tooltip text="Fetch a web page URL and save its content as notes">
-            <button onClick={importFromUrl} className="p-2 rounded-lg hover:bg-linen">
+          <Tooltip text="Fetch a web page URL — choose to append, overwrite, or create new page">
+            <button onClick={importFromUrl} disabled={!!operationLabel} className="p-2 rounded-lg hover:bg-linen disabled:opacity-50">
               <Link2 className="w-4 h-4" />
             </button>
           </Tooltip>
@@ -707,6 +801,19 @@ export default function PageView() {
           </aside>
         )}
       </div>
+
+      {importModal && (
+        <ImportOptionsModal
+          open
+          sourceLabel={importModal.sourceLabel}
+          sourceType={importModal.sourceType}
+          onClose={() => setImportModal(null)}
+          onConfirm={runImport}
+        />
+      )}
+      {operationLabel && (
+        <OperationBanner label={operationLabel} onCancel={cancelOperation} />
+      )}
     </div>
   );
 }
