@@ -9,6 +9,8 @@ import commentsRoutes from './routes/comments';
 import searchRoutes from './routes/search';
 import notificationsRoutes from './routes/notifications';
 import uploadsRoutes from './routes/uploads';
+import featuresRoutes from './routes/features';
+import tagsRoutes from './routes/tags';
 export { CollabRoom } from './collab-room';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -38,9 +40,14 @@ app.use('/api/*', async (c, next) => {
   if (c.req.path === '/api/auth/me' || c.req.path === '/api/auth/logout') {
     return next();
   }
+  if (c.req.path === '/api/auth/preferences' && (c.req.method === 'GET' || c.req.method === 'PATCH')) {
+    return next();
+  }
   return authMiddleware(c, next);
 });
 
+app.route('/api', featuresRoutes);
+app.route('/api', tagsRoutes);
 app.route('/api', pagesRoutes);
 app.route('/api', databaseRoutes);
 app.route('/api', commentsRoutes);

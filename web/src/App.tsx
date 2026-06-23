@@ -8,6 +8,7 @@ import SearchModal from './components/SearchModal';
 import QuickCapture from './components/QuickCapture';
 import SettingsPage from './components/SettingsPage';
 import NotificationsPage from './components/NotificationsPage';
+import Tooltip from './components/Tooltip';
 import { Menu } from 'lucide-react';
 
 function HomePage() {

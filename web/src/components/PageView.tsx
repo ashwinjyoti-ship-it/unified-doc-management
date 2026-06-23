@@ -5,10 +5,12 @@ import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
 import BlockEditor, { tiptapJsonToBlocks, blocksToTiptapHtml } from './BlockEditor';
 import DatabaseView from './DatabaseView';
-import type { Block, Comment } from '../types';
+import Tooltip from './Tooltip';
+import type { Block, Comment, Tag } from '../types';
+import { jsPDF } from 'jspdf';
 import {
   Menu, History, MessageSquare, FileCode, Link2, Send, RotateCcw,
-  Download, Upload, X, Trash2,
+  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
@@ -17,7 +19,7 @@ type SidePanel = 'comments' | 'history' | null;
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages } = useStore();
+  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags } = useStore();
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -33,6 +35,10 @@ export default function PageView() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pageTags, setPageTags] = useState<Tag[]>([]);
+  const [favorited, setFavorited] = useState(false);
+  const [newTag, setNewTag] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
@@ -94,10 +100,31 @@ export default function PageView() {
     }
   };
 
+  const loadPageTags = async () => {
+    if (!pageId) return;
+    try {
+      const { tags } = await api.getPageTags(pageId);
+      setPageTags(tags);
+    } catch { /* offline */ }
+  };
+
+  const loadFavoriteStatus = async () => {
+    if (!pageId) return;
+    try {
+      const { favorited: fav } = await api.isFavorited(pageId);
+      setFavorited(fav);
+    } catch { /* offline */ }
+  };
+
   useEffect(() => {
     loadPage();
     loadComments();
     loadVersionHistory();
+    loadPageTags();
+    loadFavoriteStatus();
+    if (pageId && online) {
+      api.recordPageView(pageId).then(() => loadRecent()).catch(() => {});
+    }
   }, [loadPage]);
 
   const saveTitle = async (newTitle: string) => {
@@ -160,6 +187,74 @@ export default function PageView() {
     a.download = `${pageTitle || 'untitled'}.md`;
     a.click();
     URL.revokeObjectURL(url);
+    setShowExportMenu(false);
+  };
+
+  const exportPdf = async () => {
+    if (!pageId) return;
+    const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(pageTitle || 'Untitled', 10, 15);
+    doc.setFontSize(10);
+    const lines = doc.splitTextToSize(md, 180);
+    let y = 25;
+    for (const line of lines) {
+      if (y > 280) { doc.addPage(); y = 15; }
+      doc.text(line, 10, y);
+      y += 5;
+    }
+    doc.save(`${pageTitle || 'untitled'}.pdf`);
+    setShowExportMenu(false);
+  };
+
+  const duplicatePage = async () => {
+    if (!pageId) return;
+    const { page } = await api.duplicatePage(pageId);
+    await loadPages();
+    navigate(`/page/${page.id}`);
+  };
+
+  const toggleFavorite = async () => {
+    if (!pageId) return;
+    if (favorited) {
+      await api.unfavoritePage(pageId);
+      setFavorited(false);
+    } else {
+      await api.favoritePage(pageId);
+      setFavorited(true);
+    }
+    loadFavorites();
+  };
+
+  const addTag = async () => {
+    if (!pageId || !newTag.trim()) return;
+    const { tag } = await api.addPageTag(pageId, { name: newTag.trim() });
+    setPageTags((prev) => prev.some((t) => t.id === tag.id) ? prev : [...prev, tag]);
+    setNewTag('');
+    loadTags();
+  };
+
+  const removeTag = async (tagId: string) => {
+    if (!pageId) return;
+    await api.removePageTag(pageId, tagId);
+    setPageTags((prev) => prev.filter((t) => t.id !== tagId));
+  };
+
+  const importFromUrl = async () => {
+    const url = window.prompt('Enter URL to import into this page:');
+    if (!url || !pageId) return;
+    setImporting(true);
+    try {
+      const { markdown: md } = await api.importFromUrl(url);
+      await api.saveMarkdown(pageId, md);
+      await loadPage();
+      loadVersionHistory();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Import failed');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,64 +358,139 @@ export default function PageView() {
           {saving && <span className="text-xs text-mid-gray">Saving...</span>}
           {importing && <span className="text-xs text-mid-gray">Importing...</span>}
 
-          <select
-            value={visibility}
-            onChange={(e) => { setVisibility(e.target.value); api.updatePage(pageId!, { visibility: e.target.value }); }}
-            className="text-xs bg-linen rounded-lg px-2 py-1 border-none outline-none"
-          >
-            <option value="private">🔒 Private</option>
-            <option value="shared">👥 Shared</option>
-            <option value="public">🌐 Public</option>
-          </select>
+          <Tooltip text="Who can see this page: Private, Shared, or Public">
+            <select
+              value={visibility}
+              onChange={(e) => { setVisibility(e.target.value); api.updatePage(pageId!, { visibility: e.target.value }); }}
+              className="text-xs bg-linen rounded-lg px-2 py-1 border-none outline-none"
+            >
+              <option value="private">🔒 Private</option>
+              <option value="shared">👥 Shared</option>
+              <option value="public">🌐 Public</option>
+            </select>
+          </Tooltip>
 
-          <button
-            onClick={exportPage}
-            className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
-            title="Export as Markdown"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Export</span>
-          </button>
-          <button
-            onClick={() => importInputRef.current?.click()}
-            className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
-            title="Import Markdown file"
-          >
-            <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">Import</span>
-          </button>
+          <Tooltip text={favorited ? 'Remove from favorites' : 'Pin to favorites for quick access'}>
+            <button
+              onClick={toggleFavorite}
+              className={`p-2 rounded-lg ${favorited ? 'text-amber-500 bg-amber-50' : 'hover:bg-linen'}`}
+            >
+              <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+            </button>
+          </Tooltip>
 
-          <button onClick={toggleMarkdown} className={`p-2 rounded-lg ${markdownMode ? 'bg-sage/30' : 'hover:bg-linen'}`} title="Markdown mode">
-            <FileCode className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => togglePanel('history')}
-            className={`p-2 rounded-lg flex items-center gap-1.5 text-sm ${sidePanel === 'history' ? 'bg-sage/30' : 'hover:bg-linen'}`}
-            title="Version history"
-          >
-            <History className="w-4 h-4" />
-            {versions.length > 0 && (
-              <span className="text-xs bg-forest text-white rounded-full px-1.5 min-w-[18px] text-center">
-                {versions.length}
-              </span>
+          <Tooltip text="Create a copy of this page with all its content">
+            <button onClick={duplicatePage} className="p-2 rounded-lg hover:bg-linen">
+              <Copy className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <div className="relative">
+            <Tooltip text="Download this page as Markdown or PDF">
+              <button
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
+              >
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+            </Tooltip>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-warm-white border border-green-mist rounded-xl shadow-lg z-20 py-1 min-w-[140px]">
+                <button onClick={exportPage} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2">
+                  <FileCode className="w-4 h-4" /> Markdown (.md)
+                </button>
+                <button onClick={exportPdf} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2">
+                  <FileText className="w-4 h-4" /> PDF (.pdf)
+                </button>
+              </div>
             )}
-          </button>
-          <button
-            onClick={() => togglePanel('comments')}
-            className={`p-2 rounded-lg ${sidePanel === 'comments' ? 'bg-sage/30' : 'hover:bg-linen'}`}
-            title="Comments"
-          >
-            <MessageSquare className="w-4 h-4" />
-          </button>
-          <button
-            onClick={deletePage}
-            className="p-2 rounded-lg hover:bg-red-50 text-red-600"
-            title="Delete page"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+          </div>
+
+          <Tooltip text="Import content from a Markdown file on your computer">
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm"
+            >
+              <Upload className="w-4 h-4" />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Fetch a web page URL and save its content as notes">
+            <button onClick={importFromUrl} className="p-2 rounded-lg hover:bg-linen">
+              <Link2 className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <Tooltip text={markdownMode ? 'Switch back to visual editor' : 'Edit raw Markdown source directly'}>
+            <button onClick={toggleMarkdown} className={`p-2 rounded-lg ${markdownMode ? 'bg-sage/30' : 'hover:bg-linen'}`}>
+              <FileCode className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <Tooltip text="View and restore previous versions of this page">
+            <button
+              onClick={() => togglePanel('history')}
+              className={`p-2 rounded-lg flex items-center gap-1.5 text-sm ${sidePanel === 'history' ? 'bg-sage/30' : 'hover:bg-linen'}`}
+            >
+              <History className="w-4 h-4" />
+              {versions.length > 0 && (
+                <span className="text-xs bg-forest text-white rounded-full px-1.5 min-w-[18px] text-center">
+                  {versions.length}
+                </span>
+              )}
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Add and read comments on this page">
+            <button
+              onClick={() => togglePanel('comments')}
+              className={`p-2 rounded-lg ${sidePanel === 'comments' ? 'bg-sage/30' : 'hover:bg-linen'}`}
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Permanently delete this page">
+            <button onClick={deletePage} className="p-2 rounded-lg hover:bg-red-50 text-red-600">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       </header>
+
+      {pageTags.length > 0 || pageType === 'page' ? (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-green-mist bg-warm-white/50 flex-wrap">
+          <Tooltip text="Labels to organize and find pages">
+            <TagIcon className="w-3.5 h-3.5 text-mid-gray shrink-0" />
+          </Tooltip>
+          {pageTags.map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-charcoal"
+              style={{ backgroundColor: `${tag.color}40` }}
+            >
+              {tag.name}
+              <button type="button" onClick={() => removeTag(tag.id)} className="hover:text-red-600 ml-0.5">×</button>
+            </span>
+          ))}
+          <div className="flex items-center gap-1">
+            <input
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && addTag()}
+              placeholder="Add tag..."
+              className="text-xs bg-transparent border-none outline-none w-20 placeholder:text-mid-gray"
+            />
+            <Tooltip text="Add a label to this page">
+              <button type="button" onClick={addTag} className="p-0.5 hover:bg-linen rounded">
+                <Plus className="w-3 h-3 text-mid-gray" />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex-1 flex min-h-0">
         <main className="flex-1 overflow-y-auto p-6 md:p-10 max-w-4xl mx-auto w-full">

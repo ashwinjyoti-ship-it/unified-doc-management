@@ -1,4 +1,4 @@
-import type { User, Page, Workspace, Notification, Block, Comment, DatabaseProperty, DatabaseRow } from '../types';
+import type { User, Page, Workspace, Notification, Block, Comment, DatabaseProperty, DatabaseRow, Tag, Theme } from '../types';
 
 const API_BASE = '/api';
 
@@ -181,6 +181,86 @@ class ApiClient {
       throw new Error(err.error || 'Upload failed');
     }
     return res.json() as Promise<{ url: string; filename: string; contentType: string; size: number }>;
+  }
+
+  duplicatePage(pageId: string) {
+    return this.request<{ page: Page }>(`/pages/${pageId}/duplicate`, { method: 'POST' });
+  }
+
+  bulkPages(action: 'delete' | 'move', pageIds: string[], parentId?: string | null) {
+    return this.request<{ results: Array<{ id: string; status: string }> }>(
+      '/bulk', { method: 'POST', body: JSON.stringify({ action, pageIds, parentId }) }
+    );
+  }
+
+  importFromUrl(url: string) {
+    return this.request<{ title: string; markdown: string }>(
+      '/fetch-url', { method: 'POST', body: JSON.stringify({ url }) }
+    );
+  }
+
+  importFromUrlAsPage(url: string, workspaceId: string, parentId?: string) {
+    return this.request<{ page: Page }>(
+      '/import-url', { method: 'POST', body: JSON.stringify({ url, workspaceId, parentId }) }
+    );
+  }
+
+  getFavorites() {
+    return this.request<{ pages: Page[] }>('/favorites');
+  }
+
+  getRecent() {
+    return this.request<{ pages: Page[] }>('/recent');
+  }
+
+  recordPageView(pageId: string) {
+    return this.request(`/pages/${pageId}/view`, { method: 'POST' });
+  }
+
+  favoritePage(pageId: string) {
+    return this.request(`/pages/${pageId}/favorite`, { method: 'POST' });
+  }
+
+  unfavoritePage(pageId: string) {
+    return this.request(`/pages/${pageId}/favorite`, { method: 'DELETE' });
+  }
+
+  isFavorited(pageId: string) {
+    return this.request<{ favorited: boolean }>(`/pages/${pageId}/favorite`);
+  }
+
+  getTags(workspaceId: string) {
+    return this.request<{ tags: Tag[] }>(`/workspaces/${workspaceId}/tags`);
+  }
+
+  createTag(workspaceId: string, name: string, color?: string) {
+    return this.request<{ tag: Tag }>(
+      `/workspaces/${workspaceId}/tags`, { method: 'POST', body: JSON.stringify({ name, color }) }
+    );
+  }
+
+  getPageTags(pageId: string) {
+    return this.request<{ tags: Tag[] }>(`/pages/${pageId}/tags`);
+  }
+
+  addPageTag(pageId: string, data: { tagId?: string; name?: string; color?: string }) {
+    return this.request<{ tag: Tag }>(
+      `/pages/${pageId}/tags`, { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  removePageTag(pageId: string, tagId: string) {
+    return this.request(`/pages/${pageId}/tags/${tagId}`, { method: 'DELETE' });
+  }
+
+  getPreferences() {
+    return this.request<{ preferences: { theme: Theme } }>('/auth/preferences');
+  }
+
+  updatePreferences(theme: Theme) {
+    return this.request<{ preferences: { theme: Theme } }>(
+      '/auth/preferences', { method: 'PATCH', body: JSON.stringify({ theme }) }
+    );
   }
 }
 

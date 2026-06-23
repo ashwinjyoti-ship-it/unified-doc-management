@@ -111,3 +111,33 @@ input, textarea {
 ::-webkit-scrollbar-thumb { background: var(--color-sage); border-radius: 3px; }
 
 mark { background: var(--color-sage); color: var(--color-charcoal); padding: 0 2px; border-radius: 2px; }
+
+/* Dark mode */
+html.dark {
+  --color-paper-white: #1a2e22;
+  --color-warm-white: #1D3325;
+  --color-linen: #244632;
+  --color-green-mist: #325A41;
+  --color-pedestal: #3d5c47;
+  --color-mid-gray: #8a9e8f;
+  --color-warm-gray: #97B79E;
+  --color-charcoal: #e8ede9;
+  --color-dark-ink: #0f1a14;
+}
+
+html.dark body {
+  background: radial-gradient(ellipse at center, #1a2e22 0%, #17281D 60%, #0f1a14 100%);
+  color: var(--color-charcoal);
+}
+
+html.dark .card-surface {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+html.dark .ProseMirror blockquote {
+  color: var(--color-warm-gray);
+}
+
+html.dark .ProseMirror code {
+  background: var(--color-linen);
+}

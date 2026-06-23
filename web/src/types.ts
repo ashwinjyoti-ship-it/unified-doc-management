@@ -71,3 +71,13 @@ export interface Workspace {
   owner_id: string;
   role: string;
 }
+
+export interface Tag {
+  id: string;
+  workspace_id: string;
+  name: string;
+  color: string;
+  created_at?: number;
+}
+
+export type Theme = 'light' | 'dark' | 'system';

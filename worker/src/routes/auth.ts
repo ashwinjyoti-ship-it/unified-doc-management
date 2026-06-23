@@ -145,4 +145,46 @@ auth.post('/api-keys', async (c) => {
   return c.json({ id: keyId, key: rawKey, prefix: rawKey.slice(0, 12) }, 201);
 });
 
+auth.get('/preferences', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
+  const { verifyToken } = await import('../utils');
+  const payload = await verifyToken(authHeader.slice(7), c.env.JWT_SECRET);
+  if (!payload) return c.json({ error: 'Invalid token' }, 401);
+
+  let prefs = await c.env.DB.prepare('SELECT * FROM user_preferences WHERE user_id = ?')
+    .bind(payload.userId).first<{ theme: string }>();
+
+  if (!prefs) {
+    const now = Math.floor(Date.now() / 1000);
+    await c.env.DB.prepare(
+      'INSERT INTO user_preferences (user_id, theme, updated_at) VALUES (?, ?, ?)'
+    ).bind(payload.userId, 'light', now).run();
+    prefs = { theme: 'light' };
+  }
+
+  return c.json({ preferences: prefs });
+});
+
+auth.patch('/preferences', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401);
+  const { verifyToken } = await import('../utils');
+  const payload = await verifyToken(authHeader.slice(7), c.env.JWT_SECRET);
+  if (!payload) return c.json({ error: 'Invalid token' }, 401);
+
+  const { theme } = await c.req.json<{ theme: string }>();
+  if (!['light', 'dark', 'system'].includes(theme)) {
+    return c.json({ error: 'Invalid theme' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(`
+    INSERT INTO user_preferences (user_id, theme, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET theme = excluded.theme, updated_at = excluded.updated_at
+  `).bind(payload.userId, theme, now).run();
+
+  return c.json({ preferences: { theme } });
+});
+
 export default auth;
