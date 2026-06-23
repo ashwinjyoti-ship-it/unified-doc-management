@@ -22,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -44,14 +44,15 @@ jobs:
       - name: Sync D1 database ID into wrangler config
         working-directory: worker
         run: |
-          DB_ID=$(npx wrangler d1 list --json | node -e "
-            const input = require('fs').readFileSync(0, 'utf8');
+          DB_ID=$(npx wrangler d1 list --json 2>/dev/null | node -e "
+            const input = require('fs').readFileSync(0, 'utf8').trim();
+            if (!input) process.exit(1);
             const data = JSON.parse(input);
             const rows = Array.isArray(data) ? data : (data.result || []);
             const db = rows.find((row) => row.name === 'unified-doc-db');
             if (!db?.uuid) process.exit(1);
             process.stdout.write(db.uuid);
-          ")
+          ") || grep -o '"database_id": "[^"]*"' wrangler.jsonc | head -1 | cut -d'"' -f4
           node -e "
             const fs = require('fs');
             const path = 'wrangler.jsonc';
