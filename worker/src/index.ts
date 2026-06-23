@@ -70,7 +70,10 @@ app.post('/api/sync', async (c) => {
 });
 
 app.all('*', async (c) => {
-  return c.env.ASSETS.fetch(c.req.raw);
+  if (c.env.ASSETS) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+  return c.notFound();
 });
 
 export default app;

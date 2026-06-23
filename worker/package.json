@@ -4,14 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler pages dev ../web/dist --d1=DB --port=8787",
     "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --external:cloudflare:workers",
     "build:pages-worker": "esbuild src/index.ts --bundle --outfile=../web/dist/_worker.js --format=esm --external:cloudflare:workers",
     "pages:project": "wrangler pages project create ash-doc --production-branch=main",
     "d1:create": "wrangler d1 create unified-doc-db --location=wnam",
-    "deploy:pages": "wrangler pages deploy ../web/dist --project-name=ash-doc --branch=main --commit-dirty=true",
-    "deploy:worker": "wrangler deploy",
-    "deploy": "npm run build:pages-worker && npm run deploy:pages",
+    "deploy:pages": "npm run build:pages-worker && wrangler pages deploy --project-name=ash-doc --branch=main --commit-dirty=true",
+    "deploy:worker": "wrangler deploy --config wrangler.worker.jsonc",
+    "deploy": "npm run build:pages-worker && wrangler pages deploy --project-name=ash-doc --branch=main --commit-dirty=true",
     "db:migrate": "wrangler d1 migrations apply unified-doc-db --remote",
     "db:migrate:local": "wrangler d1 migrations apply unified-doc-db --local",
     "types": "wrangler types"
