@@ -52,7 +52,7 @@ npm run deploy
 
 This builds the React frontend and deploys the Worker with static assets.
 
-Your app will be available at: `https://unified-doc-management.<your-subdomain>.workers.dev`
+Your app will be available at: `https://ash-doc.pages.dev`
 
 ## Step 5: Custom Domain (Optional)
 
@@ -91,8 +91,11 @@ Update `capacitor.config.json` server URL to your production Workers URL for nat
 ## CI/CD with GitHub
 
 Add these secrets to your GitHub repo:
-- `CLOUDFLARE_API_TOKEN` — with Workers and D1 permissions
+- `CLOUDFLARE_API_TOKEN` — with Workers, D1, and Pages permissions
 - `CLOUDFLARE_ACCOUNT_ID`
+- `JWT_SECRET` — random string for auth token signing (e.g. `openssl rand -hex 32`)
+
+Your app will be available at: `https://ash-doc.pages.dev`
 
 Example GitHub Actions workflow (`.github/workflows/deploy.yml`):
 

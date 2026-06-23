@@ -1,0 +1,4 @@
+/page/*         /index.html   200
+/settings       /index.html   200
+/notifications  /index.html   200
+/*              /index.html   200

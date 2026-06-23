@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "build": "esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --external:cloudflare:workers",
-    "deploy": "wrangler deploy",
+    "build:pages-worker": "esbuild src/index.ts --bundle --outfile=../web/dist/_worker.js --format=esm --external:cloudflare:workers",
+    "pages:project": "wrangler pages project create ash-doc --production-branch=main",
+    "d1:create": "wrangler d1 create unified-doc-db --location=wnam",
+    "deploy:pages": "wrangler pages deploy ../web/dist --project-name=ash-doc --branch=main --commit-dirty=true",
+    "deploy:worker": "wrangler deploy",
+    "deploy": "npm run build:pages-worker && npm run deploy:pages",
     "db:migrate": "wrangler d1 migrations apply unified-doc-db --remote",
     "db:migrate:local": "wrangler d1 migrations apply unified-doc-db --local",
     "types": "wrangler types"

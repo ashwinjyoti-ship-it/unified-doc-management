@@ -1,9 +1,10 @@
 {
-  "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "unified-doc-management",
+  "$schema": "../node_modules/wrangler/config.schema.json",
+  "name": "ash-doc",
   "main": "src/index.ts",
   "compatibility_date": "2025-06-01",
   "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
@@ -11,7 +12,8 @@
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
   },
   "d1_databases": [
     {
@@ -34,8 +36,5 @@
       "tag": "v1",
       "new_classes": ["CollabRoom"]
     }
-  ],
-  "vars": {
-    "JWT_SECRET": "dev-secret-change-in-production"
-  }
+  ]
 }
