@@ -193,9 +193,9 @@ class ApiClient {
     );
   }
 
-  importFromUrl(url: string) {
+  importFromUrl(url: string, signal?: AbortSignal) {
     return this.request<{ title: string; markdown: string }>(
-      '/fetch-url', { method: 'POST', body: JSON.stringify({ url }) }
+      '/fetch-url', { method: 'POST', body: JSON.stringify({ url }), signal }
     );
   }
 
