@@ -202,15 +202,15 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
       {editable && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
-          <div className="flex gap-1 bg-charcoal rounded-lg p-1 shadow-lg">
+          <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg">
             <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
-              <Bold className="w-4 h-4 text-white" />
+              <Bold className="w-4 h-4 text-tooltip-fg" />
             </ToolbarButton>
             <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
-              <Italic className="w-4 h-4 text-white" />
+              <Italic className="w-4 h-4 text-tooltip-fg" />
             </ToolbarButton>
             <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
-              <Strikethrough className="w-4 h-4 text-white" />
+              <Strikethrough className="w-4 h-4 text-tooltip-fg" />
             </ToolbarButton>
           </div>
         </BubbleMenu>

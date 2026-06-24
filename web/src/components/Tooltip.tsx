@@ -40,11 +40,11 @@ export default function Tooltip({ text, children, position = 'bottom', className
       {visible && text && (
         <span
           role="tooltip"
-          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-white bg-charcoal rounded-lg shadow-lg whitespace-nowrap pointer-events-none ${positionClasses[position]}`}
+          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-tooltip-fg bg-tooltip-bg rounded-lg shadow-lg max-w-[220px] whitespace-normal text-left pointer-events-none ${positionClasses[position]}`}
         >
           {text}
           <span
-            className={`absolute w-2 h-2 bg-charcoal rotate-45 ${
+            className={`absolute w-2 h-2 bg-tooltip-bg rotate-45 ${
               position === 'bottom' ? '-top-1 left-1/2 -translate-x-1/2' :
               position === 'top' ? '-bottom-1 left-1/2 -translate-x-1/2' :
               position === 'left' ? '-right-1 top-1/2 -translate-y-1/2' :
