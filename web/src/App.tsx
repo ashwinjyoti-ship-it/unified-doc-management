@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useStore } from './lib/store';
 import { createProject } from './lib/projectCreate';
+import { isStandalonePage } from './lib/standalonePages';
 import AuthPage from './components/AuthPage';
 import Sidebar from './components/Sidebar';
 import PageView from './components/PageView';
@@ -49,11 +50,14 @@ function HomePage() {
 }
 
 function AppLayout() {
+  const location = useLocation();
+  const showMobileTopBar = !isStandalonePage(location.pathname);
+
   return (
     <div className="h-full flex overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
-        <MobileTopBar />
+        {showMobileTopBar && <MobileTopBar />}
         <div id="app-scroll" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full">
           <Routes>
             <Route path="/" element={<HomePage />} />
