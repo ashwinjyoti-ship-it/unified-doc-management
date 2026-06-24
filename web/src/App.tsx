@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useStore } from './lib/store';
 import AuthPage from './components/AuthPage';
 import Sidebar from './components/Sidebar';
@@ -8,8 +8,7 @@ import SearchModal from './components/SearchModal';
 import QuickCapture from './components/QuickCapture';
 import SettingsPage from './components/SettingsPage';
 import NotificationsPage from './components/NotificationsPage';
-import Tooltip from './components/Tooltip';
-import { Menu } from 'lucide-react';
+import MobileTopBar from './components/MobileTopBar';
 
 function HomePage() {
   const { pages, createPage } = useStore();
@@ -43,20 +42,11 @@ function HomePage() {
 }
 
 function AppLayout() {
-  const { setSidebarOpen } = useStore();
-
   return (
     <div className="h-full flex">
       <Sidebar />
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
-        <div className="md:hidden flex items-center p-3 border-b border-green-mist bg-warm-white">
-          <Tooltip text="Open navigation sidebar">
-            <button onClick={() => setSidebarOpen(true)} className="p-1">
-              <Menu className="w-5 h-5" />
-            </button>
-          </Tooltip>
-          <span className="ml-2 font-semibold text-forest text-sm">Unified Doc Management</span>
-        </div>
+        <MobileTopBar />
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/page/:pageId" element={<PageView />} />
@@ -71,7 +61,7 @@ function AppLayout() {
 }
 
 export default function App() {
-  const { user, loading, init, loadNotifications } = useStore();
+  const { user, loading, init, loadNotifications, setSidebarOpen } = useStore();
 
   useEffect(() => {
     init();
@@ -80,6 +70,16 @@ export default function App() {
   useEffect(() => {
     if (user) loadNotifications();
   }, [user, loadNotifications]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const apply = () => {
+      if (mq.matches) setSidebarOpen(false);
+    };
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [setSidebarOpen]);
 
   if (loading) {
     return (

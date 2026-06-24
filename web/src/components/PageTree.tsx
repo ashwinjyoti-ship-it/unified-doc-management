@@ -1,15 +1,17 @@
 import { useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDraggable,
   useDroppable,
   type DragEndEvent,
   type DragStartEvent,
+  type DragOverEvent,
 } from '@dnd-kit/core';
 import {
   ChevronRight, ChevronDown, CheckSquare, Square, GripVertical,
@@ -25,7 +27,7 @@ interface PageTreeProps {
   selected?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onPagesChange: () => Promise<void>;
-  onMoveRequest?: (pageIds: string[]) => void;
+  onNavigate: (pageId: string) => void;
 }
 
 function TreeRow({
@@ -37,6 +39,7 @@ function TreeRow({
   onToggleSelect,
   activeDragId,
   overDropId,
+  onNavigate,
 }: {
   page: Page;
   pages: Page[];
@@ -46,9 +49,9 @@ function TreeRow({
   onToggleSelect?: (id: string) => void;
   activeDragId: string | null;
   overDropId: string | null;
+  onNavigate: (pageId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const navigate = useNavigate();
   const { pageId } = useParams();
   const children = getChildren(pages, page.id);
   const isActive = pageId === page.id;
@@ -74,7 +77,7 @@ function TreeRow({
     <div className={isDragging ? 'opacity-40' : ''}>
       <div
         ref={setRefs}
-        className={`${pageTreeRowClass(isActive)} ${highlight ? 'ring-2 ring-forest/50 bg-sage/20' : ''}`}
+        className={`${pageTreeRowClass(isActive)} ${highlight && !isActive ? 'ring-2 ring-forest/50 bg-sage/20' : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {!bulkMode && (
@@ -103,7 +106,7 @@ function TreeRow({
         )}
         <button
           type="button"
-          onClick={() => navigate(`/page/${page.id}`)}
+          onClick={() => onNavigate(page.id)}
           className="flex-1 flex items-center gap-2 px-1 py-1.5 min-w-0"
         >
           {children.length > 0 ? (
@@ -131,6 +134,7 @@ function TreeRow({
           onToggleSelect={onToggleSelect}
           activeDragId={activeDragId}
           overDropId={overDropId}
+          onNavigate={onNavigate}
         />
       ))}
     </div>
@@ -163,6 +167,7 @@ export default function PageTree({
   selected,
   onToggleSelect,
   onPagesChange,
+  onNavigate,
 }: PageTreeProps) {
   const rootPages = getChildren(pages, null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
@@ -170,13 +175,14 @@ export default function PageTree({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
   );
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveDragId(String(event.active.id));
   };
 
-  const handleDragOver = useCallback((event: { over: { id: string | number } | null }) => {
+  const handleDragOver = useCallback((event: DragOverEvent) => {
     setOverDropId(event.over ? String(event.over.id) : null);
   }, []);
 
@@ -233,6 +239,7 @@ export default function PageTree({
           onToggleSelect={onToggleSelect}
           activeDragId={activeDragId}
           overDropId={overDropId}
+          onNavigate={onNavigate}
         />
       ))}
       <DragOverlay>

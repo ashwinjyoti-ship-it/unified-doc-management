@@ -7,12 +7,13 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
+import { slashCommands } from './SlashCommandList';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
 
@@ -26,6 +27,7 @@ interface BlockEditorProps {
 
 export default function BlockEditor({ content, onChange, editable = true }: BlockEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [insertOpen, setInsertOpen] = useState(false);
 
   const uploadImage = useCallback(async (file: File): Promise<string> => {
     const result = await api.uploadFile(file);
@@ -79,6 +81,15 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
     if (url && editor) editor.chain().focus().setLink({ href: url }).run();
   }, [editor]);
 
+  const runSlashCommand = useCallback((index: number) => {
+    if (!editor) return;
+    const item = slashCommands[index];
+    if (!item) return;
+    const { from, to } = editor.state.selection;
+    item.command({ editor, range: { from, to } });
+    setInsertOpen(false);
+  }, [editor]);
+
   if (!editor) return null;
 
   const ToolbarButton = ({ onClick, active, tooltip, children }: { onClick: () => void; active?: boolean; tooltip: string; children: React.ReactNode }) => (
@@ -104,6 +115,16 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       />
       {editable && (
         <div className="flex flex-wrap gap-1 mb-4 p-2 bg-linen/50 rounded-xl sticky top-0 z-10">
+          <Tooltip text="Insert block — headings, lists, images (mobile-friendly)">
+            <button
+              type="button"
+              onClick={() => setInsertOpen(true)}
+              className="md:hidden p-2 rounded-md bg-forest text-white hover:bg-dark-teal flex items-center gap-1 text-xs font-medium"
+            >
+              <Slash className="w-4 h-4" />
+              Insert
+            </button>
+          </Tooltip>
           <ToolbarButton tooltip="Bold (Ctrl+B)" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
             <Bold className="w-4 h-4" />
           </ToolbarButton>
@@ -175,6 +196,36 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       )}
 
       <EditorContent editor={editor} className="prose-forest max-w-none" />
+
+      {insertOpen && (
+        <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-label="Insert block">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setInsertOpen(false)} />
+          <div className="absolute bottom-0 left-0 right-0 bg-warm-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-green-mist shrink-0">
+              <h3 className="font-semibold text-sm">Insert block</h3>
+              <button type="button" onClick={() => setInsertOpen(false)} className="text-mid-gray text-sm px-2 py-1">
+                Close
+              </button>
+            </div>
+            <div className="overflow-y-auto overscroll-contain p-2">
+              {slashCommands.map((item, index) => (
+                <button
+                  key={item.title}
+                  type="button"
+                  onClick={() => runSlashCommand(index)}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl hover:bg-linen active:bg-sage/30"
+                >
+                  <span className="text-mid-gray shrink-0">{item.icon}</span>
+                  <div>
+                    <div className="font-medium text-sm">{item.title}</div>
+                    <div className="text-xs text-mid-gray">{item.description}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

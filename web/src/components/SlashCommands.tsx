@@ -84,6 +84,13 @@ export const SlashCommands = Extension.create({
                 interactive: true,
                 trigger: 'manual',
                 placement: 'bottom-start',
+                zIndex: 100000,
+                touch: true,
+                maxWidth: 'calc(100vw - 1rem)',
+                popperOptions: {
+                  strategy: 'fixed',
+                  modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }],
+                },
               });
             },
 

@@ -56,7 +56,7 @@ export const useStore = create<AppState>((set, get) => ({
   recent: [],
   tags: [],
   notifications: [],
-  sidebarOpen: true,
+  sidebarOpen: typeof window !== 'undefined' ? window.matchMedia('(min-width: 768px)').matches : true,
   searchOpen: false,
   markdownMode: false,
   online: navigator.onLine,
