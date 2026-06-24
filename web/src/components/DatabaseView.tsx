@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
@@ -62,10 +62,16 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const [newRollupRelationPropId, setNewRollupRelationPropId] = useState('');
   const [newRollupTargetPropId, setNewRollupTargetPropId] = useState('');
   const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
+  const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     void loadDatabase();
   }, [pageId]);
+
+  useEffect(() => () => {
+    pendingSaves.current.forEach((timer) => clearTimeout(timer));
+    pendingSaves.current.clear();
+  }, []);
 
   const loadDatabase = async () => {
     setLoading(true);
@@ -107,13 +113,55 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     await loadPages();
   };
 
-  const updateCell = async (rowId: string, propId: string, value: unknown) => {
-    const row = rows.find((r) => r.id === rowId);
-    if (!row) return;
-    const props = { ...JSON.parse(row.properties), [propId]: value };
-    const { row: updated } = await api.updateDatabaseRow(pageId, rowId, { properties: props });
-    setRows(rows.map((r) => (r.id === rowId ? updated : r)));
-  };
+  const patchRowLocal = useCallback((rowId: string, propId: string, value: unknown) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.id !== rowId) return r;
+        const props = { ...JSON.parse(r.properties || '{}'), [propId]: value };
+        return { ...r, properties: JSON.stringify(props) };
+      }),
+    );
+  }, []);
+
+  const flushSave = useCallback(async (rowId: string, propId: string, value: unknown) => {
+    const key = `${rowId}:${propId}`;
+    const timer = pendingSaves.current.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      pendingSaves.current.delete(key);
+    }
+    try {
+      const { row: updated } = await api.updateDatabaseRow(pageId, rowId, {
+        properties: { [propId]: value },
+      });
+      setRows((prev) => prev.map((r) => (r.id === rowId ? updated : r)));
+    } catch {
+      await loadDatabase();
+    }
+  }, [pageId]);
+
+  const scheduleSave = useCallback((rowId: string, propId: string, value: unknown) => {
+    const key = `${rowId}:${propId}`;
+    const existing = pendingSaves.current.get(key);
+    if (existing) clearTimeout(existing);
+    pendingSaves.current.set(
+      key,
+      setTimeout(() => {
+        pendingSaves.current.delete(key);
+        void flushSave(rowId, propId, value);
+      }, 400),
+    );
+  }, [flushSave]);
+
+  const updateCellText = useCallback((rowId: string, propId: string, value: unknown) => {
+    patchRowLocal(rowId, propId, value);
+    scheduleSave(rowId, propId, value);
+  }, [patchRowLocal, scheduleSave]);
+
+  const updateCellImmediate = useCallback((rowId: string, propId: string, value: unknown) => {
+    patchRowLocal(rowId, propId, value);
+    void flushSave(rowId, propId, value);
+  }, [patchRowLocal, flushSave]);
 
   const deleteRow = async (rowId: string) => {
     await api.deleteDatabaseRow(pageId, rowId);
@@ -256,7 +304,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         value={selected}
         onChange={(e) => {
           const vals = Array.from(e.target.selectedOptions, (o) => o.value);
-          void updateCell(row.id, prop.id, vals);
+          updateCellImmediate(row.id, prop.id, vals);
         }}
         className="w-full min-w-[120px] bg-transparent border-none outline-none text-sm text-charcoal"
         size={Math.min(3, Math.max(1, options.length))}
@@ -273,7 +321,8 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <input
           type="text"
           value={String(getPropValue(row, prop.id) || '')}
-          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
+          onChange={(e) => updateCellText(row.id, prop.id, e.target.value)}
+          onBlur={(e) => void flushSave(row.id, prop.id, e.target.value)}
           className="flex-1 bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
         />
         {row.page_id && (
@@ -304,7 +353,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       return (
         <select
           value={getPropValue(row, prop.id) as string}
-          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
+          onChange={(e) => updateCellImmediate(row.id, prop.id, e.target.value)}
           className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         >
           <option value="">—</option>
@@ -329,7 +378,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   const next = new Set(selected);
                   if (on) next.delete(opt);
                   else next.add(opt);
-                  void updateCell(row.id, prop.id, [...next]);
+                  updateCellImmediate(row.id, prop.id, [...next]);
                 }}
                 className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
                   on ? 'bg-forest text-white border-forest' : 'bg-linen text-warm-gray border-green-mist hover:border-forest'
@@ -347,7 +396,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <input
           type="checkbox"
           checked={parseCheckboxValue(getPropValue(row, prop.id))}
-          onChange={(e) => void updateCell(row.id, prop.id, e.target.checked)}
+          onChange={(e) => updateCellImmediate(row.id, prop.id, e.target.checked)}
           className="w-4 h-4 accent-forest"
         />
       );
@@ -357,7 +406,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <input
           type="date"
           value={getPropValue(row, prop.id) as string}
-          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
+          onChange={(e) => updateCellImmediate(row.id, prop.id, e.target.value)}
           className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         />
       );
@@ -366,7 +415,8 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       <input
         type={prop.type === 'number' ? 'number' : 'text'}
         value={getPropValue(row, prop.id) as string}
-        onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
+        onChange={(e) => updateCellText(row.id, prop.id, e.target.value)}
+        onBlur={(e) => void flushSave(row.id, prop.id, e.target.value)}
         className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
       />
     );
