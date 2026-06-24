@@ -56,6 +56,12 @@ class ApiClient {
     return this.request<{ workspaces: Workspace[] }>('/workspaces');
   }
 
+  updateWorkspace(workspaceId: string, data: { name: string }) {
+    return this.request<{ workspace: Workspace }>(
+      `/workspaces/${workspaceId}`, { method: 'PATCH', body: JSON.stringify(data) }
+    );
+  }
+
   getPages(workspaceId: string) {
     return this.request<{ pages: Page[] }>(`/workspaces/${workspaceId}/pages`);
   }
@@ -130,6 +136,12 @@ class ApiClient {
 
   deleteDatabaseRow(pageId: string, rowId: string) {
     return this.request(`/pages/${pageId}/database/rows/${rowId}`, { method: 'DELETE' });
+  }
+
+  createDatabaseProperty(pageId: string, data: { name: string; type: string; options?: string[] }) {
+    return this.request<{ property: DatabaseProperty }>(
+      `/pages/${pageId}/database/properties`, { method: 'POST', body: JSON.stringify(data) }
+    );
   }
 
   getComments(pageId: string) {

@@ -29,7 +29,7 @@ export function useDocumentCreate() {
     setFolderModal({ parentId });
   };
 
-  const confirmNewFolder = async (name: string) => {
+  const confirmNewFolder = async (name: string, icon?: string) => {
     if (!workspace) return;
     const parentId = folderModal?.parentId;
     setFolderModal(null);
@@ -37,7 +37,7 @@ export function useDocumentCreate() {
       type: 'folder',
       title: name,
       parentId,
-      icon: '📁',
+      icon: icon || '📁',
     });
     await afterCreate(page.id);
   };

@@ -6,9 +6,12 @@ interface NamePromptModalProps {
   label: string;
   placeholder?: string;
   defaultValue?: string;
+  defaultIcon?: string;
+  showIcon?: boolean;
+  iconLabel?: string;
   confirmLabel?: string;
   onClose: () => void;
-  onConfirm: (name: string) => void;
+  onConfirm: (name: string, icon?: string) => void;
 }
 
 export default function NamePromptModal({
@@ -17,32 +20,48 @@ export default function NamePromptModal({
   label,
   placeholder = '',
   defaultValue = '',
+  defaultIcon = '📁',
+  showIcon = false,
+  iconLabel = 'Icon (emoji)',
   confirmLabel = 'Create',
   onClose,
   onConfirm,
 }: NamePromptModalProps) {
   const [value, setValue] = useState(defaultValue);
+  const [icon, setIcon] = useState(defaultIcon);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
       setValue(defaultValue);
+      setIcon(defaultIcon);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [open, defaultValue]);
+  }, [open, defaultValue, defaultIcon]);
 
   if (!open) return null;
 
   const submit = () => {
     const trimmed = value.trim();
     if (!trimmed) return;
-    onConfirm(trimmed);
+    onConfirm(trimmed, showIcon ? icon.trim() || defaultIcon : undefined);
   };
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="card-surface w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg mb-4">{title}</h3>
+        {showIcon && (
+          <div className="mb-4">
+            <label className="block text-sm text-mid-gray mb-1.5">{iconLabel}</label>
+            <input
+              value={icon}
+              onChange={(e) => setIcon(e.target.value)}
+              maxLength={4}
+              className="w-20 px-3 py-2 rounded-lg border border-green-mist bg-warm-white outline-none focus:border-forest text-center text-xl"
+            />
+          </div>
+        )}
         <label className="block text-sm text-mid-gray mb-1.5">{label}</label>
         <input
           ref={inputRef}

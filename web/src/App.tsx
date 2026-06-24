@@ -43,16 +43,18 @@ function HomePage() {
 
 function AppLayout() {
   return (
-    <div className="h-full flex">
+    <div className="h-full flex overflow-hidden">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         <MobileTopBar />
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/page/:pageId" element={<PageView />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-        </Routes>
+        <div id="app-scroll" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/page/:pageId" element={<PageView />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
+          </Routes>
+        </div>
       </div>
       <SearchModal />
       <QuickCapture />

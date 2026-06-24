@@ -7,10 +7,16 @@ import type { Theme } from '../types';
 import { ArrowLeft, Key, Copy, Check, Sun, Moon, Monitor } from 'lucide-react';
 
 export default function SettingsPage() {
-  const { user, logout, theme, setTheme } = useStore();
+  const { user, logout, theme, setTheme, workspace, renameWorkspace } = useStore();
   const navigate = useNavigate();
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [workspaceName, setWorkspaceName] = useState(workspace?.name || '');
+  const [workspaceSaved, setWorkspaceSaved] = useState(false);
+
+  useEffect(() => {
+    setWorkspaceName(workspace?.name || '');
+  }, [workspace?.name]);
 
   const generateApiKey = async () => {
     const { key } = await api.createApiKey('Integration Key');
@@ -32,7 +38,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-10 max-w-2xl mx-auto w-full">
+    <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full">
       <Tooltip text="Go back to the previous page">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-warm-gray hover:text-charcoal mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
@@ -40,6 +46,32 @@ export default function SettingsPage() {
       </Tooltip>
 
       <h1 className="text-2xl font-bold text-charcoal mb-8">Settings</h1>
+
+      {workspace && (
+        <section className="card-surface p-6 mb-6">
+          <h2 className="font-semibold mb-2">Workspace</h2>
+          <p className="text-sm text-warm-gray mb-4">Rename your workspace (e.g. &ldquo;My Knowledge Base&rdquo;).</p>
+          <div className="flex gap-2">
+            <input
+              value={workspaceName}
+              onChange={(e) => setWorkspaceName(e.target.value)}
+              className="flex-1 px-3 py-2 rounded-lg border border-green-mist bg-warm-white outline-none focus:border-forest text-sm"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                if (!workspaceName.trim()) return;
+                await renameWorkspace(workspaceName.trim());
+                setWorkspaceSaved(true);
+                setTimeout(() => setWorkspaceSaved(false), 2000);
+              }}
+              className="btn-primary text-sm shrink-0"
+            >
+              {workspaceSaved ? 'Saved' : 'Save'}
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="card-surface p-6 mb-6">
         <h2 className="font-semibold mb-4">Appearance</h2>

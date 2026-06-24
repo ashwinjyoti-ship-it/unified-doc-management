@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
-  Quote, Minus, Code, ImageIcon,
+  Quote, Minus, Code, ImageIcon, FileText,
 } from 'lucide-react';
 
 export interface SlashCommandItem {
@@ -9,6 +9,17 @@ export interface SlashCommandItem {
   description: string;
   icon: React.ReactNode;
   command: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void;
+}
+
+export function createPageLinkCommand(
+  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
+): SlashCommandItem {
+  return {
+    title: 'Page Link',
+    description: 'Link to another page ([[Page Title]])',
+    icon: <FileText className="w-4 h-4" />,
+    command: onRequest,
+  };
 }
 
 export const slashCommands: SlashCommandItem[] = [

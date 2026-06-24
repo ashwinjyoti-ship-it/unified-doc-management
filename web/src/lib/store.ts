@@ -40,6 +40,7 @@ interface AppState {
   logout: () => Promise<void>;
   init: () => Promise<void>;
   loadWorkspace: () => Promise<void>;
+  renameWorkspace: (name: string) => Promise<void>;
   loadPages: () => Promise<void>;
   loadFavorites: () => Promise<void>;
   loadRecent: () => Promise<void>;
@@ -137,6 +138,13 @@ export const useStore = create<AppState>((set, get) => ({
         get().loadTags(),
       ]);
     }
+  },
+
+  renameWorkspace: async (name: string) => {
+    const workspace = get().workspace;
+    if (!workspace) return;
+    const { workspace: updated } = await api.updateWorkspace(workspace.id, { name });
+    set({ workspace: { ...workspace, name: updated.name } });
   },
 
   loadPages: async () => {
