@@ -15,6 +15,9 @@
   --color-warm-gray: #ADACA6;
   --color-charcoal: #1D3325;
   --color-dark-ink: #17281D;
+  /* Tooltip / overlay surfaces — fixed contrast in both themes */
+  --color-tooltip-bg: #1D3325;
+  --color-tooltip-fg: #ffffff;
 
   --font-sans: 'Poppins', 'Inter', system-ui, sans-serif;
 }
@@ -148,6 +151,8 @@ html.dark {
   --color-dark-teal: #8ec49a;
   --color-sage: #b0c9b6;
   --color-shaded-green: #6a9a78;
+  --color-tooltip-bg: #0f1a14;
+  --color-tooltip-fg: #e8ede9;
 }
 
 html.dark body {

@@ -131,12 +131,19 @@ export const useStore = create<AppState>((set, get) => ({
     const { workspaces } = await api.getWorkspaces();
     if (workspaces.length > 0) {
       set({ workspace: workspaces[0] });
+      try {
+        await api.migrateKnowledgeBase();
+      } catch { /* offline or already organized */ }
       await Promise.all([
         get().loadPages(),
         get().loadFavorites(),
         get().loadRecent(),
         get().loadTags(),
       ]);
+      const { workspaces: refreshed } = await api.getWorkspaces();
+      if (refreshed.length > 0) {
+        set({ workspace: refreshed[0] });
+      }
     }
   },
 

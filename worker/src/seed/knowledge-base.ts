@@ -2,6 +2,7 @@ import { generateId, markdownToBlocks, syncBacklinks } from '../utils';
 
 export interface KnowledgeBaseSeedResult {
   alreadySeeded: boolean;
+  migrated?: boolean;
   workspaceName: string;
   dailyNoteTitle: string;
   pageIds: {
@@ -12,6 +13,16 @@ export interface KnowledgeBaseSeedResult {
   };
   message: string;
 }
+
+export interface LegacyMigrationResult {
+  migrated: boolean;
+  projectId?: string;
+  movedCount: number;
+  message: string;
+}
+
+const DEMO_FOLDER_TITLES = ['Learning', 'Ideas', 'Tasks', 'Interesting'] as const;
+const PROJECT_TITLE = 'My Knowledge Base';
 
 async function updatePageFts(db: D1Database, pageId: string, title: string, content: string) {
   await db.prepare('DELETE FROM pages_fts WHERE page_id = ?').bind(pageId).run();
@@ -68,6 +79,111 @@ async function setPageMarkdown(
   await syncBacklinks(db, pageId, workspaceId, markdown);
 }
 
+/** Move flat demo folders (Learning, Ideas, …) under one My Knowledge Base project. Idempotent. */
+export async function migrateLegacyKnowledgeBase(
+  db: D1Database,
+  workspaceId: string,
+  userId: string,
+): Promise<LegacyMigrationResult> {
+  const existingProject = await db.prepare(`
+    SELECT id FROM pages
+    WHERE workspace_id = ? AND type = 'folder' AND title = ? AND parent_id IS NULL
+    LIMIT 1
+  `).bind(workspaceId, PROJECT_TITLE).first<{ id: string }>();
+
+  if (existingProject) {
+    return {
+      migrated: false,
+      projectId: existingProject.id,
+      movedCount: 0,
+      message: 'Knowledge Base project already exists.',
+    };
+  }
+
+  const rootDemoFolders = await db.prepare(`
+    SELECT id, title FROM pages
+    WHERE workspace_id = ? AND type = 'folder' AND parent_id IS NULL
+      AND title IN (${DEMO_FOLDER_TITLES.map(() => '?').join(', ')})
+  `).bind(workspaceId, ...DEMO_FOLDER_TITLES).all<{ id: string; title: string }>();
+
+  const folders = rootDemoFolders.results ?? [];
+  const hasLearning = folders.some((f) => f.title === 'Learning');
+  if (!hasLearning || folders.length === 0) {
+    return { migrated: false, movedCount: 0, message: 'No legacy demo layout detected.' };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  let projectId: string;
+
+  const namedProject = await db.prepare(`
+    SELECT id FROM pages
+    WHERE workspace_id = ? AND type = 'folder' AND title = ?
+    LIMIT 1
+  `).bind(workspaceId, PROJECT_TITLE).first<{ id: string }>();
+
+  if (namedProject) {
+    projectId = namedProject.id;
+    await db.prepare('UPDATE pages SET parent_id = NULL, updated_at = ? WHERE id = ?')
+      .bind(now, projectId).run();
+  } else {
+    projectId = await insertPage(db, workspaceId, userId, {
+      title: PROJECT_TITLE,
+      type: 'folder',
+      icon: '🗂️',
+      parentId: null,
+    });
+  }
+
+  let movedCount = 0;
+  for (const folder of folders) {
+    await db.prepare('UPDATE pages SET parent_id = ?, updated_at = ? WHERE id = ?')
+      .bind(projectId, now, folder.id).run();
+    movedCount++;
+  }
+
+  const weeklyAtRoot = await db.prepare(`
+    SELECT id FROM pages
+    WHERE workspace_id = ? AND title = 'Weekly Review' AND type = 'page' AND parent_id IS NULL
+    LIMIT 1
+  `).bind(workspaceId).first<{ id: string }>();
+
+  if (weeklyAtRoot) {
+    await db.prepare('UPDATE pages SET parent_id = ?, updated_at = ? WHERE id = ?')
+      .bind(projectId, now, weeklyAtRoot.id).run();
+    movedCount++;
+  }
+
+  await db.prepare('UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?')
+    .bind(PROJECT_TITLE, now, workspaceId).run();
+
+  return {
+    migrated: true,
+    projectId,
+    movedCount,
+    message: `Organized ${movedCount} demo item(s) under "${PROJECT_TITLE}".`,
+  };
+}
+
+async function resolveSeedPageIds(db: D1Database, workspaceId: string, projectId: string) {
+  const learning = await db.prepare(`
+    SELECT id FROM pages WHERE workspace_id = ? AND title = 'Learning' LIMIT 1
+  `).bind(workspaceId).first<{ id: string }>();
+  const weekly = await db.prepare(`
+    SELECT id FROM pages WHERE workspace_id = ? AND title = 'Weekly Review' LIMIT 1
+  `).bind(workspaceId).first<{ id: string }>();
+  const today = new Date().toLocaleDateString('en-CA');
+  const daily = await db.prepare(`
+    SELECT id FROM pages WHERE workspace_id = ? AND title = ? LIMIT 1
+  `).bind(workspaceId, today).first<{ id: string }>();
+
+  return {
+    projectId,
+    learningFolderId: learning?.id || projectId,
+    weeklyReviewId: weekly?.id || projectId,
+    dailyNoteId: daily?.id || projectId,
+  };
+}
+
 export async function seedKnowledgeBase(
   db: D1Database,
   workspaceId: string,
@@ -75,9 +191,9 @@ export async function seedKnowledgeBase(
 ): Promise<KnowledgeBaseSeedResult> {
   const existingProject = await db.prepare(`
     SELECT id, title FROM pages
-    WHERE workspace_id = ? AND type = 'folder' AND title = 'My Knowledge Base' AND parent_id IS NULL
+    WHERE workspace_id = ? AND type = 'folder' AND title = ? AND parent_id IS NULL
     LIMIT 1
-  `).bind(workspaceId).first<{ id: string; title: string }>();
+  `).bind(workspaceId, PROJECT_TITLE).first<{ id: string; title: string }>();
 
   const legacyLearning = !existingProject ? await db.prepare(`
     SELECT id, title FROM pages
@@ -85,45 +201,39 @@ export async function seedKnowledgeBase(
     LIMIT 1
   `).bind(workspaceId).first<{ id: string; title: string }>() : null;
 
-  const existing = existingProject || legacyLearning;
-
-  if (existing) {
-    const projectId = existingProject?.id || existing.id;
-    const learning = await db.prepare(`
-      SELECT id FROM pages
-      WHERE workspace_id = ? AND title = 'Learning'
-      LIMIT 1
-    `).bind(workspaceId).first<{ id: string }>();
-    const weekly = await db.prepare(`
-      SELECT id FROM pages WHERE workspace_id = ? AND title = 'Weekly Review' LIMIT 1
-    `).bind(workspaceId).first<{ id: string }>();
+  if (legacyLearning) {
+    const migration = await migrateLegacyKnowledgeBase(db, workspaceId, userId);
     const today = new Date().toLocaleDateString('en-CA');
-    const daily = await db.prepare(`
-      SELECT id FROM pages WHERE workspace_id = ? AND title = ? LIMIT 1
-    `).bind(workspaceId, today).first<{ id: string }>();
-
+    const projectId = migration.projectId ?? legacyLearning.id;
     return {
       alreadySeeded: true,
-      workspaceName: 'My Knowledge Base',
+      migrated: migration.migrated,
+      workspaceName: PROJECT_TITLE,
       dailyNoteTitle: today,
-      pageIds: {
-        projectId,
-        learningFolderId: learning?.id || existing.id,
-        weeklyReviewId: weekly?.id || existing.id,
-        dailyNoteId: daily?.id || existing.id,
-      },
+      pageIds: await resolveSeedPageIds(db, workspaceId, projectId),
+      message: migration.message,
+    };
+  }
+
+  if (existingProject) {
+    const today = new Date().toLocaleDateString('en-CA');
+    return {
+      alreadySeeded: true,
+      workspaceName: PROJECT_TITLE,
+      dailyNoteTitle: today,
+      pageIds: await resolveSeedPageIds(db, workspaceId, existingProject.id),
       message: 'Demo Knowledge Base already exists in this workspace.',
     };
   }
 
   const now = Math.floor(Date.now() / 1000);
   await db.prepare('UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?')
-    .bind('My Knowledge Base', now, workspaceId).run();
+    .bind(PROJECT_TITLE, now, workspaceId).run();
 
   const today = new Date().toLocaleDateString('en-CA');
 
   const projectId = await insertPage(db, workspaceId, userId, {
-    title: 'My Knowledge Base', type: 'folder', icon: '🗂️',
+    title: PROJECT_TITLE, type: 'folder', icon: '🗂️',
   });
 
   const learningId = await insertPage(db, workspaceId, userId, {
@@ -252,7 +362,7 @@ Follow-up: [[React Hooks Deep Dive]]
 
   return {
     alreadySeeded: false,
-    workspaceName: 'My Knowledge Base',
+    workspaceName: PROJECT_TITLE,
     dailyNoteTitle: today,
     pageIds: {
       projectId,

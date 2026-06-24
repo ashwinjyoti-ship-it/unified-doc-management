@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext } from '../types';
-import { seedKnowledgeBase } from '../seed/knowledge-base';
+import { migrateLegacyKnowledgeBase, seedKnowledgeBase } from '../seed/knowledge-base';
 
 const seed = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -20,6 +20,18 @@ seed.post('/seed/knowledge-base', async (c) => {
   }
 
   const result = await seedKnowledgeBase(c.env.DB, workspaceId, auth.user.id);
+  return c.json(result);
+});
+
+seed.post('/seed/migrate-knowledge-base', async (c) => {
+  const auth = c.get('auth');
+  const workspaceId = await getUserWorkspaceId(c.env.DB, auth.user.id);
+
+  if (!workspaceId) {
+    return c.json({ error: 'No workspace found for your account' }, 404);
+  }
+
+  const result = await migrateLegacyKnowledgeBase(c.env.DB, workspaceId, auth.user.id);
   return c.json(result);
 });
 

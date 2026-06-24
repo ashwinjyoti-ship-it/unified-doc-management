@@ -278,11 +278,21 @@ class ApiClient {
   seedKnowledgeBase() {
     return this.request<{
       alreadySeeded: boolean;
+      migrated?: boolean;
       workspaceName: string;
       dailyNoteTitle: string;
       pageIds: { projectId: string; learningFolderId: string; weeklyReviewId: string; dailyNoteId: string };
       message: string;
     }>('/seed/knowledge-base', { method: 'POST' });
+  }
+
+  migrateKnowledgeBase() {
+    return this.request<{
+      migrated: boolean;
+      projectId?: string;
+      movedCount: number;
+      message: string;
+    }>('/seed/migrate-knowledge-base', { method: 'POST' });
   }
 }
 
