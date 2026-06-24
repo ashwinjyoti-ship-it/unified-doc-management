@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { api } from './api';
+import { markOpenBlankPageAfterAuth } from './authSession';
 import type { User, Page, Workspace, Notification, Tag, Theme } from '../types';
 
 function resolveTheme(theme: Theme): 'light' | 'dark' {
@@ -85,6 +86,7 @@ export const useStore = create<AppState>((set, get) => ({
     api.setToken(token);
     set({ user });
     await get().loadWorkspace();
+    markOpenBlankPageAfterAuth();
     try {
       const { preferences } = await api.getPreferences();
       await get().setTheme(preferences.theme);
@@ -98,6 +100,7 @@ export const useStore = create<AppState>((set, get) => ({
     api.setToken(token);
     set({ user, workspace: { id: workspaceId, name: `${name}'s Workspace`, owner_id: user.id, role: 'owner' } });
     await get().loadPages();
+    markOpenBlankPageAfterAuth();
     applyThemeToDom(get().theme);
   },
 
@@ -109,6 +112,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   init: async () => {
     applyThemeToDom(get().theme);
+    api.syncTokenFromStorage();
     if (!api.getToken()) {
       set({ loading: false });
       return;
@@ -121,8 +125,13 @@ export const useStore = create<AppState>((set, get) => ({
         await get().setTheme(preferences.theme);
       } catch { /* use local */ }
       await get().loadWorkspace();
-    } catch {
-      api.setToken(null);
+    } catch (err) {
+      const status = (err as Error & { status?: number }).status;
+      if (status === 401) {
+        api.setToken(null);
+        set({ user: null, workspace: null, pages: [] });
+      }
+      /* Keep token on network errors so mobile sessions survive flaky connectivity */
     }
     set({ loading: false });
   },

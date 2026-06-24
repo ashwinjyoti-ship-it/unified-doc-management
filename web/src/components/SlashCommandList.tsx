@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
-  Quote, Minus, Code, ImageIcon, FileText,
+  Quote, Minus, Code, ImageIcon, FileText, Table2, Database, MessageSquare, Square,
 } from 'lucide-react';
 
 export interface SlashCommandItem {
@@ -18,6 +18,28 @@ export function createPageLinkCommand(
     title: 'Page Link',
     description: 'Link to another page ([[Page Title]])',
     icon: <FileText className="w-4 h-4" />,
+    command: onRequest,
+  };
+}
+
+export function createNewDatabaseCommand(
+  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
+): SlashCommandItem {
+  return {
+    title: 'New Database',
+    description: 'Create a database in this folder',
+    icon: <Database className="w-4 h-4" />,
+    command: onRequest,
+  };
+}
+
+export function createMessagePageCommand(
+  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
+): SlashCommandItem {
+  return {
+    title: 'Message (new page)',
+    description: 'Create a message page and link to it',
+    icon: <MessageSquare className="w-4 h-4" />,
     command: onRequest,
   };
 }
@@ -54,10 +76,64 @@ export const slashCommands: SlashCommandItem[] = [
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
   },
   {
+    title: 'To-do Item',
+    description: 'Single checkbox task',
+    icon: <Square className="w-4 h-4" />,
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: 'taskList',
+          content: [
+            {
+              type: 'taskItem',
+              attrs: { checked: false },
+              content: [{ type: 'paragraph' }],
+            },
+          ],
+        })
+        .run();
+    },
+  },
+  {
     title: 'To-do List',
     description: 'Task list with checkboxes',
     icon: <CheckSquare className="w-4 h-4" />,
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+  },
+  {
+    title: 'Table',
+    description: 'Insert a 3×3 table',
+    icon: <Table2 className="w-4 h-4" />,
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .run(),
+  },
+  {
+    title: 'Message (inline)',
+    description: 'Callout note in the current page',
+    icon: <MessageSquare className="w-4 h-4" />,
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: 'blockquote',
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: '💬 ' }],
+            },
+          ],
+        })
+        .run(),
   },
   {
     title: 'Quote',

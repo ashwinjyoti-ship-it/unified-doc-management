@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { BrowserRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from './lib/store';
 import { createProject } from './lib/projectCreate';
+import { consumeOpenBlankPageAfterAuth } from './lib/authSession';
 import { isStandalonePage } from './lib/standalonePages';
 import AuthPage from './components/AuthPage';
 import Sidebar from './components/Sidebar';
@@ -13,13 +14,36 @@ import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
 
 function HomePage() {
-  const { pages, workspace, loadPages } = useStore();
+  const navigate = useNavigate();
+  const { workspace, createPage, recent, loadPages } = useStore();
+  const [opening, setOpening] = useState(false);
+  const handled = useRef(false);
 
   useEffect(() => {
-    if (pages.length > 0) {
-      window.location.href = `/page/${pages[0].id}`;
+    if (!workspace || handled.current || opening) return;
+
+    if (consumeOpenBlankPageAfterAuth()) {
+      handled.current = true;
+      setOpening(true);
+      void createPage({ type: 'page', title: 'Untitled', icon: '📄' })
+        .then((page) => navigate(`/page/${page.id}`, { replace: true }))
+        .finally(() => setOpening(false));
+      return;
     }
-  }, [pages]);
+
+    if (recent.length > 0) {
+      handled.current = true;
+      navigate(`/page/${recent[0].id}`, { replace: true });
+    }
+  }, [workspace, createPage, navigate, opening, recent]);
+
+  if (opening) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-forest font-medium animate-pulse">Opening blank page...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 pb-24 md:pb-8 text-center">
@@ -39,7 +63,7 @@ function HomePage() {
             child: { type: 'page', title: 'My First Page', icon: '✨' },
           });
           await loadPages();
-          window.location.href = `/page/${project.id}`;
+          navigate(`/page/${project.id}`, { replace: true });
         }}
         className="btn-primary"
       >

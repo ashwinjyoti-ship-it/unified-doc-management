@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
+import { saveLastAuthEmail, getLastAuthEmail } from '../lib/authSession';
 import { Shield, Users, Search, Settings, BarChart3 } from 'lucide-react';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => getLastAuthEmail());
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
@@ -21,6 +22,7 @@ export default function AuthPage() {
       } else {
         await register(email, password, name);
       }
+      saveLastAuthEmail(email);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
