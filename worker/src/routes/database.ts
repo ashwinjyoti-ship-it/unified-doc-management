@@ -4,6 +4,8 @@ import { generateId } from '../utils';
 import {
   ensureRowPage,
   getRelationData,
+  getRelatedSchemas,
+  computeRollupValues,
   syncPageTitleFromRowProperty,
 } from '../database-helpers';
 
@@ -54,6 +56,14 @@ database.get('/pages/:pageId/database', async (c) => {
     (properties.results || []) as Array<{ id: string; type: string; options: string }>,
   );
 
+  const propList = (properties.results || []) as Array<{ id: string; type: string; options: string }>;
+  const relatedSchemas = await getRelatedSchemas(c.env.DB, propList);
+  const rollupValues = await computeRollupValues(
+    c.env.DB,
+    propList,
+    (refreshedRows.results || []) as Array<{ id: string; properties: string }>,
+  );
+
   const databases = await c.env.DB.prepare(
     "SELECT id, title, icon FROM pages WHERE workspace_id = ? AND type = 'database' AND id != ? ORDER BY title"
   ).bind(dbPage.workspace_id, pageId).all();
@@ -63,6 +73,8 @@ database.get('/pages/:pageId/database', async (c) => {
     rows: refreshedRows.results,
     views: views.results,
     relationData,
+    relatedSchemas,
+    rollupValues,
     databases: databases.results,
   });
 });
@@ -72,7 +84,12 @@ database.post('/pages/:pageId/database/properties', async (c) => {
   const body = await c.req.json<{
     name: string;
     type: string;
-    options?: string[] | { relatedDatabaseId?: string };
+    options?: string[] | {
+      relatedDatabaseId?: string;
+      relationPropertyId?: string;
+      targetPropertyId?: string;
+      aggregation?: string;
+    };
   }>();
 
   if (!(await getDatabasePage(c.env.DB, pageId))) {
@@ -81,6 +98,8 @@ database.post('/pages/:pageId/database/properties', async (c) => {
 
   let optionsJson: string;
   if (body.type === 'relation' && body.options && !Array.isArray(body.options)) {
+    optionsJson = JSON.stringify(body.options);
+  } else if (body.type === 'rollup' && body.options && !Array.isArray(body.options)) {
     optionsJson = JSON.stringify(body.options);
   } else if (Array.isArray(body.options)) {
     optionsJson = JSON.stringify(body.options);

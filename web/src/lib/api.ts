@@ -136,6 +136,8 @@ class ApiClient {
       rows: DatabaseRow[];
       views: SavedDatabaseView[];
       relationData: Record<string, Array<{ id: string; page_id: string | null; title: string }>>;
+      relatedSchemas: Record<string, Array<{ id: string; name: string; type: string }>>;
+      rollupValues: Record<string, Record<string, string | number>>;
       databases: Array<{ id: string; title: string; icon: string | null }>;
     }>(`/pages/${pageId}/database`);
   }
@@ -159,7 +161,12 @@ class ApiClient {
   createDatabaseProperty(pageId: string, data: {
     name: string;
     type: string;
-    options?: string[] | { relatedDatabaseId?: string };
+    options?: string[] | {
+      relatedDatabaseId?: string;
+      relationPropertyId?: string;
+      targetPropertyId?: string;
+      aggregation?: string;
+    };
   }) {
     return this.request<{ property: DatabaseProperty }>(
       `/pages/${pageId}/database/properties`, { method: 'POST', body: JSON.stringify(data) }

@@ -25,10 +25,18 @@ export interface SavedDatabaseView {
   order_index: number;
 }
 
-export interface RelationRowOption {
+export type RollupAggregation = 'count' | 'count_values' | 'sum' | 'average' | 'min' | 'max' | 'show_unique';
+
+export interface RollupOptions {
+  relationPropertyId: string;
+  targetPropertyId: string;
+  aggregation: RollupAggregation;
+}
+
+export interface RelatedSchemaProperty {
   id: string;
-  page_id: string | null;
-  title: string;
+  name: string;
+  type: string;
 }
 
 export function parseRowProperties(row: DatabaseRow): Record<string, unknown> {
@@ -55,8 +63,9 @@ export function getRowTitle(
 function matchFilter(
   row: DatabaseRow,
   filter: DatabaseFilter,
+  getValue: (row: DatabaseRow, propId: string) => unknown = getPropValue,
 ): boolean {
-  const raw = getPropValue(row, filter.propertyId);
+  const raw = getValue(row, filter.propertyId);
   const value = Array.isArray(raw) ? raw.join(',') : String(raw ?? '');
 
   switch (filter.operator) {
@@ -75,22 +84,27 @@ function matchFilter(
   }
 }
 
-export function applyFilters(rows: DatabaseRow[], filters: DatabaseFilter[]): DatabaseRow[] {
+export function applyFilters(
+  rows: DatabaseRow[],
+  filters: DatabaseFilter[],
+  getValue: (row: DatabaseRow, propId: string) => unknown = getPropValue,
+): DatabaseRow[] {
   if (filters.length === 0) return rows;
-  return rows.filter((row) => filters.every((f) => matchFilter(row, f)));
+  return rows.filter((row) => filters.every((f) => matchFilter(row, f, getValue)));
 }
 
 export function applySort(
   rows: DatabaseRow[],
   sorts: DatabaseSort[],
   properties: DatabaseProperty[],
+  getValue: (row: DatabaseRow, propId: string) => unknown = getPropValue,
 ): DatabaseRow[] {
   if (sorts.length === 0) return rows;
   return [...rows].sort((a, b) => {
     for (const sort of sorts) {
       const prop = properties.find((p) => p.id === sort.propertyId);
-      const av = String(getPropValue(a, sort.propertyId));
-      const bv = String(getPropValue(b, sort.propertyId));
+      const av = String(getValue(a, sort.propertyId));
+      const bv = String(getValue(b, sort.propertyId));
       let cmp = av.localeCompare(bv, undefined, { numeric: true });
       if (prop?.name.toLowerCase() === 'priority') {
         const order: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
@@ -107,6 +121,26 @@ export function parseRelationValue(raw: unknown): string[] {
   if (typeof raw === 'string' && raw) return [raw];
   return [];
 }
+
+export function parseRollupOptions(options: string): Partial<RollupOptions> {
+  try {
+    const parsed = JSON.parse(options || '{}');
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Partial<RollupOptions>;
+    }
+  } catch { /* ignore */ }
+  return {};
+}
+
+export const ROLLUP_AGGREGATIONS: { value: RollupAggregation; label: string }[] = [
+  { value: 'count', label: 'Count all' },
+  { value: 'count_values', label: 'Count values' },
+  { value: 'sum', label: 'Sum' },
+  { value: 'average', label: 'Average' },
+  { value: 'min', label: 'Min' },
+  { value: 'max', label: 'Max' },
+  { value: 'show_unique', label: 'Show unique' },
+];
 
 export function parseRelationOptions(options: string): { relatedDatabaseId?: string } {
   try {
