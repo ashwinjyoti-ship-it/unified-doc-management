@@ -1,4 +1,5 @@
-import type { User, Page, Workspace, Notification, Block, Comment, DatabaseProperty, DatabaseRow, Tag, Theme } from '../types';
+import type { User, Page, Workspace, Notification, Block, Comment, DatabaseProperty, DatabaseRow, SavedDatabaseView, Tag, Theme } from '../types';
+import type { DatabaseFilter, DatabaseSort } from './databaseFilters';
 
 const API_BASE = '/api';
 
@@ -130,14 +131,18 @@ class ApiClient {
   }
 
   getDatabase(pageId: string) {
-    return this.request<{ properties: DatabaseProperty[]; rows: DatabaseRow[] }>(
-      `/pages/${pageId}/database`
-    );
+    return this.request<{
+      properties: DatabaseProperty[];
+      rows: DatabaseRow[];
+      views: SavedDatabaseView[];
+      relationData: Record<string, Array<{ id: string; page_id: string | null; title: string }>>;
+      databases: Array<{ id: string; title: string; icon: string | null }>;
+    }>(`/pages/${pageId}/database`);
   }
 
-  createDatabaseRow(pageId: string, properties?: Record<string, unknown>) {
+  createDatabaseRow(pageId: string, properties?: Record<string, unknown>, title?: string) {
     return this.request<{ row: DatabaseRow }>(
-      `/pages/${pageId}/database/rows`, { method: 'POST', body: JSON.stringify({ properties }) }
+      `/pages/${pageId}/database/rows`, { method: 'POST', body: JSON.stringify({ properties, title }) }
     );
   }
 
@@ -151,10 +156,40 @@ class ApiClient {
     return this.request(`/pages/${pageId}/database/rows/${rowId}`, { method: 'DELETE' });
   }
 
-  createDatabaseProperty(pageId: string, data: { name: string; type: string; options?: string[] }) {
+  createDatabaseProperty(pageId: string, data: {
+    name: string;
+    type: string;
+    options?: string[] | { relatedDatabaseId?: string };
+  }) {
     return this.request<{ property: DatabaseProperty }>(
       `/pages/${pageId}/database/properties`, { method: 'POST', body: JSON.stringify(data) }
     );
+  }
+
+  createDatabaseView(pageId: string, data: {
+    name: string;
+    viewType?: string;
+    filters?: DatabaseFilter[];
+    sortConfig?: DatabaseSort[];
+  }) {
+    return this.request<{ view: SavedDatabaseView }>(
+      `/pages/${pageId}/database/views`, { method: 'POST', body: JSON.stringify(data) }
+    );
+  }
+
+  updateDatabaseView(pageId: string, viewId: string, data: {
+    name?: string;
+    viewType?: string;
+    filters?: DatabaseFilter[];
+    sortConfig?: DatabaseSort[];
+  }) {
+    return this.request<{ view: SavedDatabaseView }>(
+      `/pages/${pageId}/database/views/${viewId}`, { method: 'PATCH', body: JSON.stringify(data) }
+    );
+  }
+
+  deleteDatabaseView(pageId: string, viewId: string) {
+    return this.request(`/pages/${pageId}/database/views/${viewId}`, { method: 'DELETE' });
   }
 
   getComments(pageId: string) {
