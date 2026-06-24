@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
 import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks } from '../utils';
+import { syncRowPageTitle } from '../database-helpers';
 
 const pages = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -162,6 +163,8 @@ pages.patch('/pages/:pageId', async (c) => {
   await c.env.DB.prepare(
     'UPDATE pages SET title = ?, icon = ?, parent_id = ?, visibility = ?, updated_at = ? WHERE id = ?'
   ).bind(title, icon, parentId, visibility, now, pageId).run();
+
+  await syncRowPageTitle(c.env.DB, pageId, title);
 
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all<Block>();
   const md = blocksToMarkdown(blocks.results || []);

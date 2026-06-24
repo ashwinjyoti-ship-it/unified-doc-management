@@ -41,8 +41,25 @@ export interface DatabaseRow {
   id: string;
   database_id: string;
   page_id: string | null;
+  page_title?: string;
   properties: string;
   order_index: number;
+}
+
+export interface SavedDatabaseView {
+  id: string;
+  database_id: string;
+  name: string;
+  view_type: string;
+  filters: string;
+  sort_config: string;
+  order_index: number;
+}
+
+export interface RelationRowOption {
+  id: string;
+  page_id: string | null;
+  title: string;
 }
 
 export interface Comment {

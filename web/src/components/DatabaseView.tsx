@@ -1,29 +1,57 @@
 import { useState, useEffect, useMemo } from 'react';
-import { api } from '../lib/api';
-import type { DatabaseProperty, DatabaseRow } from '../types';
-import { Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2, Images } from 'lucide-react';
+import { useStore } from '../lib/store';
+import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
+import {
+  applyFilters,
+  applySort,
+  getPropValue,
+  getRowTitle,
+  parseRelationValue,
+  type DatabaseFilter,
+  type DatabaseSort,
+  type FilterOperator,
+  type ViewType,
+} from '../lib/databaseFilters';
+import {
+  Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2, Images,
+  Filter, Save, ExternalLink, X,
+} from 'lucide-react';
 
-type ViewType = 'table' | 'board' | 'calendar' | 'gallery' | 'list';
-
-const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+const FILTER_OPS: { value: FilterOperator; label: string }[] = [
+  { value: 'eq', label: 'is' },
+  { value: 'neq', label: 'is not' },
+  { value: 'contains', label: 'contains' },
+  { value: 'empty', label: 'is empty' },
+  { value: 'not_empty', label: 'is not empty' },
+];
 
 interface DatabaseViewProps {
   pageId: string;
 }
 
 export default function DatabaseView({ pageId }: DatabaseViewProps) {
+  const navigate = useNavigate();
+  const { loadPages } = useStore();
   const [properties, setProperties] = useState<DatabaseProperty[]>([]);
   const [rows, setRows] = useState<DatabaseRow[]>([]);
+  const [savedViews, setSavedViews] = useState<SavedDatabaseView[]>([]);
+  const [relationData, setRelationData] = useState<Record<string, Array<{ id: string; page_id: string | null; title: string }>>>({});
+  const [workspaceDatabases, setWorkspaceDatabases] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
   const [view, setView] = useState<ViewType>('table');
+  const [filters, setFilters] = useState<DatabaseFilter[]>([]);
+  const [sorts, setSorts] = useState<DatabaseSort[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddProp, setShowAddProp] = useState(false);
+  const [showSaveView, setShowSaveView] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
   const [newPropName, setNewPropName] = useState('');
   const [newPropType, setNewPropType] = useState('text');
   const [newPropOptions, setNewPropOptions] = useState('');
-  const [listSortPropId, setListSortPropId] = useState<string | null>(null);
+  const [newRelationDbId, setNewRelationDbId] = useState('');
 
   useEffect(() => {
-    loadDatabase();
+    void loadDatabase();
   }, [pageId]);
 
   const loadDatabase = async () => {
@@ -32,16 +60,36 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       const data = await api.getDatabase(pageId);
       setProperties(data.properties);
       setRows(data.rows);
-      const priority = data.properties.find((p) => p.name.toLowerCase() === 'priority');
-      if (priority && !listSortPropId) setListSortPropId(priority.id);
+      setSavedViews(data.views || []);
+      setRelationData(data.relationData || {});
+      setWorkspaceDatabases(data.databases || []);
     } finally {
       setLoading(false);
     }
   };
 
+  const applySavedView = (sv: SavedDatabaseView) => {
+    setActiveViewId(sv.id);
+    setView(sv.view_type as ViewType);
+    try {
+      setFilters(JSON.parse(sv.filters || '[]'));
+      setSorts(JSON.parse(sv.sort_config || '[]'));
+    } catch {
+      setFilters([]);
+      setSorts([]);
+    }
+  };
+
+  const clearSavedView = () => {
+    setActiveViewId(null);
+    setFilters([]);
+    setSorts([]);
+  };
+
   const addRow = async () => {
-    const { row } = await api.createDatabaseRow(pageId, {});
+    const { row } = await api.createDatabaseRow(pageId);
     setRows([...rows, row]);
+    await loadPages();
   };
 
   const updateCell = async (rowId: string, propId: string, value: unknown) => {
@@ -55,13 +103,22 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const deleteRow = async (rowId: string) => {
     await api.deleteDatabaseRow(pageId, rowId);
     setRows(rows.filter((r) => r.id !== rowId));
+    await loadPages();
+  };
+
+  const openRowPage = (row: DatabaseRow) => {
+    if (row.page_id) navigate(`/page/${row.page_id}`);
   };
 
   const addProperty = async () => {
     if (!newPropName.trim()) return;
-    const options = newPropType === 'select'
-      ? newPropOptions.split(',').map((s) => s.trim()).filter(Boolean)
-      : undefined;
+    let options: string[] | { relatedDatabaseId?: string } | undefined;
+    if (newPropType === 'select') {
+      options = newPropOptions.split(',').map((s) => s.trim()).filter(Boolean);
+    } else if (newPropType === 'relation') {
+      if (!newRelationDbId) return;
+      options = { relatedDatabaseId: newRelationDbId };
+    }
     const { property } = await api.createDatabaseProperty(pageId, {
       name: newPropName.trim(),
       type: newPropType,
@@ -70,18 +127,51 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     setProperties([...properties, property]);
     setNewPropName('');
     setNewPropOptions('');
+    setNewRelationDbId('');
     setShowAddProp(false);
+    await loadDatabase();
   };
 
-  const getPropValue = (row: DatabaseRow, propId: string) => {
-    const props = JSON.parse(row.properties || '{}');
-    return props[propId] ?? '';
+  const saveCurrentView = async () => {
+    if (!newViewName.trim()) return;
+    const { view: created } = await api.createDatabaseView(pageId, {
+      name: newViewName.trim(),
+      viewType: view,
+      filters,
+      sortConfig: sorts,
+    });
+    setSavedViews([...savedViews, created]);
+    setActiveViewId(created.id);
+    setNewViewName('');
+    setShowSaveView(false);
+  };
+
+  const updateActiveView = async () => {
+    if (!activeViewId) return;
+    const { view: updated } = await api.updateDatabaseView(pageId, activeViewId, {
+      viewType: view,
+      filters,
+      sortConfig: sorts,
+    });
+    setSavedViews(savedViews.map((v) => (v.id === activeViewId ? updated : v)));
+  };
+
+  const addFilter = () => {
+    const firstProp = properties[0];
+    if (!firstProp) return;
+    setFilters([...filters, { propertyId: firstProp.id, operator: 'contains', value: '' }]);
+    setActiveViewId(null);
   };
 
   const statusProp = properties.find((p) => p.type === 'select' && p.name.toLowerCase().includes('status'))
     || properties.find((p) => p.type === 'select');
   const dateProp = properties.find((p) => p.type === 'date');
   const nameProp = properties.find((p) => p.name.toLowerCase() === 'name') || properties[0];
+
+  const displayRows = useMemo(
+    () => applySort(applyFilters(rows, filters), sorts, properties),
+    [rows, filters, sorts, properties],
+  );
 
   const galleryCoverStyle = (status: string) => {
     const colors: Record<string, string> = {
@@ -91,19 +181,6 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     };
     return colors[status] || 'from-linen to-green-mist';
   };
-
-  const sortedListRows = useMemo(() => {
-    if (!listSortPropId) return rows;
-    const prop = properties.find((p) => p.id === listSortPropId);
-    return [...rows].sort((a, b) => {
-      const av = String(getPropValue(a, listSortPropId));
-      const bv = String(getPropValue(b, listSortPropId));
-      if (prop?.name.toLowerCase() === 'priority') {
-        return (PRIORITY_ORDER[av] ?? 99) - (PRIORITY_ORDER[bv] ?? 99);
-      }
-      return av.localeCompare(bv);
-    });
-  }, [rows, listSortPropId, properties]);
 
   const calendarDays = useMemo(() => {
     const now = new Date();
@@ -120,7 +197,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     return { cells, monthLabel: now.toLocaleString('default', { month: 'long', year: 'numeric' }) };
   }, []);
 
-  const views = [
+  const viewTabs = [
     { id: 'table' as const, icon: Table, label: 'Table' },
     { id: 'board' as const, icon: LayoutGrid, label: 'Kanban' },
     { id: 'calendar' as const, icon: Calendar, label: 'Calendar' },
@@ -128,12 +205,57 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     { id: 'list' as const, icon: List, label: 'List' },
   ];
 
+  const renderRelationCell = (row: DatabaseRow, prop: DatabaseProperty) => {
+    const options = relationData[prop.id] || [];
+    const selected = parseRelationValue(getPropValue(row, prop.id));
+    return (
+      <select
+        multiple
+        value={selected}
+        onChange={(e) => {
+          const vals = Array.from(e.target.selectedOptions, (o) => o.value);
+          void updateCell(row.id, prop.id, vals);
+        }}
+        className="w-full min-w-[120px] bg-transparent border-none outline-none text-sm text-charcoal"
+        size={Math.min(3, Math.max(1, options.length))}
+      >
+        {options.map((opt) => (
+          <option key={opt.id} value={opt.id}>{opt.title}</option>
+        ))}
+      </select>
+    );
+  };
+
+  const renderNameCell = (row: DatabaseRow, prop: DatabaseProperty) => (
+      <div className="flex items-center gap-1 min-w-[120px]">
+        <input
+          type="text"
+          value={String(getPropValue(row, prop.id) || '')}
+          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
+          className="flex-1 bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
+        />
+        {row.page_id && (
+          <button
+            type="button"
+            onClick={() => openRowPage(row)}
+            className="p-1 rounded hover:bg-linen text-forest shrink-0"
+            title="Open page"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    );
+
   const renderCell = (row: DatabaseRow, prop: DatabaseProperty) => {
+    if (prop.type === 'relation') return renderRelationCell(row, prop);
+    if (nameProp && prop.id === nameProp.id) return renderNameCell(row, prop);
+
     if (prop.type === 'select') {
       return (
         <select
           value={getPropValue(row, prop.id) as string}
-          onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
+          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
           className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         >
           <option value="">—</option>
@@ -148,7 +270,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <input
           type="date"
           value={getPropValue(row, prop.id) as string}
-          onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
+          onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
           className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         />
       );
@@ -157,11 +279,31 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       <input
         type={prop.type === 'number' ? 'number' : 'text'}
         value={getPropValue(row, prop.id) as string}
-        onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
+        onChange={(e) => void updateCell(row.id, prop.id, e.target.value)}
         className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
       />
     );
   };
+
+  const formatRelationDisplay = (row: DatabaseRow, prop: DatabaseProperty) => {
+    const selected = parseRelationValue(getPropValue(row, prop.id));
+    const options = relationData[prop.id] || [];
+    return selected
+      .map((id) => options.find((o) => o.id === id)?.title || id)
+      .join(', ') || '—';
+  };
+
+  const RowTitleButton = ({ row }: { row: DatabaseRow }) => (
+    <button
+      type="button"
+      onClick={() => openRowPage(row)}
+      className="font-medium text-left text-forest hover:underline flex items-center gap-1"
+      disabled={!row.page_id}
+    >
+      {getRowTitle(row, nameProp)}
+      {row.page_id && <ExternalLink className="w-3 h-3 opacity-60" />}
+    </button>
+  );
 
   if (loading) return <div className="p-8 text-mid-gray">Loading database...</div>;
 
@@ -169,11 +311,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 bg-linen rounded-xl p-1 flex-wrap">
-          {views.map(({ id, icon: Icon, label }) => (
+          {viewTabs.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
               type="button"
-              onClick={() => setView(id)}
+              onClick={() => { setView(id); setActiveViewId(null); }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                 view === id ? 'bg-warm-white shadow-sm text-forest font-medium' : 'text-warm-gray hover:text-charcoal'
               }`}
@@ -182,7 +324,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             </button>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button type="button" onClick={() => setShowAddProp(true)} className="btn-secondary text-sm flex items-center gap-1">
             <Settings2 className="w-4 h-4" /> Add Property
           </button>
@@ -192,21 +334,131 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         </div>
       </div>
 
-      {view === 'list' && properties.length > 1 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-mid-gray">Sort by:</span>
+      {/* Saved views */}
+      <div className="flex flex-wrap items-center gap-2">
+        {savedViews.length > 0 && (
           <select
-            value={listSortPropId || ''}
-            onChange={(e) => setListSortPropId(e.target.value || null)}
-            className="bg-linen rounded-lg px-2 py-1 border-none outline-none text-sm text-charcoal"
+            value={activeViewId || ''}
+            onChange={(e) => {
+              const sv = savedViews.find((v) => v.id === e.target.value);
+              if (sv) applySavedView(sv);
+              else clearSavedView();
+            }}
+            className="text-sm bg-linen rounded-lg px-3 py-1.5 border-none outline-none text-charcoal"
+          >
+            <option value="">All rows</option>
+            {savedViews.map((sv) => (
+              <option key={sv.id} value={sv.id}>{sv.name}</option>
+            ))}
+          </select>
+        )}
+        <button type="button" onClick={() => setShowSaveView(true)} className="btn-secondary text-xs flex items-center gap-1">
+          <Save className="w-3.5 h-3.5" /> Save view
+        </button>
+        {activeViewId && (
+          <button type="button" onClick={() => void updateActiveView()} className="btn-secondary text-xs">
+            Update view
+          </button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="card-surface p-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-charcoal flex items-center gap-1.5">
+            <Filter className="w-4 h-4" /> Filters
+          </span>
+          <button type="button" onClick={addFilter} className="text-xs text-forest hover:underline">
+            + Add filter
+          </button>
+        </div>
+        {filters.length === 0 ? (
+          <p className="text-xs text-mid-gray">No filters — showing all rows.</p>
+        ) : (
+          filters.map((f, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <select
+                value={f.propertyId}
+                onChange={(e) => {
+                  const next = [...filters];
+                  next[i] = { ...f, propertyId: e.target.value };
+                  setFilters(next);
+                  setActiveViewId(null);
+                }}
+                className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+              >
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <select
+                value={f.operator}
+                onChange={(e) => {
+                  const next = [...filters];
+                  next[i] = { ...f, operator: e.target.value as FilterOperator };
+                  setFilters(next);
+                  setActiveViewId(null);
+                }}
+                className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+              >
+                {FILTER_OPS.map((op) => (
+                  <option key={op.value} value={op.value}>{op.label}</option>
+                ))}
+              </select>
+              {!['empty', 'not_empty'].includes(f.operator) && (
+                <input
+                  value={f.value || ''}
+                  onChange={(e) => {
+                    const next = [...filters];
+                    next[i] = { ...f, value: e.target.value };
+                    setFilters(next);
+                    setActiveViewId(null);
+                  }}
+                  placeholder="Value"
+                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none flex-1 min-w-[100px]"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => { setFilters(filters.filter((_, j) => j !== i)); setActiveViewId(null); }}
+                className="p-1 text-mid-gray hover:text-red-500"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          ))
+        )}
+        <div className="flex items-center gap-2 pt-1 border-t border-green-mist/50">
+          <span className="text-xs text-mid-gray">Sort by:</span>
+          <select
+            value={sorts[0]?.propertyId || ''}
+            onChange={(e) => {
+              if (!e.target.value) { setSorts([]); setActiveViewId(null); return; }
+              setSorts([{ propertyId: e.target.value, direction: sorts[0]?.direction || 'asc' }]);
+              setActiveViewId(null);
+            }}
+            className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
           >
             <option value="">Default order</option>
             {properties.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {sorts[0] && (
+            <select
+              value={sorts[0].direction}
+              onChange={(e) => {
+                setSorts([{ ...sorts[0], direction: e.target.value as 'asc' | 'desc' }]);
+                setActiveViewId(null);
+              }}
+              className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+            >
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
+            </select>
+          )}
         </div>
-      )}
+      </div>
 
       {view === 'table' && (
         <div className="overflow-x-auto card-surface">
@@ -220,13 +472,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {displayRows.map((row) => (
                 <tr key={row.id} className="border-b border-green-mist/50 hover:bg-linen/50">
                   {properties.map((prop) => (
                     <td key={prop.id} className="p-2">{renderCell(row, prop)}</td>
                   ))}
                   <td className="p-2">
-                    <button type="button" onClick={() => deleteRow(row.id)} className="text-red-400 hover:text-red-600">
+                    <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -243,16 +495,18 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             <div key={status} className="card-surface p-3">
               <h3 className="font-medium text-sm text-charcoal mb-3">{status}</h3>
               <div className="space-y-2">
-                {rows.filter((r) => getPropValue(r, statusProp.id) === status).map((row) => (
-                    <div key={row.id} className="bg-linen rounded-lg p-3 text-sm">
-                      <div className="font-medium">{nameProp ? getPropValue(row, nameProp.id) || 'Untitled' : 'Untitled'}</div>
-                      {properties.slice(1).filter((p) => p.id !== statusProp.id).map((p) => {
-                        const val = getPropValue(row, p.id);
-                        if (!val) return null;
-                        return <div key={p.id} className="text-xs text-mid-gray mt-1">{p.name}: {String(val)}</div>;
-                      })}
-                    </div>
-                  ))}
+                {displayRows.filter((r) => getPropValue(r, statusProp.id) === status).map((row) => (
+                  <div key={row.id} className="bg-linen rounded-lg p-3 text-sm">
+                    <RowTitleButton row={row} />
+                    {properties.filter((p) => p.id !== nameProp?.id && p.id !== statusProp.id).map((p) => {
+                      const val = p.type === 'relation'
+                        ? formatRelationDisplay(row, p)
+                        : getPropValue(row, p.id);
+                      if (!val || val === '—') return null;
+                      return <div key={p.id} className="text-xs text-mid-gray mt-1">{p.name}: {String(val)}</div>;
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -260,7 +514,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       )}
 
       {view === 'board' && !statusProp && (
-        <p className="text-sm text-mid-gray">Add a Status select property to use Board view.</p>
+        <p className="text-sm text-mid-gray">Add a Status select property to use Kanban view.</p>
       )}
 
       {view === 'calendar' && dateProp && (
@@ -274,16 +528,21 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
           <div className="grid grid-cols-7 gap-1">
             {calendarDays.cells.map((cell, i) => {
               const dayRows = cell.dateStr
-                ? rows.filter((r) => getPropValue(r, dateProp.id) === cell.dateStr)
+                ? displayRows.filter((r) => getPropValue(r, dateProp.id) === cell.dateStr)
                 : [];
               return (
                 <div key={i} className="min-h-16 p-1 border border-green-mist/30 rounded-lg text-xs">
                   {cell.day && <span className="text-mid-gray">{cell.day}</span>}
                   {dayRows.map((row) => (
-                      <div key={row.id} className="bg-sage/30 rounded px-1 py-0.5 mt-0.5 truncate">
-                        {nameProp ? getPropValue(row, nameProp.id) || 'Item' : 'Item'}
-                      </div>
-                    ))}
+                    <button
+                      key={row.id}
+                      type="button"
+                      onClick={() => openRowPage(row)}
+                      className="block w-full text-left bg-sage/30 rounded px-1 py-0.5 mt-0.5 truncate hover:bg-sage/50"
+                    >
+                      {getRowTitle(row, nameProp)}
+                    </button>
+                  ))}
                 </div>
               );
             })}
@@ -297,31 +556,28 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
       {view === 'gallery' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rows.map((row) => {
-            const title = nameProp ? String(getPropValue(row, nameProp.id) || 'Untitled') : 'Untitled';
+          {displayRows.map((row) => {
+            const title = getRowTitle(row, nameProp);
             const status = statusProp ? String(getPropValue(row, statusProp.id) || '') : '';
             const due = dateProp ? String(getPropValue(row, dateProp.id) || '') : '';
             return (
               <div key={row.id} className="card-surface overflow-hidden group">
-                <div className={`h-28 bg-gradient-to-br ${galleryCoverStyle(status)} flex items-center justify-center`}>
+                <button
+                  type="button"
+                  onClick={() => openRowPage(row)}
+                  className={`w-full h-28 bg-gradient-to-br ${galleryCoverStyle(status)} flex items-center justify-center hover:opacity-90`}
+                >
                   <span className="text-3xl opacity-80">{status === 'Done' ? '✅' : status === 'In Progress' ? '🔄' : '📄'}</span>
-                </div>
+                </button>
                 <div className="p-4">
-                  <div className="font-medium text-charcoal truncate">{title}</div>
+                  <RowTitleButton row={row} />
                   {status && (
                     <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-linen text-warm-gray">{status}</span>
                   )}
                   {due && <div className="text-xs text-mid-gray mt-2">Due {due}</div>}
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-warm-gray">
-                    {properties.filter((p) => p.id !== nameProp?.id && p.id !== statusProp?.id && p.id !== dateProp?.id).map((prop) => {
-                      const val = getPropValue(row, prop.id);
-                      if (!val) return null;
-                      return <span key={prop.id}><span className="text-mid-gray">{prop.name}:</span> {String(val)}</span>;
-                    })}
-                  </div>
                 </div>
                 <div className="px-4 pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button type="button" onClick={() => deleteRow(row.id)} className="text-red-400 hover:text-red-600 text-xs flex items-center gap-1">
+                  <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600 text-xs flex items-center gap-1">
                     <Trash2 className="w-3.5 h-3.5" /> Delete
                   </button>
                 </div>
@@ -333,24 +589,46 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
       {view === 'list' && (
         <div className="space-y-2">
-          {sortedListRows.map((row) => (
-              <div key={row.id} className="card-surface p-4 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium">{nameProp ? getPropValue(row, nameProp.id) || 'Untitled' : 'Untitled'}</span>
-                <div className="flex flex-wrap gap-4 text-sm text-warm-gray">
-                  {properties.slice(1).map((prop) => (
-                    <span key={prop.id}>
-                      <span className="text-mid-gray">{prop.name}:</span> {String(getPropValue(row, prop.id) || '—')}
-                    </span>
-                  ))}
-                </div>
+          {displayRows.map((row) => (
+            <div key={row.id} className="card-surface p-4 flex flex-wrap items-center justify-between gap-2">
+              <RowTitleButton row={row} />
+              <div className="flex flex-wrap gap-4 text-sm text-warm-gray">
+                {properties.filter((p) => p.id !== nameProp?.id).map((prop) => (
+                  <span key={prop.id}>
+                    <span className="text-mid-gray">{prop.name}:</span>{' '}
+                    {prop.type === 'relation'
+                      ? formatRelationDisplay(row, prop)
+                      : String(getPropValue(row, prop.id) || '—')}
+                  </span>
+                ))}
               </div>
+            </div>
           ))}
         </div>
       )}
 
-      {rows.length === 0 && (
+      {displayRows.length === 0 && (
         <div className="text-center py-12 text-mid-gray">
-          <p>No rows yet. Click &ldquo;New Row&rdquo; to get started.</p>
+          <p>{rows.length === 0 ? 'No rows yet. Click "New Row" to get started.' : 'No rows match the current filters.'}</p>
+        </div>
+      )}
+
+      {showSaveView && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowSaveView(false)}>
+          <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold mb-4">Save view</h3>
+            <p className="text-sm text-mid-gray mb-3">Saves the current view type, filters, and sort order.</p>
+            <input
+              value={newViewName}
+              onChange={(e) => setNewViewName(e.target.value)}
+              placeholder="e.g. Active tasks, Due this week"
+              className="w-full px-3 py-2 rounded-lg border border-green-mist mb-4 outline-none focus:border-forest"
+            />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowSaveView(false)} className="btn-secondary flex-1 text-sm">Cancel</button>
+              <button type="button" onClick={() => void saveCurrentView()} className="btn-primary flex-1 text-sm">Save</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -362,7 +640,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             <input
               value={newPropName}
               onChange={(e) => setNewPropName(e.target.value)}
-              placeholder="e.g. Priority, Assignee"
+              placeholder="e.g. Priority, Project"
               className="w-full px-3 py-2 rounded-lg border border-green-mist mb-3 outline-none focus:border-forest"
             />
             <label className="block text-sm text-mid-gray mb-1">Type</label>
@@ -375,6 +653,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               <option value="number">Number</option>
               <option value="date">Date</option>
               <option value="select">Select</option>
+              <option value="relation">Relation</option>
             </select>
             {newPropType === 'select' && (
               <>
@@ -385,6 +664,21 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   placeholder="High, Medium, Low"
                   className="w-full px-3 py-2 rounded-lg border border-green-mist mb-4 outline-none focus:border-forest"
                 />
+              </>
+            )}
+            {newPropType === 'relation' && (
+              <>
+                <label className="block text-sm text-mid-gray mb-1">Link to database</label>
+                <select
+                  value={newRelationDbId}
+                  onChange={(e) => setNewRelationDbId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-green-mist mb-4 outline-none"
+                >
+                  <option value="">Select a database…</option>
+                  {workspaceDatabases.map((db) => (
+                    <option key={db.id} value={db.id}>{db.icon || '🗃️'} {db.title}</option>
+                  ))}
+                </select>
               </>
             )}
             <div className="flex gap-2">
