@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { ArrowLeft, Bell } from 'lucide-react';
+import Tooltip from './Tooltip';
+import MobileStandaloneHeader from './MobileStandaloneHeader';
 
 export default function NotificationsPage() {
   const { notifications, loadNotifications } = useStore();
@@ -23,12 +25,16 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full safe-top">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-warm-gray hover:text-charcoal mb-6">
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
+    <>
+      <MobileStandaloneHeader title="Notifications" />
+      <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full">
+      <Tooltip text="Go back to the previous page">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-warm-gray hover:text-charcoal mb-6">
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+      </Tooltip>
 
-      <h1 className="text-2xl font-bold text-charcoal mb-6 flex items-center gap-2">
+      <h1 className="hidden md:flex text-2xl font-bold text-charcoal mb-6 items-center gap-2">
         <Bell className="w-6 h-6" /> Notifications
       </h1>
 
@@ -54,6 +60,7 @@ export default function NotificationsPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

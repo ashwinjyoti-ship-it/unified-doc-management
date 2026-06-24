@@ -135,17 +135,28 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         onChange={handleFileSelect}
       />
       {editable && (
-        <div className="flex flex-wrap gap-1 mb-4 p-2 bg-linen/50 rounded-xl sticky top-0 z-10">
-          <Tooltip text="Insert block — headings, lists, images (mobile-friendly)">
-            <button
-              type="button"
-              onClick={() => setInsertOpen(true)}
-              className="md:hidden p-2 rounded-md bg-forest text-white hover:bg-dark-teal flex items-center gap-1 text-xs font-medium"
-            >
-              <Slash className="w-4 h-4" />
-              Insert
-            </button>
-          </Tooltip>
+        <div className="mb-4 p-2 bg-linen/50 rounded-xl md:sticky md:top-0 md:z-10">
+          {/* Mobile: slim toolbar — Insert sheet + basic formatting */}
+          <div className="flex gap-1 md:hidden">
+            <Tooltip text="Insert block — headings, lists, images">
+              <button
+                type="button"
+                onClick={() => setInsertOpen(true)}
+                className="p-2 rounded-md bg-forest text-white hover:bg-dark-teal flex items-center gap-1 text-xs font-medium"
+              >
+                <Slash className="w-4 h-4" />
+                Insert
+              </button>
+            </Tooltip>
+            <ToolbarButton tooltip="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
+              <Bold className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton tooltip="Italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
+              <Italic className="w-4 h-4" />
+            </ToolbarButton>
+          </div>
+          {/* Desktop: full toolbar */}
+          <div className="hidden md:flex flex-wrap gap-1">
           <ToolbarButton tooltip="Bold (Ctrl+B)" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
             <Bold className="w-4 h-4" />
           </ToolbarButton>
@@ -197,6 +208,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
           <ToolbarButton tooltip="Insert a hyperlink" onClick={addLink} active={editor.isActive('link')}>
             <Link2 className="w-4 h-4" />
           </ToolbarButton>
+          </div>
         </div>
       )}
 

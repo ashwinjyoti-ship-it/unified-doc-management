@@ -317,8 +317,8 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       )}
 
       {showAddProp && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowAddProp(false)}>
-          <div className="card-surface w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowAddProp(false)}>
+          <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold mb-4">Add property</h3>
             <label className="block text-sm text-mid-gray mb-1">Name</label>
             <input

@@ -71,7 +71,7 @@ export default function NewMenuDropdown({
             className={`
               z-[70] bg-warm-white border border-green-mist rounded-xl shadow-lg py-1 overflow-hidden
               ${variant === 'compact'
-                ? 'fixed left-3 right-3 bottom-4 md:absolute md:left-0 md:right-0 md:bottom-auto md:top-full md:mt-1'
+                ? 'fixed left-3 right-3 bottom-[max(1rem,env(safe-area-inset-bottom))] md:absolute md:left-0 md:right-0 md:bottom-auto md:top-full md:mt-1'
                 : 'absolute left-0 right-0 top-full mt-1'}
             `}
             role="menu"

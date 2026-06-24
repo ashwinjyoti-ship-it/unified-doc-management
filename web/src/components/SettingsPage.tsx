@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
+import MobileStandaloneHeader from './MobileStandaloneHeader';
 import type { Theme, Workspace } from '../types';
 import { ArrowLeft, Key, Copy, Check, Sun, Moon, Monitor, Sparkles, Loader2 } from 'lucide-react';
 
@@ -92,14 +93,16 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full safe-top">
+    <>
+      <MobileStandaloneHeader title="Settings" />
+      <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full">
       <Tooltip text="Go back to the previous page">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-warm-gray hover:text-charcoal mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
       </Tooltip>
 
-      <h1 className="text-2xl font-bold text-charcoal mb-8">Settings</h1>
+      <h1 className="hidden md:block text-2xl font-bold text-charcoal mb-8">Settings</h1>
 
       {workspace && (
         <WorkspaceRenameSection
@@ -137,7 +140,7 @@ export default function SettingsPage() {
       <section className="card-surface p-6 mb-6">
         <h2 className="font-semibold mb-4">Appearance</h2>
         <p className="text-sm text-warm-gray mb-4">Choose a color theme for the interface.</p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {themes.map((t) => (
             <Tooltip key={t.value} text={t.tooltip}>
               <button
@@ -209,6 +212,7 @@ export default function SettingsPage() {
           </button>
         </Tooltip>
       </section>
-    </div>
+      </div>
+    </>
   );
 }

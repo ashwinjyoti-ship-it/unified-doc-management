@@ -14,8 +14,8 @@ export default function ImportOptionsModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="card-surface w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={onClose}>
+      <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg mb-1">Import options</h3>
         <p className="text-sm text-mid-gray mb-4 truncate">
           {sourceType === 'file' ? 'File' : 'URL'}: {sourceLabel}
