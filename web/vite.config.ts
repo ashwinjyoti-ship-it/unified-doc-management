@@ -11,8 +11,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Unified Doc Management',
-        short_name: 'UDM',
+        name: 'UnifiedDocs',
+        short_name: 'UnifiedDocs',
         description: 'Create, organize, and collaborate on documents',
         theme_color: '#004228',
         background_color: '#F8F5F3',
