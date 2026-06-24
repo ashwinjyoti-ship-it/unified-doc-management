@@ -11,6 +11,7 @@ import notificationsRoutes from './routes/notifications';
 import uploadsRoutes from './routes/uploads';
 import featuresRoutes from './routes/features';
 import tagsRoutes from './routes/tags';
+import seedRoutes from './routes/seed';
 export { CollabRoom } from './collab-room';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -48,6 +49,7 @@ app.use('/api/*', async (c, next) => {
 
 app.route('/api', featuresRoutes);
 app.route('/api', tagsRoutes);
+app.route('/api', seedRoutes);
 app.route('/api', pagesRoutes);
 app.route('/api', databaseRoutes);
 app.route('/api', commentsRoutes);
