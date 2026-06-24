@@ -280,7 +280,7 @@ class ApiClient {
       alreadySeeded: boolean;
       workspaceName: string;
       dailyNoteTitle: string;
-      pageIds: { learningFolderId: string; weeklyReviewId: string; dailyNoteId: string };
+      pageIds: { projectId: string; learningFolderId: string; weeklyReviewId: string; dailyNoteId: string };
       message: string;
     }>('/seed/knowledge-base', { method: 'POST' });
   }

@@ -5,6 +5,7 @@ export interface KnowledgeBaseSeedResult {
   workspaceName: string;
   dailyNoteTitle: string;
   pageIds: {
+    projectId: string;
     learningFolderId: string;
     weeklyReviewId: string;
     dailyNoteId: string;
@@ -72,13 +73,27 @@ export async function seedKnowledgeBase(
   workspaceId: string,
   userId: string,
 ): Promise<KnowledgeBaseSeedResult> {
-  const existing = await db.prepare(`
+  const existingProject = await db.prepare(`
     SELECT id, title FROM pages
-    WHERE workspace_id = ? AND type = 'folder' AND title = 'Learning' AND parent_id IS NULL
+    WHERE workspace_id = ? AND type = 'folder' AND title = 'My Knowledge Base' AND parent_id IS NULL
     LIMIT 1
   `).bind(workspaceId).first<{ id: string; title: string }>();
 
+  const legacyLearning = !existingProject ? await db.prepare(`
+    SELECT id, title FROM pages
+    WHERE workspace_id = ? AND type = 'folder' AND title = 'Learning' AND parent_id IS NULL
+    LIMIT 1
+  `).bind(workspaceId).first<{ id: string; title: string }>() : null;
+
+  const existing = existingProject || legacyLearning;
+
   if (existing) {
+    const projectId = existingProject?.id || existing.id;
+    const learning = await db.prepare(`
+      SELECT id FROM pages
+      WHERE workspace_id = ? AND title = 'Learning'
+      LIMIT 1
+    `).bind(workspaceId).first<{ id: string }>();
     const weekly = await db.prepare(`
       SELECT id FROM pages WHERE workspace_id = ? AND title = 'Weekly Review' LIMIT 1
     `).bind(workspaceId).first<{ id: string }>();
@@ -92,7 +107,8 @@ export async function seedKnowledgeBase(
       workspaceName: 'My Knowledge Base',
       dailyNoteTitle: today,
       pageIds: {
-        learningFolderId: existing.id,
+        projectId,
+        learningFolderId: learning?.id || existing.id,
         weeklyReviewId: weekly?.id || existing.id,
         dailyNoteId: daily?.id || existing.id,
       },
@@ -106,10 +122,22 @@ export async function seedKnowledgeBase(
 
   const today = new Date().toLocaleDateString('en-CA');
 
-  const learningId = await insertPage(db, workspaceId, userId, { title: 'Learning', type: 'folder', icon: '📚' });
-  const ideasId = await insertPage(db, workspaceId, userId, { title: 'Ideas', type: 'folder', icon: '💡' });
-  const tasksId = await insertPage(db, workspaceId, userId, { title: 'Tasks', type: 'folder', icon: '📋' });
-  const interestingId = await insertPage(db, workspaceId, userId, { title: 'Interesting', type: 'folder', icon: '📰' });
+  const projectId = await insertPage(db, workspaceId, userId, {
+    title: 'My Knowledge Base', type: 'folder', icon: '🗂️',
+  });
+
+  const learningId = await insertPage(db, workspaceId, userId, {
+    title: 'Learning', type: 'folder', icon: '📚', parentId: projectId,
+  });
+  const ideasId = await insertPage(db, workspaceId, userId, {
+    title: 'Ideas', type: 'folder', icon: '💡', parentId: projectId,
+  });
+  const tasksId = await insertPage(db, workspaceId, userId, {
+    title: 'Tasks', type: 'folder', icon: '📋', parentId: projectId,
+  });
+  const interestingId = await insertPage(db, workspaceId, userId, {
+    title: 'Interesting', type: 'folder', icon: '📰', parentId: projectId,
+  });
 
   const reactHooksId = await insertPage(db, workspaceId, userId, {
     title: 'React Hooks Deep Dive', type: 'page', icon: '⚛️', parentId: learningId,
@@ -136,10 +164,10 @@ export async function seedKnowledgeBase(
     title: 'Podcast: Syntax FM #700', type: 'page', icon: '🎧', parentId: interestingId,
   });
   const weeklyReviewId = await insertPage(db, workspaceId, userId, {
-    title: 'Weekly Review', type: 'page', icon: '📝',
+    title: 'Weekly Review', type: 'page', icon: '📝', parentId: projectId,
   });
   const dailyNoteId = await insertPage(db, workspaceId, userId, {
-    title: today, type: 'page', icon: '📅',
+    title: today, type: 'page', icon: '📅', parentId: null,
   });
 
   await setPageMarkdown(db, workspaceId, reactHooksId, 'React Hooks Deep Dive', `# React Hooks Deep Dive
@@ -227,10 +255,11 @@ Follow-up: [[React Hooks Deep Dive]]
     workspaceName: 'My Knowledge Base',
     dailyNoteTitle: today,
     pageIds: {
+      projectId,
       learningFolderId: learningId,
       weeklyReviewId,
       dailyNoteId,
     },
-    message: 'Demo Knowledge Base loaded with folders, pages, and links.',
+    message: 'Demo Knowledge Base loaded — open the My Knowledge Base project to explore.',
   };
 }

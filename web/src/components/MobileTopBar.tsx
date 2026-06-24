@@ -13,6 +13,7 @@ export default function MobileTopBar() {
     handleNewPage,
     handleNewDatabase,
     handleNewFolderRequest,
+    handleNewProjectRequest,
     confirmNewFolder,
   } = useDocumentCreate();
 
@@ -48,6 +49,7 @@ export default function MobileTopBar() {
         <NewMenuDropdown
           variant="compact"
           onNewPage={() => void handleNewPage()}
+          onNewProject={() => handleNewProjectRequest()}
           onNewFolder={() => handleNewFolderRequest()}
           onNewDatabase={() => void handleNewDatabase()}
         />
@@ -56,12 +58,12 @@ export default function MobileTopBar() {
       {folderModal && (
         <NamePromptModal
           open
-          title="New Folder"
-          label="Folder name"
-          placeholder="e.g. Project Documentation"
-          confirmLabel="Create Folder"
+          title={folderModal.kind === 'project' ? 'New Project' : 'New Folder'}
+          label={folderModal.kind === 'project' ? 'Project name' : 'Folder name'}
+          placeholder={folderModal.kind === 'project' ? 'e.g. Sprint Q2' : 'e.g. Meeting Notes'}
+          confirmLabel={folderModal.kind === 'project' ? 'Create Project' : 'Create Folder'}
           showIcon
-          defaultIcon="📁"
+          defaultIcon={folderModal.kind === 'project' ? '🗂️' : '📁'}
           onClose={() => setFolderModal(null)}
           onConfirm={(name, icon) => void confirmNewFolder(name, icon)}
         />

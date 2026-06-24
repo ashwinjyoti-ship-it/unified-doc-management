@@ -77,7 +77,7 @@ export default function SettingsPage() {
       await loadWorkspace();
       await loadPages();
       setSeedMessage(result.message);
-      navigate(`/page/${result.pageIds.learningFolderId}`);
+      navigate(`/page/${result.pageIds.projectId}`);
     } catch (err) {
       setSeedMessage(err instanceof Error ? err.message : 'Could not load demo data');
     } finally {
@@ -114,7 +114,7 @@ export default function SettingsPage() {
           <Sparkles className="w-4 h-4 text-forest" /> Demo data
         </h2>
         <p className="text-sm text-warm-gray mb-4">
-          Load a sample &ldquo;My Knowledge Base&rdquo; with folders, linked pages, a daily note, and a weekly review — great for exploring how the app works.
+          Load a sample &ldquo;My Knowledge Base&rdquo; project with folders, linked pages, a daily note in Inbox, and a weekly review.
         </p>
         <Tooltip text="Adds demo folders and pages to your current workspace">
           <button

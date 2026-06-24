@@ -4,10 +4,15 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { closeSidebarOnMobile } from '../lib/device';
 
+export type FolderModalState =
+  | { kind: 'folder'; parentId?: string }
+  | { kind: 'project' }
+  | null;
+
 export function useDocumentCreate() {
   const { workspace, createPage, loadPages, setSidebarOpen } = useStore();
   const navigate = useNavigate();
-  const [folderModal, setFolderModal] = useState<{ parentId?: string } | null>(null);
+  const [folderModal, setFolderModal] = useState<FolderModalState>(null);
 
   const afterCreate = async (pageId: string) => {
     await loadPages();
@@ -26,18 +31,22 @@ export function useDocumentCreate() {
   };
 
   const handleNewFolderRequest = (parentId?: string) => {
-    setFolderModal({ parentId });
+    setFolderModal({ kind: 'folder', parentId });
+  };
+
+  const handleNewProjectRequest = () => {
+    setFolderModal({ kind: 'project' });
   };
 
   const confirmNewFolder = async (name: string, icon?: string) => {
-    if (!workspace) return;
-    const parentId = folderModal?.parentId;
+    if (!workspace || !folderModal) return;
+    const parentId = folderModal.kind === 'folder' ? folderModal.parentId : undefined;
     setFolderModal(null);
     const { page } = await api.createPage(workspace.id, {
       type: 'folder',
       title: name,
       parentId,
-      icon: icon || '📁',
+      icon: icon || (folderModal.kind === 'project' ? '🗂️' : '📁'),
     });
     await afterCreate(page.id);
   };
@@ -48,6 +57,7 @@ export function useDocumentCreate() {
     handleNewPage,
     handleNewDatabase,
     handleNewFolderRequest,
+    handleNewProjectRequest,
     confirmNewFolder,
   };
 }

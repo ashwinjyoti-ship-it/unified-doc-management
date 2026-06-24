@@ -16,7 +16,6 @@ import { closeSidebarOnMobile } from '../lib/device';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import type { Page } from '../types';
 import {
-  FileText,
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
   Star, Clock, CheckSquare, Trash2, FolderInput, Link2, CalendarDays,
 } from 'lucide-react';
@@ -76,6 +75,7 @@ export default function Sidebar() {
     handleNewPage,
     handleNewDatabase,
     handleNewFolderRequest,
+    handleNewProjectRequest,
     confirmNewFolder,
   } = useDocumentCreate();
 
@@ -98,7 +98,7 @@ export default function Sidebar() {
 
   const handleDailyNote = async () => {
     const title = todayNoteTitle();
-    const existing = pages.find((p) => p.title === title && p.type === 'page');
+    const existing = pages.find((p) => p.title === title && p.type === 'page' && p.parent_id === null);
     if (existing) {
       navigateToPage(existing.id);
       return;
@@ -233,6 +233,7 @@ export default function Sidebar() {
             <NewMenuDropdown
               className="flex-1"
               onNewPage={() => void handleNewPage()}
+              onNewProject={() => handleNewProjectRequest()}
               onNewFolder={() => handleNewFolderRequest()}
               onNewDatabase={() => void handleNewDatabase()}
             />
@@ -297,11 +298,6 @@ export default function Sidebar() {
             onNavigate={navigateToPage}
           />
 
-          <Tooltip text="Tap and hold the grip to drag pages into folders">
-            <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
-              <FileText className="w-3 h-3" /> All Pages
-            </div>
-          </Tooltip>
           <PageTree
             pages={pages}
             bulkMode={bulkMode}
@@ -367,12 +363,12 @@ export default function Sidebar() {
       {folderModal && (
         <NamePromptModal
           open
-          title="New Folder"
-          label="Folder name"
-          placeholder="e.g. Project Documentation"
-          confirmLabel="Create Folder"
+          title={folderModal.kind === 'project' ? 'New Project' : 'New Folder'}
+          label={folderModal.kind === 'project' ? 'Project name' : 'Folder name'}
+          placeholder={folderModal.kind === 'project' ? 'e.g. Sprint Q2' : 'e.g. Meeting Notes'}
+          confirmLabel={folderModal.kind === 'project' ? 'Create Project' : 'Create Folder'}
           showIcon
-          defaultIcon="📁"
+          defaultIcon={folderModal.kind === 'project' ? '🗂️' : '📁'}
           onClose={() => setFolderModal(null)}
           onConfirm={(name, icon) => void confirmNewFolder(name, icon)}
         />

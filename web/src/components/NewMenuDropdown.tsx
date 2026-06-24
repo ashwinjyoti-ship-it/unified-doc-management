@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
-import { Plus, ChevronDown, FileText, FolderPlus, Database } from 'lucide-react';
+import { Plus, ChevronDown, FileText, FolderPlus, Database, Briefcase } from 'lucide-react';
 import Tooltip from './Tooltip';
 
 interface NewMenuDropdownProps {
   onNewPage: () => void;
   onNewFolder: () => void;
+  onNewProject: () => void;
   onNewDatabase: () => void;
   className?: string;
   /** Compact icon-only style for tight mobile headers */
@@ -14,6 +15,7 @@ interface NewMenuDropdownProps {
 export default function NewMenuDropdown({
   onNewPage,
   onNewFolder,
+  onNewProject,
   onNewDatabase,
   className = '',
   variant = 'default',
@@ -86,6 +88,14 @@ export default function NewMenuDropdown({
               className={itemClass}
             >
               <FileText className="w-4 h-4 shrink-0" /> New Page
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => { close(); onNewProject(); }}
+              className={itemClass}
+            >
+              <Briefcase className="w-4 h-4 shrink-0" /> New Project
             </button>
             <button
               type="button"

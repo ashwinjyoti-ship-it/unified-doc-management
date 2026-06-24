@@ -4,6 +4,20 @@ export function getChildren(pages: Page[], parentId: string | null): Page[] {
   return pages.filter((p) => p.parent_id === parentId);
 }
 
+/** Top-level folders — treated as projects in the sidebar */
+export function getRootProjects(pages: Page[]): Page[] {
+  return getChildren(pages, null).filter((p) => p.type === 'folder');
+}
+
+/** Root pages and databases kept outside projects (daily notes, quick captures, etc.) */
+export function getInboxPages(pages: Page[]): Page[] {
+  return getChildren(pages, null).filter((p) => p.type !== 'folder');
+}
+
+export function isProject(page: Page): boolean {
+  return page.type === 'folder' && page.parent_id === null;
+}
+
 export function isDescendant(pages: Page[], ancestorId: string, nodeId: string): boolean {
   let current = pages.find((p) => p.id === nodeId);
   while (current?.parent_id) {

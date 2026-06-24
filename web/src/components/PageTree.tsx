@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import type { Page } from '../types';
 import { api } from '../lib/api';
-import { canNestUnder, getChildren, pageIcon } from '../lib/pageTree';
+import { canNestUnder, getChildren, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
 import { pageTreeRowClass } from '../lib/pageSelection';
 
 interface PageTreeProps {
@@ -40,6 +40,7 @@ function TreeRow({
   activeDragId,
   overDropId,
   onNavigate,
+  isProjectRoot = false,
 }: {
   page: Page;
   pages: Page[];
@@ -50,6 +51,7 @@ function TreeRow({
   activeDragId: string | null;
   overDropId: string | null;
   onNavigate: (pageId: string) => void;
+  isProjectRoot?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const { pageId } = useParams();
@@ -77,7 +79,7 @@ function TreeRow({
     <div className={isDragging ? 'opacity-40' : ''}>
       <div
         ref={setRefs}
-        className={`${pageTreeRowClass(isActive)} ${highlight && !isActive ? 'ring-2 ring-forest/50 bg-sage/20' : ''}`}
+        className={`${pageTreeRowClass(isActive)} ${highlight && !isActive ? 'ring-2 ring-forest/50 bg-sage/20' : ''} ${isProjectRoot ? 'font-semibold' : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {!bulkMode && (
@@ -141,11 +143,23 @@ function TreeRow({
   );
 }
 
-function RootDropZone({ activeDragId, overDropId }: { activeDragId: string | null; overDropId: string | null }) {
-  const { setNodeRef, isOver } = useDroppable({ id: 'nest-root' });
-  const highlight = overDropId === 'nest-root' || isOver;
+function RootDropZone({
+  id,
+  label,
+  activeDragId,
+  overDropId,
+  draggedPage,
+}: {
+  id: string;
+  label: string;
+  activeDragId: string | null;
+  overDropId: string | null;
+  draggedPage: Page | null | undefined;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  const highlight = overDropId === id || isOver;
 
-  if (!activeDragId) return null;
+  if (!activeDragId || !draggedPage) return null;
 
   return (
     <div
@@ -156,9 +170,16 @@ function RootDropZone({ activeDragId, overDropId }: { activeDragId: string | nul
           : 'border-green-mist text-mid-gray'
       }`}
     >
-      Drop here for top level
+      {label}
     </div>
   );
+}
+
+function canDropOnRootZone(zoneId: string, page: Page): boolean {
+  if (zoneId === 'nest-project-root') return page.type === 'folder';
+  if (zoneId === 'nest-inbox-root') return page.type !== 'folder';
+  if (zoneId === 'nest-root') return true;
+  return false;
 }
 
 export default function PageTree({
@@ -169,7 +190,8 @@ export default function PageTree({
   onPagesChange,
   onNavigate,
 }: PageTreeProps) {
-  const rootPages = getChildren(pages, null);
+  const projects = getRootProjects(pages);
+  const inboxPages = getInboxPages(pages);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overDropId, setOverDropId] = useState<string | null>(null);
 
@@ -193,10 +215,14 @@ export default function PageTree({
     if (!over) return;
 
     const draggedId = String(active.id);
+    const dragged = pages.find((p) => p.id === draggedId);
+    if (!dragged) return;
+
     let newParentId: string | null = null;
 
     const overId = String(over.id);
-    if (overId === 'nest-root') {
+    if (overId === 'nest-root' || overId === 'nest-project-root' || overId === 'nest-inbox-root') {
+      if (!canDropOnRootZone(overId, dragged)) return;
       newParentId = null;
     } else if (overId.startsWith('nest-')) {
       newParentId = overId.slice('nest-'.length);
@@ -205,9 +231,7 @@ export default function PageTree({
     }
 
     if (!canNestUnder(pages, draggedId, newParentId)) return;
-
-    const dragged = pages.find((p) => p.id === draggedId);
-    if (!dragged || dragged.parent_id === newParentId) return;
+    if (dragged.parent_id === newParentId) return;
 
     try {
       await api.updatePage(draggedId, { parentId: newParentId });
@@ -227,21 +251,67 @@ export default function PageTree({
       onDragEnd={handleDragEnd}
       onDragCancel={() => { setActiveDragId(null); setOverDropId(null); }}
     >
-      <RootDropZone activeDragId={activeDragId} overDropId={overDropId} />
-      {rootPages.map((page) => (
-        <TreeRow
-          key={page.id}
-          page={page}
-          pages={pages}
-          depth={0}
-          bulkMode={bulkMode}
-          selected={selected}
-          onToggleSelect={onToggleSelect}
+      <div className="mb-3">
+        <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
+          Projects
+        </div>
+        <RootDropZone
+          id="nest-project-root"
+          label="Drop folder here for a new top-level project"
           activeDragId={activeDragId}
           overDropId={overDropId}
-          onNavigate={onNavigate}
+          draggedPage={draggedPage}
         />
-      ))}
+        {projects.length === 0 && !activeDragId && (
+          <p className="px-3 py-2 text-xs text-mid-gray">No projects yet — use New → New Project</p>
+        )}
+        {projects.map((page) => (
+          <TreeRow
+            key={page.id}
+            page={page}
+            pages={pages}
+            depth={0}
+            bulkMode={bulkMode}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
+            activeDragId={activeDragId}
+            overDropId={overDropId}
+            onNavigate={onNavigate}
+            isProjectRoot
+          />
+        ))}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
+          Inbox
+        </div>
+        <RootDropZone
+          id="nest-inbox-root"
+          label="Drop here for inbox (daily notes, quick pages)"
+          activeDragId={activeDragId}
+          overDropId={overDropId}
+          draggedPage={draggedPage}
+        />
+        {inboxPages.length === 0 && !activeDragId && (
+          <p className="px-3 py-2 text-xs text-mid-gray">Unfiled pages and daily notes appear here</p>
+        )}
+        {inboxPages.map((page) => (
+          <TreeRow
+            key={page.id}
+            page={page}
+            pages={pages}
+            depth={0}
+            bulkMode={bulkMode}
+            selected={selected}
+            onToggleSelect={onToggleSelect}
+            activeDragId={activeDragId}
+            overDropId={overDropId}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+
       <DragOverlay>
         {draggedPage ? (
           <div className="flex items-center gap-2 px-3 py-2 bg-warm-white border border-forest rounded-lg shadow-lg text-sm font-medium">

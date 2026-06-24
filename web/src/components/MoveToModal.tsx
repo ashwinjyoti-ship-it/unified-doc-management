@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, ChevronDown, FolderRoot } from 'lucide-react';
 import type { Page } from '../types';
-import { canNestUnder, getChildren, pageIcon } from '../lib/pageTree';
+import { canNestUnder, getChildren, getRootProjects, pageIcon } from '../lib/pageTree';
 
 interface MoveToModalProps {
   open: boolean;
@@ -81,7 +81,6 @@ export default function MoveToModal({
 }: MoveToModalProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const excludeSet = new Set(excludeIds);
-  const rootPages = getChildren(pages, null).filter((p) => !excludeSet.has(p.id));
 
   if (!open) return null;
 
@@ -93,7 +92,9 @@ export default function MoveToModal({
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="card-surface w-full max-w-md p-6 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg mb-1">{title}</h3>
-        <p className="text-sm text-mid-gray mb-4">Choose a folder or page to nest under, or move to workspace root.</p>
+        <p className="text-sm text-mid-gray mb-4">
+          Move to inbox, a project, or a folder inside a project.
+        </p>
 
         <div className="flex-1 overflow-y-auto border border-green-mist rounded-xl p-2 mb-4 min-h-[120px] max-h-[320px]">
           <button
@@ -104,19 +105,21 @@ export default function MoveToModal({
             }`}
           >
             <FolderRoot className="w-4 h-4 shrink-0" />
-            <span>Workspace root (top level)</span>
+            <span>Inbox (unfiled pages)</span>
           </button>
-          {rootPages.map((page) => (
-            <MoveTreeNode
-              key={page.id}
-              page={page}
-              pages={pages}
-              depth={0}
-              excludeIds={excludeSet}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-          ))}
+          {getRootProjects(pages)
+            .filter((p) => !excludeSet.has(p.id))
+            .map((page) => (
+              <MoveTreeNode
+                key={page.id}
+                page={page}
+                pages={pages}
+                depth={0}
+                excludeIds={excludeSet}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+              />
+            ))}
         </div>
 
         {!canMove && (
