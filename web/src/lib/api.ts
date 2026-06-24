@@ -274,6 +274,16 @@ class ApiClient {
       '/auth/preferences', { method: 'PATCH', body: JSON.stringify({ theme }) }
     );
   }
+
+  seedKnowledgeBase() {
+    return this.request<{
+      alreadySeeded: boolean;
+      workspaceName: string;
+      dailyNoteTitle: string;
+      pageIds: { learningFolderId: string; weeklyReviewId: string; dailyNoteId: string };
+      message: string;
+    }>('/seed/knowledge-base', { method: 'POST' });
+  }
 }
 
 export const api = new ApiClient();
