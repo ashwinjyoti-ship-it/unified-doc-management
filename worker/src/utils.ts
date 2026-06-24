@@ -194,3 +194,39 @@ export async function isPageDescendant(
   }
   return false;
 }
+
+/** Sync backlinks from [[Page Title]] or [[Title|page-id]] wiki-style links in content */
+export async function syncBacklinks(
+  db: D1Database,
+  sourcePageId: string,
+  workspaceId: string,
+  content: string,
+) {
+  await db.prepare('DELETE FROM backlinks WHERE source_page_id = ?').bind(sourcePageId).run();
+
+  const pattern = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+  const refs = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(content)) !== null) {
+    refs.add((match[2] || match[1]).trim());
+  }
+
+  for (const ref of refs) {
+    if (!ref) continue;
+    let target = await db.prepare(
+      'SELECT id FROM pages WHERE id = ? AND workspace_id = ?'
+    ).bind(ref, workspaceId).first<{ id: string }>();
+
+    if (!target) {
+      target = await db.prepare(
+        'SELECT id FROM pages WHERE workspace_id = ? AND title = ? COLLATE NOCASE LIMIT 1'
+      ).bind(workspaceId, ref).first<{ id: string }>();
+    }
+
+    if (target && target.id !== sourcePageId) {
+      await db.prepare(
+        'INSERT OR IGNORE INTO backlinks (source_page_id, target_page_id) VALUES (?, ?)'
+      ).bind(sourcePageId, target.id).run();
+    }
+  }
+}

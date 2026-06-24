@@ -465,7 +465,7 @@ export default function PageView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="min-h-full flex flex-col">
       <input
         ref={importInputRef}
         type="file"
@@ -671,8 +671,9 @@ export default function PageView() {
         </div>
       ) : null}
 
-      <div className="flex-1 flex min-h-0">
-        <main className="flex-1 overflow-y-auto p-6 md:p-10 max-w-4xl mx-auto w-full">
+      <div className="flex">
+        <div className="flex-1 min-w-0 w-full">
+          <div className="p-6 md:p-10 max-w-4xl mx-auto w-full">
           {pageType === 'database' ? (
             <DatabaseView pageId={pageId!} />
           ) : pageType === 'folder' ? (
@@ -696,7 +697,7 @@ export default function PageView() {
               placeholder="Write markdown here..."
             />
           ) : (
-            <BlockEditor content={editorContent} onChange={handleEditorChange} />
+            <BlockEditor content={editorContent} onChange={handleEditorChange} pageId={pageId} />
           )}
 
           {backlinks.length > 0 && (
@@ -717,10 +718,11 @@ export default function PageView() {
               </div>
             </div>
           )}
-        </main>
+          </div>
+        </div>
 
         {sidePanel && (
-          <aside className="w-80 border-l border-green-mist bg-warm-white flex flex-col">
+          <aside className="w-80 shrink-0 border-l border-green-mist bg-warm-white flex flex-col sticky top-0 self-start max-h-[100dvh] overflow-hidden">
             <div className="flex border-b border-green-mist">
               <button
                 onClick={() => setSidePanel('comments')}
@@ -833,13 +835,15 @@ export default function PageView() {
           label="Folder name"
           placeholder="e.g. API Documentation"
           confirmLabel="Create Folder"
+          showIcon
+          defaultIcon="📁"
           onClose={() => setFolderChildModal(null)}
-          onConfirm={async (name) => {
+          onConfirm={async (name, icon) => {
             const page = await createPage({
               type: 'folder',
               title: name,
               parentId: pageId,
-              icon: '📁',
+              icon: icon || '📁',
             });
             await loadPages();
             setFolderChildModal(null);

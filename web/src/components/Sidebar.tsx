@@ -18,8 +18,12 @@ import type { Page } from '../types';
 import {
   FileText,
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
-  Star, Clock, CheckSquare, Trash2, FolderInput, Link2,
+  Star, Clock, CheckSquare, Trash2, FolderInput, Link2, CalendarDays,
 } from 'lucide-react';
+
+function todayNoteTitle() {
+  return new Date().toLocaleDateString('en-CA');
+}
 
 function PageListSection({
   title, icon, pages, tooltip, onNavigate,
@@ -59,7 +63,7 @@ function PageListSection({
 export default function Sidebar() {
   const {
     pages, favorites, recent, workspace, sidebarOpen, setSidebarOpen,
-    logout, online, notifications, setSearchOpen,
+    createPage, logout, online, notifications, setSearchOpen,
     loadPages, loadFavorites, loadRecent,
   } = useStore();
   const navigate = useNavigate();
@@ -90,6 +94,18 @@ export default function Sidebar() {
   const navigateToPage = (id: string) => {
     navigate(`/page/${id}`);
     closeSidebarOnMobile(setSidebarOpen);
+  };
+
+  const handleDailyNote = async () => {
+    const title = todayNoteTitle();
+    const existing = pages.find((p) => p.title === title && p.type === 'page');
+    if (existing) {
+      navigateToPage(existing.id);
+      return;
+    }
+    const page = await createPage({ title, type: 'page', icon: '📅' });
+    await loadPages();
+    navigateToPage(page.id);
   };
 
   const toggleSelect = (id: string) => {
@@ -227,6 +243,17 @@ export default function Sidebar() {
             </Tooltip>
           </div>
           <div className="flex gap-2 mt-2">
+            <Tooltip text="Open or create today's daily note page">
+              <button
+                type="button"
+                onClick={() => void handleDailyNote()}
+                className="btn-secondary text-xs flex-1 flex items-center justify-center gap-1"
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> Today
+              </button>
+            </Tooltip>
+          </div>
+          <div className="flex gap-2 mt-2">
             <Tooltip text={bulkMode ? 'Exit bulk selection mode' : 'Select multiple pages to move or delete'}>
               <button
                 type="button"
@@ -344,8 +371,10 @@ export default function Sidebar() {
           label="Folder name"
           placeholder="e.g. Project Documentation"
           confirmLabel="Create Folder"
+          showIcon
+          defaultIcon="📁"
           onClose={() => setFolderModal(null)}
-          onConfirm={(name) => void confirmNewFolder(name)}
+          onConfirm={(name, icon) => void confirmNewFolder(name, icon)}
         />
       )}
       {moveModal && (

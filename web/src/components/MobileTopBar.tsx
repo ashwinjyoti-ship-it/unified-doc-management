@@ -60,8 +60,10 @@ export default function MobileTopBar() {
           label="Folder name"
           placeholder="e.g. Project Documentation"
           confirmLabel="Create Folder"
+          showIcon
+          defaultIcon="📁"
           onClose={() => setFolderModal(null)}
-          onConfirm={(name) => void confirmNewFolder(name)}
+          onConfirm={(name, icon) => void confirmNewFolder(name, icon)}
         />
       )}
     </>

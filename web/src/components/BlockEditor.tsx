@@ -13,7 +13,10 @@ import {
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
-import { slashCommands } from './SlashCommandList';
+import { slashCommands, createPageLinkCommand } from './SlashCommandList';
+import PageLinkModal from './PageLinkModal';
+import { useStore } from '../lib/store';
+import type { Page } from '../types';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
 
@@ -23,15 +26,24 @@ interface BlockEditorProps {
   content: string;
   onChange: (html: string, json: object) => void;
   editable?: boolean;
+  pageId?: string;
 }
 
-export default function BlockEditor({ content, onChange, editable = true }: BlockEditorProps) {
+export default function BlockEditor({ content, onChange, editable = true, pageId }: BlockEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
+  const [pageLinkOpen, setPageLinkOpen] = useState(false);
+  const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const { pages } = useStore();
 
   const uploadImage = useCallback(async (file: File): Promise<string> => {
     const result = await api.uploadFile(file);
     return result.url;
+  }, []);
+
+  const requestPageLink = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
+    pageLinkRangeRef.current = props.range;
+    setPageLinkOpen(true);
   }, []);
 
   const editor = useEditor({
@@ -43,7 +55,7 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
       CodeBlockLowlight.configure({ lowlight }),
-      SlashCommands.configure({ onImageUpload: uploadImage }),
+      SlashCommands.configure({ onImageUpload: uploadImage, onPageLinkRequest: requestPageLink }),
     ],
     content,
     editable,
@@ -57,6 +69,14 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
       editor.commands.setContent(content);
     }
   }, [content, editor]);
+
+  const insertPageLink = useCallback((page: Page) => {
+    if (!editor || !pageLinkRangeRef.current) return;
+    const { from, to } = pageLinkRangeRef.current;
+    editor.chain().focus().deleteRange({ from, to }).insertContent(`[[${page.title}]] `).run();
+    pageLinkRangeRef.current = null;
+    setPageLinkOpen(false);
+  }, [editor]);
 
   const addImage = useCallback(() => {
     fileInputRef.current?.click();
@@ -83,12 +103,13 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
 
   const runSlashCommand = useCallback((index: number) => {
     if (!editor) return;
-    const item = slashCommands[index];
+    const items = [...slashCommands, createPageLinkCommand(requestPageLink)];
+    const item = items[index];
     if (!item) return;
     const { from, to } = editor.state.selection;
     item.command({ editor, range: { from, to } });
-    setInsertOpen(false);
-  }, [editor]);
+    if (item.title !== 'Page Link') setInsertOpen(false);
+  }, [editor, requestPageLink]);
 
   if (!editor) return null;
 
@@ -208,7 +229,7 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
               </button>
             </div>
             <div className="overflow-y-auto overscroll-contain p-2">
-              {slashCommands.map((item, index) => (
+              {[...slashCommands, createPageLinkCommand(requestPageLink)].map((item, index) => (
                 <button
                   key={item.title}
                   type="button"
@@ -226,6 +247,14 @@ export default function BlockEditor({ content, onChange, editable = true }: Bloc
           </div>
         </div>
       )}
+
+      <PageLinkModal
+        open={pageLinkOpen}
+        pages={pages}
+        currentPageId={pageId}
+        onClose={() => { setPageLinkOpen(false); pageLinkRangeRef.current = null; }}
+        onSelect={insertPageLink}
+      />
     </div>
   );
 }

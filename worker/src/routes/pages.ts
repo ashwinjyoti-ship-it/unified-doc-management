@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
-import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant } from '../utils';
+import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks } from '../utils';
 
 const pages = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -26,6 +26,28 @@ pages.get('/workspaces', async (c) => {
     ORDER BY w.updated_at DESC
   `).bind(auth.user.id).all();
   return c.json({ workspaces: workspaces.results });
+});
+
+pages.patch('/workspaces/:workspaceId', async (c) => {
+  const auth = c.get('auth');
+  const workspaceId = c.req.param('workspaceId');
+  const body = await c.req.json<{ name?: string }>();
+
+  if (!(await checkWorkspaceAccess(c.env.DB, workspaceId, auth.user.id))) {
+    return c.json({ error: 'Access denied' }, 403);
+  }
+
+  if (!body.name?.trim()) {
+    return c.json({ error: 'Name is required' }, 400);
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  await c.env.DB.prepare(
+    'UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?'
+  ).bind(body.name.trim(), now, workspaceId).run();
+
+  const workspace = await c.env.DB.prepare('SELECT * FROM workspaces WHERE id = ?').bind(workspaceId).first();
+  return c.json({ workspace });
 });
 
 pages.get('/workspaces/:workspaceId/pages', async (c) => {
@@ -196,6 +218,7 @@ pages.put('/pages/:pageId/blocks', async (c) => {
   const md = blocksToMarkdown(blocks.map((b) => ({ type: b.type, content: JSON.stringify(b.content) })));
   await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(md, now, pageId).run();
   await updatePageFts(c.env.DB, pageId, page.title, md);
+  await syncBacklinks(c.env.DB, pageId, page.workspace_id, md);
 
   // Broadcast to collab room
   const roomId = c.env.COLLAB_ROOM.idFromName(pageId);
@@ -247,6 +270,7 @@ pages.put('/pages/:pageId/markdown', async (c) => {
 
   await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(markdown, now, pageId).run();
   await updatePageFts(c.env.DB, pageId, page.title, markdown);
+  await syncBacklinks(c.env.DB, pageId, page.workspace_id, markdown);
 
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all();
   return c.json({ blocks: blocks.results });
