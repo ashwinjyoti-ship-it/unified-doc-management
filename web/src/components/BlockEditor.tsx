@@ -81,6 +81,34 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     }
   }, []);
 
+  const insertItems = slashCommands;
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({ codeBlock: false }),
+      Placeholder.configure({ placeholder: 'Type / for commands, or start writing...' }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image.configure({ inline: false }),
+      Link.configure({ openOnClick: false }),
+      CodeBlockLowlight.configure({ lowlight }),
+      SlashCommands.configure({
+        onImageUpload: uploadImage,
+        onSlashItemSelected: handleSlashItemSelected,
+      }),
+    ],
+    content,
+    editable,
+    immediatelyRender: false,
+    onUpdate: ({ editor: ed }) => {
+      onChange(ed.getHTML(), ed.getJSON());
+    },
+  });
+
   const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
     if (!editor) return;
     const parentId = resolveInsertParentId(pageId, pages);
@@ -120,33 +148,6 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     }
     navigate(`/page/${page.id}`);
   }, [editor, pageId, pages, createPage, loadPages, navigate, createDatabaseAndLink]);
-
-  const insertItems = slashCommands;
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ codeBlock: false }),
-      Placeholder.configure({ placeholder: 'Type / for commands, or start writing...' }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Image.configure({ inline: false }),
-      Link.configure({ openOnClick: false }),
-      CodeBlockLowlight.configure({ lowlight }),
-      SlashCommands.configure({
-        onImageUpload: uploadImage,
-        onSlashItemSelected: handleSlashItemSelected,
-      }),
-    ],
-    content,
-    editable,
-    onUpdate: ({ editor }) => {
-      onChange(editor.getHTML(), editor.getJSON());
-    },
-  });
 
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
@@ -251,7 +252,9 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     handleSlashItemSelected({ editor, range: { from, to }, item });
   }, [editor, insertItems, handleSlashItemSelected]);
 
-  if (!editor) return null;
+  if (!editor) {
+    return <div className="text-mid-gray text-sm py-8">Loading editor...</div>;
+  }
 
   const ToolbarButton = ({ onClick, active, tooltip, children }: { onClick: () => void; active?: boolean; tooltip: string; children: React.ReactNode }) => (
     <Tooltip text={tooltip}>

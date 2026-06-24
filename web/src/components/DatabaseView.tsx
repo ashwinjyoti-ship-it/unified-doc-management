@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../lib/api';
 import type { DatabaseProperty, DatabaseRow } from '../types';
-import { Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2 } from 'lucide-react';
+import { Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2, Images } from 'lucide-react';
 
-type ViewType = 'table' | 'board' | 'calendar' | 'list';
+type ViewType = 'table' | 'board' | 'calendar' | 'gallery' | 'list';
 
 const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
@@ -81,6 +81,16 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const statusProp = properties.find((p) => p.type === 'select' && p.name.toLowerCase().includes('status'))
     || properties.find((p) => p.type === 'select');
   const dateProp = properties.find((p) => p.type === 'date');
+  const nameProp = properties.find((p) => p.name.toLowerCase() === 'name') || properties[0];
+
+  const galleryCoverStyle = (status: string) => {
+    const colors: Record<string, string> = {
+      'To Do': 'from-slate-200 to-slate-300',
+      'In Progress': 'from-amber-100 to-amber-200',
+      'Done': 'from-sage/60 to-forest/30',
+    };
+    return colors[status] || 'from-linen to-green-mist';
+  };
 
   const sortedListRows = useMemo(() => {
     if (!listSortPropId) return rows;
@@ -112,8 +122,9 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
   const views = [
     { id: 'table' as const, icon: Table, label: 'Table' },
-    { id: 'board' as const, icon: LayoutGrid, label: 'Board' },
+    { id: 'board' as const, icon: LayoutGrid, label: 'Kanban' },
     { id: 'calendar' as const, icon: Calendar, label: 'Calendar' },
+    { id: 'gallery' as const, icon: Images, label: 'Gallery' },
     { id: 'list' as const, icon: List, label: 'List' },
   ];
 
@@ -232,19 +243,16 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             <div key={status} className="card-surface p-3">
               <h3 className="font-medium text-sm text-charcoal mb-3">{status}</h3>
               <div className="space-y-2">
-                {rows.filter((r) => getPropValue(r, statusProp.id) === status).map((row) => {
-                  const nameProp = properties[0];
-                  return (
+                {rows.filter((r) => getPropValue(r, statusProp.id) === status).map((row) => (
                     <div key={row.id} className="bg-linen rounded-lg p-3 text-sm">
-                      <div className="font-medium">{getPropValue(row, nameProp.id) || 'Untitled'}</div>
+                      <div className="font-medium">{nameProp ? getPropValue(row, nameProp.id) || 'Untitled' : 'Untitled'}</div>
                       {properties.slice(1).filter((p) => p.id !== statusProp.id).map((p) => {
                         const val = getPropValue(row, p.id);
                         if (!val) return null;
                         return <div key={p.id} className="text-xs text-mid-gray mt-1">{p.name}: {String(val)}</div>;
                       })}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             </div>
           ))}
@@ -271,14 +279,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               return (
                 <div key={i} className="min-h-16 p-1 border border-green-mist/30 rounded-lg text-xs">
                   {cell.day && <span className="text-mid-gray">{cell.day}</span>}
-                  {dayRows.map((row) => {
-                    const nameProp = properties[0];
-                    return (
+                  {dayRows.map((row) => (
                       <div key={row.id} className="bg-sage/30 rounded px-1 py-0.5 mt-0.5 truncate">
-                        {getPropValue(row, nameProp.id) || 'Item'}
+                        {nameProp ? getPropValue(row, nameProp.id) || 'Item' : 'Item'}
                       </div>
-                    );
-                  })}
+                    ))}
                 </div>
               );
             })}
@@ -290,13 +295,47 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <p className="text-sm text-mid-gray">Add a Due Date property to use Calendar view.</p>
       )}
 
+      {view === 'gallery' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rows.map((row) => {
+            const title = nameProp ? String(getPropValue(row, nameProp.id) || 'Untitled') : 'Untitled';
+            const status = statusProp ? String(getPropValue(row, statusProp.id) || '') : '';
+            const due = dateProp ? String(getPropValue(row, dateProp.id) || '') : '';
+            return (
+              <div key={row.id} className="card-surface overflow-hidden group">
+                <div className={`h-28 bg-gradient-to-br ${galleryCoverStyle(status)} flex items-center justify-center`}>
+                  <span className="text-3xl opacity-80">{status === 'Done' ? '✅' : status === 'In Progress' ? '🔄' : '📄'}</span>
+                </div>
+                <div className="p-4">
+                  <div className="font-medium text-charcoal truncate">{title}</div>
+                  {status && (
+                    <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-linen text-warm-gray">{status}</span>
+                  )}
+                  {due && <div className="text-xs text-mid-gray mt-2">Due {due}</div>}
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-warm-gray">
+                    {properties.filter((p) => p.id !== nameProp?.id && p.id !== statusProp?.id && p.id !== dateProp?.id).map((prop) => {
+                      const val = getPropValue(row, prop.id);
+                      if (!val) return null;
+                      return <span key={prop.id}><span className="text-mid-gray">{prop.name}:</span> {String(val)}</span>;
+                    })}
+                  </div>
+                </div>
+                <div className="px-4 pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button type="button" onClick={() => deleteRow(row.id)} className="text-red-400 hover:text-red-600 text-xs flex items-center gap-1">
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {view === 'list' && (
         <div className="space-y-2">
-          {sortedListRows.map((row) => {
-            const nameProp = properties[0];
-            return (
+          {sortedListRows.map((row) => (
               <div key={row.id} className="card-surface p-4 flex flex-wrap items-center justify-between gap-2">
-                <span className="font-medium">{getPropValue(row, nameProp.id) || 'Untitled'}</span>
+                <span className="font-medium">{nameProp ? getPropValue(row, nameProp.id) || 'Untitled' : 'Untitled'}</span>
                 <div className="flex flex-wrap gap-4 text-sm text-warm-gray">
                   {properties.slice(1).map((prop) => (
                     <span key={prop.id}>
@@ -305,8 +344,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   ))}
                 </div>
               </div>
-            );
-          })}
+          ))}
         </div>
       )}
 
