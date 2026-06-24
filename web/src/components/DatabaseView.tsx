@@ -10,6 +10,8 @@ import {
   getRowTitle,
   parseRelationOptions,
   parseRelationValue,
+  parseMultiSelectValue,
+  parseCheckboxValue,
   ROLLUP_AGGREGATIONS,
   type DatabaseFilter,
   type DatabaseSort,
@@ -126,7 +128,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const addProperty = async () => {
     if (!newPropName.trim()) return;
     let options: string[] | { relatedDatabaseId?: string } | undefined;
-    if (newPropType === 'select') {
+    if (newPropType === 'select' || newPropType === 'multi_select') {
       options = newPropOptions.split(',').map((s) => s.trim()).filter(Boolean);
     } else if (newPropType === 'relation') {
       if (!newRelationDbId) return;
@@ -312,6 +314,44 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         </select>
       );
     }
+    if (prop.type === 'multi_select') {
+      const options = JSON.parse(prop.options || '[]') as string[];
+      const selected = new Set(parseMultiSelectValue(getPropValue(row, prop.id)));
+      return (
+        <div className="flex flex-wrap gap-1 min-w-[140px]">
+          {options.map((opt) => {
+            const on = selected.has(opt);
+            return (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => {
+                  const next = new Set(selected);
+                  if (on) next.delete(opt);
+                  else next.add(opt);
+                  void updateCell(row.id, prop.id, [...next]);
+                }}
+                className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                  on ? 'bg-forest text-white border-forest' : 'bg-linen text-warm-gray border-green-mist hover:border-forest'
+                }`}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      );
+    }
+    if (prop.type === 'checkbox') {
+      return (
+        <input
+          type="checkbox"
+          checked={parseCheckboxValue(getPropValue(row, prop.id))}
+          onChange={(e) => void updateCell(row.id, prop.id, e.target.checked)}
+          className="w-4 h-4 accent-forest"
+        />
+      );
+    }
     if (prop.type === 'date') {
       return (
         <input
@@ -342,6 +382,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
   const formatCellDisplay = (row: DatabaseRow, prop: DatabaseProperty) => {
     if (prop.type === 'relation') return formatRelationDisplay(row, prop);
+    if (prop.type === 'multi_select') {
+      const vals = parseMultiSelectValue(getPropValue(row, prop.id));
+      return vals.length ? vals.join(', ') : '—';
+    }
+    if (prop.type === 'checkbox') {
+      return parseCheckboxValue(getPropValue(row, prop.id)) ? 'Yes' : 'No';
+    }
     return String(cellValue(row, prop.id) || '—');
   };
 
@@ -700,16 +747,18 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               <option value="number">Number</option>
               <option value="date">Date</option>
               <option value="select">Select</option>
+              <option value="multi_select">Multi-select</option>
+              <option value="checkbox">Checkbox</option>
               <option value="relation">Relation</option>
               <option value="rollup">Rollup</option>
             </select>
-            {newPropType === 'select' && (
+            {(newPropType === 'select' || newPropType === 'multi_select') && (
               <>
                 <label className="block text-sm text-mid-gray mb-1">Options (comma-separated)</label>
                 <input
                   value={newPropOptions}
                   onChange={(e) => setNewPropOptions(e.target.value)}
-                  placeholder="High, Medium, Low"
+                  placeholder={newPropType === 'multi_select' ? 'Bug, Feature, Docs' : 'High, Medium, Low'}
                   className="w-full px-3 py-2 rounded-lg border border-green-mist mb-4 outline-none focus:border-forest"
                 />
               </>

@@ -44,7 +44,7 @@ export interface DatabaseProperty {
   id: string;
   database_id: string;
   name: string;
-  type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'relation';
+  type: 'text' | 'number' | 'date' | 'select' | 'multi_select' | 'relation' | 'rollup' | 'checkbox';
   options: string;
   order_index: number;
 }
