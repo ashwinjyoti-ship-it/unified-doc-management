@@ -120,14 +120,14 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
     }
 
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-green-mist overflow-hidden min-w-[240px]">
+      <div className="bg-white rounded-xl shadow-lg border border-green-mist overflow-hidden min-w-[min(100vw-2rem,280px)] max-h-[min(50vh,360px)] overflow-y-auto overscroll-contain">
         {items.map((item, index) => (
           <button
             key={item.title}
             type="button"
             onClick={() => command(item)}
-            className={`w-full flex items-center gap-3 px-3 py-2 text-left text-sm transition-colors ${
-              index === selectedIndex ? 'bg-sage/30 text-forest' : 'hover:bg-linen text-charcoal'
+            className={`w-full flex items-center gap-3 px-3 py-3 md:py-2 text-left text-sm transition-colors ${
+              index === selectedIndex ? 'bg-sage/30 text-forest' : 'hover:bg-linen active:bg-sage/20 text-charcoal'
             }`}
           >
             <span className="text-mid-gray">{item.icon}</span>

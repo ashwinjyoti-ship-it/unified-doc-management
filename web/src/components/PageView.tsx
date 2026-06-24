@@ -14,7 +14,7 @@ import { applyImportContent } from '../lib/importContent';
 import type { Block, Comment, Tag } from '../types';
 import { jsPDF } from 'jspdf';
 import {
-  Menu, History, MessageSquare, FileCode, Link2, Send, RotateCcw,
+  History, MessageSquare, FileCode, Link2, Send, RotateCcw,
   Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
@@ -24,7 +24,7 @@ type SidePanel = 'comments' | 'history' | null;
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore();
+  const { user, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore();
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -476,10 +476,6 @@ export default function PageView() {
 
       <header className="flex flex-col gap-2 px-4 py-3 border-b border-green-mist bg-warm-white/80 backdrop-blur sticky top-0 z-10">
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={() => setSidebarOpen(true)} className="md:hidden p-1 shrink-0">
-            <Menu className="w-5 h-5" />
-          </button>
-
           <input
             value={title}
             onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
