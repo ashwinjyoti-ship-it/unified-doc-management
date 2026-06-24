@@ -68,7 +68,7 @@ export const SlashCommands = Extension.create({
                 interactive: true,
                 trigger: 'manual',
                 placement: 'bottom-start',
-                zIndex: 100000,
+                zIndex: 90,
                 touch: true,
                 maxWidth: 'calc(100vw - 1rem)',
                 popperOptions: {

@@ -130,9 +130,9 @@ input, textarea {
   bottom: max(1.5rem, env(safe-area-inset-bottom));
 }
 
-/* Slash command popup above mobile keyboards and headers */
+/* Slash command popup — above editor chrome, below app modals (z-[100]+) */
 .tippy-box[data-theme] {
-  z-index: 100000 !important;
+  z-index: 90 !important;
 }
 
 /* App-wide scroll container — scrollbar at viewport edge */
