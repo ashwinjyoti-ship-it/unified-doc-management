@@ -94,7 +94,14 @@ input, textarea {
 .ProseMirror h2 { font-size: 1.5rem; font-weight: 600; margin: 0.875rem 0 0.5rem; }
 .ProseMirror h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.375rem; }
 .ProseMirror ul, .ProseMirror ol { padding-left: 1.5rem; margin: 0.5rem 0; }
-.ProseMirror blockquote { border-left: 3px solid var(--color-sage); padding-left: 1rem; color: var(--color-warm-gray); margin: 0.5rem 0; }
+.ProseMirror blockquote {
+  border-left: 3px solid var(--color-sage);
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: color-mix(in srgb, var(--color-linen) 70%, transparent);
+  border-radius: 0 8px 8px 0;
+  color: var(--color-charcoal);
+}
 .ProseMirror pre { background: var(--color-dark-ink); color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; }
 .ProseMirror code { background: var(--color-linen); padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875em; }
 .ProseMirror pre code { background: none; padding: 0; }
