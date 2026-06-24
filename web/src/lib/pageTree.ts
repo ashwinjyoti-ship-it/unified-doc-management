@@ -1,0 +1,45 @@
+import type { Page } from '../types';
+
+export function getChildren(pages: Page[], parentId: string | null): Page[] {
+  return pages.filter((p) => p.parent_id === parentId);
+}
+
+export function isDescendant(pages: Page[], ancestorId: string, nodeId: string): boolean {
+  let current = pages.find((p) => p.id === nodeId);
+  while (current?.parent_id) {
+    if (current.parent_id === ancestorId) return true;
+    current = pages.find((p) => p.id === current!.parent_id);
+  }
+  return false;
+}
+
+export function canNestUnder(
+  pages: Page[],
+  draggedId: string,
+  targetParentId: string | null,
+  excludeIds: Set<string> = new Set(),
+): boolean {
+  if (draggedId === targetParentId) return false;
+  if (targetParentId && excludeIds.has(targetParentId)) return false;
+  if (targetParentId && isDescendant(pages, draggedId, targetParentId)) return false;
+  for (const id of excludeIds) {
+    if (id !== draggedId && targetParentId && isDescendant(pages, id, targetParentId)) return false;
+  }
+  return true;
+}
+
+export function pageIcon(page: Page): string {
+  return page.icon || (page.type === 'folder' ? '📁' : page.type === 'database' ? '🗃️' : '📄');
+}
+
+export function collectDescendantIds(pages: Page[], rootId: string): Set<string> {
+  const ids = new Set<string>([rootId]);
+  const walk = (parentId: string) => {
+    for (const child of getChildren(pages, parentId)) {
+      ids.add(child.id);
+      walk(child.id);
+    }
+  };
+  walk(rootId);
+  return ids;
+}

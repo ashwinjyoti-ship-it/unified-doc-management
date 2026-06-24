@@ -178,3 +178,19 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
 
   return blocks;
 }
+
+export async function isPageDescendant(
+  db: D1Database,
+  ancestorId: string,
+  nodeId: string,
+): Promise<boolean> {
+  let currentId: string | null = nodeId;
+  while (currentId) {
+    const row = await db.prepare('SELECT parent_id FROM pages WHERE id = ?')
+      .bind(currentId).first<{ parent_id: string | null }>();
+    if (!row?.parent_id) return false;
+    if (row.parent_id === ancestorId) return true;
+    currentId = row.parent_id;
+  }
+  return false;
+}
