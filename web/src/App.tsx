@@ -22,7 +22,7 @@ function HomePage() {
   }, [pages]);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+    <div className="flex-1 flex flex-col items-center justify-center p-8 pb-24 md:pb-8 text-center">
       <div className="text-6xl mb-4">📄</div>
       <h1 className="text-2xl font-bold text-charcoal mb-2">
         Welcome to <span className="text-forest">Unified Doc Management</span>

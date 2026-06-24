@@ -15,7 +15,7 @@ import type { Block, Comment, Tag } from '../types';
 import { jsPDF } from 'jspdf';
 import {
   History, MessageSquare, FileCode, Link2, Send, RotateCcw,
-  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check,
+  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
@@ -44,6 +44,7 @@ export default function PageView() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [operationLabel, setOperationLabel] = useState<string | null>(null);
+  const [showMobileMore, setShowMobileMore] = useState(false);
   const [importModal, setImportModal] = useState<{
     sourceLabel: string;
     sourceType: 'file' | 'url';
@@ -491,8 +492,9 @@ export default function PageView() {
             ) : dirty ? (
               <span className="text-xs text-amber-600 whitespace-nowrap">Unsaved</span>
             ) : lastSaved ? (
-              <span className="text-xs text-sage whitespace-nowrap hidden sm:inline-flex items-center gap-1">
-                <Check className="w-3 h-3" /> Saved
+              <span className="text-xs text-sage whitespace-nowrap inline-flex items-center gap-1">
+                <Check className="w-3 h-3" />
+                <span className="hidden sm:inline">Saved</span>
               </span>
             ) : null}
 
@@ -517,7 +519,7 @@ export default function PageView() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
+        <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-0.5 -mx-1 px-1">
           {presence.length > 0 && (
             <div className="flex items-center gap-1.5 mr-1">
               <div className="flex -space-x-2">
@@ -637,6 +639,91 @@ export default function PageView() {
             </button>
           </Tooltip>
         </div>
+
+        {/* Mobile: compact action row + overflow menu */}
+        <div className="flex md:hidden items-center gap-1 pb-0.5">
+          {importing && <span className="text-xs text-mid-gray shrink-0">Importing...</span>}
+          {exporting && <span className="text-xs text-mid-gray shrink-0">Exporting...</span>}
+
+          <Tooltip text={favorited ? 'Remove from favorites' : 'Pin to favorites'}>
+            <button
+              onClick={toggleFavorite}
+              className={`p-2 rounded-lg ${favorited ? 'text-amber-500 bg-amber-50' : 'hover:bg-linen'}`}
+            >
+              <Star className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Version history">
+            <button
+              onClick={() => togglePanel('history')}
+              className={`p-2 rounded-lg flex items-center gap-1 ${sidePanel === 'history' ? 'bg-sage/30' : 'hover:bg-linen'}`}
+            >
+              <History className="w-4 h-4" />
+              {versions.length > 0 && (
+                <span className="text-xs bg-forest text-white rounded-full px-1.5 min-w-[18px] text-center">
+                  {versions.length}
+                </span>
+              )}
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Comments">
+            <button
+              onClick={() => togglePanel('comments')}
+              className={`p-2 rounded-lg ${sidePanel === 'comments' ? 'bg-sage/30' : 'hover:bg-linen'}`}
+            >
+              <MessageSquare className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <div className="relative ml-auto">
+            <Tooltip text="More actions">
+              <button
+                onClick={() => setShowMobileMore((v) => !v)}
+                className={`p-2 rounded-lg ${showMobileMore ? 'bg-sage/30' : 'hover:bg-linen'}`}
+                aria-expanded={showMobileMore}
+              >
+                <MoreHorizontal className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            {showMobileMore && (
+              <>
+                <div className="fixed inset-0 z-20" aria-hidden onClick={() => setShowMobileMore(false)} />
+                <div className="absolute right-0 top-full mt-1 z-30 bg-warm-white border border-green-mist rounded-xl shadow-lg py-1 min-w-[200px]">
+                  <label className="block px-4 py-2 text-xs text-mid-gray">Visibility</label>
+                  <select
+                    value={visibility}
+                    onChange={(e) => { setVisibility(e.target.value); api.updatePage(pageId!, { visibility: e.target.value }); }}
+                    className="w-[calc(100%-2rem)] mx-4 mb-2 text-xs bg-linen rounded-lg px-2 py-1.5 border-none outline-none"
+                  >
+                    <option value="private">🔒 Private</option>
+                    <option value="shared">👥 Shared</option>
+                    <option value="public">🌐 Public</option>
+                  </select>
+                  <button onClick={() => { duplicatePage(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
+                    <Copy className="w-4 h-4" /> Duplicate
+                  </button>
+                  <button onClick={() => { exportPage(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
+                    <FileCode className="w-4 h-4" /> Export Markdown
+                  </button>
+                  <button onClick={() => { exportPdf(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Export PDF
+                  </button>
+                  <button onClick={() => { importInputRef.current?.click(); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                    <Upload className="w-4 h-4" /> Import file
+                  </button>
+                  <button onClick={() => { importFromUrl(); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                    <Link2 className="w-4 h-4" /> Import URL
+                  </button>
+                  <button onClick={() => { toggleMarkdown(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
+                    <FileCode className="w-4 h-4" /> {markdownMode ? 'Visual editor' : 'Markdown source'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </header>
 
       {pageTags.length > 0 || pageType === 'page' ? (
@@ -722,7 +809,13 @@ export default function PageView() {
         </div>
 
         {sidePanel && (
-          <aside className="w-80 shrink-0 border-l border-green-mist bg-warm-white flex flex-col sticky top-0 self-start max-h-[100dvh] overflow-hidden">
+          <>
+            <div
+              className="md:hidden fixed inset-0 bg-black/30 z-30"
+              onClick={() => setSidePanel(null)}
+              aria-hidden
+            />
+            <aside className="fixed inset-y-0 right-0 z-40 w-full max-w-sm flex flex-col border-l border-green-mist bg-warm-white overflow-hidden md:relative md:inset-auto md:z-auto md:w-80 md:shrink-0 md:sticky md:top-0 md:self-start md:max-h-[100dvh]">
             <div className="flex border-b border-green-mist">
               <button
                 onClick={() => setSidePanel('comments')}
@@ -813,6 +906,7 @@ export default function PageView() {
               </div>
             )}
           </aside>
+          </>
         )}
       </div>
 

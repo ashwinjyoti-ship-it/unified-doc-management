@@ -46,8 +46,8 @@ export default function SearchModal() {
   if (!searchOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-start justify-center pt-[15vh] p-4" onClick={() => setSearchOpen(false)}>
-      <div className="card-surface w-full max-w-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-end md:items-start md:justify-center md:pt-[15vh] p-0 md:p-4" onClick={() => setSearchOpen(false)}>
+      <div className="card-surface w-full max-w-xl overflow-hidden rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 p-4 border-b border-green-mist">
           <Search className="w-5 h-5 text-mid-gray" />
           <input

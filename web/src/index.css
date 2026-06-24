@@ -112,6 +112,15 @@ input, textarea {
   padding-top: max(0px, env(safe-area-inset-top));
 }
 
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* Bottom-fixed controls sit above home indicator */
+.fixed-bottom-safe {
+  bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
 /* Slash command popup above mobile keyboards and headers */
 .tippy-box[data-theme] {
   z-index: 100000 !important;

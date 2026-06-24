@@ -1,25 +1,34 @@
-import { Menu, Search as SearchIcon } from 'lucide-react';
+import { Menu, Search as SearchIcon, Bell } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../lib/store';
+import { pageIcon } from '../lib/pageTree';
 import NewMenuDropdown from './NewMenuDropdown';
 import NamePromptModal from './NamePromptModal';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import Tooltip from './Tooltip';
 
 export default function MobileTopBar() {
-  const { workspace, setSidebarOpen, setSearchOpen } = useStore();
+  const { pageId } = useParams<{ pageId: string }>();
+  const navigate = useNavigate();
+  const { workspace, pages, notifications, setSidebarOpen, setSearchOpen } = useStore();
   const {
     folderModal,
     setFolderModal,
     handleNewPage,
     handleNewDatabase,
-    handleNewFolderRequest,
     handleNewProjectRequest,
     confirmNewFolder,
   } = useDocumentCreate();
 
+  const currentPage = pageId ? pages.find((p) => p.id === pageId) : null;
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const barTitle = currentPage
+    ? `${pageIcon(currentPage)} ${currentPage.title}`
+    : workspace?.name || 'Unified Doc Management';
+
   return (
     <>
-      <div className="md:hidden flex items-center gap-2 p-3 border-b border-green-mist bg-warm-white sticky top-0 z-20 safe-top">
+      <div className="md:hidden flex items-center gap-1.5 px-3 py-3 border-b border-green-mist bg-warm-white sticky top-0 z-20 safe-top">
         <Tooltip text="Open sidebar — pages, folders, favorites">
           <button
             type="button"
@@ -32,8 +41,22 @@ export default function MobileTopBar() {
         </Tooltip>
 
         <span className="flex-1 font-semibold text-forest text-sm truncate min-w-0">
-          {workspace?.name || 'Unified Doc Management'}
+          {barTitle}
         </span>
+
+        <Tooltip text="Notifications">
+          <button
+            type="button"
+            onClick={() => navigate('/notifications')}
+            className="p-2 rounded-lg hover:bg-linen shrink-0 relative"
+            aria-label="Notifications"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 w-2 h-2 bg-forest rounded-full" aria-hidden />
+            )}
+          </button>
+        </Tooltip>
 
         <Tooltip text="Search all pages">
           <button

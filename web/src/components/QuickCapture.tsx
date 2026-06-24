@@ -42,15 +42,15 @@ export default function QuickCapture() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-forest text-white rounded-full shadow-lg flex items-center justify-center z-40 md:hidden hover:bg-dark-teal transition-colors"
+        className="fixed fixed-bottom-safe right-6 w-14 h-14 bg-forest text-white rounded-full shadow-lg flex items-center justify-center z-40 md:hidden hover:bg-dark-teal transition-colors"
         aria-label="Quick capture"
       >
         <Zap className="w-6 h-6" />
       </button>
 
       {open && (
-        <div className="fixed inset-0 bg-black/30 z-50 flex items-end md:items-center justify-center p-4" onClick={() => setOpen(false)}>
-          <div className="card-surface w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/30 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setOpen(false)}>
+          <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-charcoal">Quick Capture</h3>
               <button onClick={() => setOpen(false)}><X className="w-5 h-5" /></button>
