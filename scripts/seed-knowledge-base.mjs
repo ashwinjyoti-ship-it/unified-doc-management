@@ -61,6 +61,7 @@ async function main() {
   console.log(`  Password: ${password}${created ? ' (new account)' : ''}`);
   console.log('\nOr use Settings → Load demo Knowledge Base while logged in.\n');
   console.log('Explore:');
+  console.log(`  Project:          /page/${result.pageIds.projectId}`);
   console.log(`  Learning folder:  /page/${result.pageIds.learningFolderId}`);
   console.log(`  Weekly Review:    /page/${result.pageIds.weeklyReviewId}`);
   console.log(`  Today's note:     /page/${result.pageIds.dailyNoteId} (${result.dailyNoteTitle})\n`);
