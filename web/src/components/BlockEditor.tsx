@@ -11,25 +11,31 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
-import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
-import {
-  slashCommands,
-  createPageLinkCommand,
-  createNewDatabaseCommand,
-  createMessagePageCommand,
-} from './SlashCommandList';
+import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
 import NamePromptModal from './NamePromptModal';
+import InsertPlacementModal from './InsertPlacementModal';
 import { useStore } from '../lib/store';
 import type { Page } from '../types';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
+import { consumeEditorSeed } from '../lib/editorSeed';
+import {
+  applyNewPageSeed,
+  defaultIconFor,
+  defaultTitleFor,
+  resolveInsertParentId,
+  runInlineFunctional,
+  seedBlocksFor,
+  type FunctionalSlashKey,
+} from '../lib/slashInsert';
 
 const lowlight = createLowlight(common);
 
@@ -44,9 +50,13 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
   const [pageLinkOpen, setPageLinkOpen] = useState(false);
-  const [messagePageOpen, setMessagePageOpen] = useState(false);
+  const [newPagePromptOpen, setNewPagePromptOpen] = useState(false);
+  const [placementModal, setPlacementModal] = useState<{
+    item: SlashCommandItem;
+    range: { from: number; to: number };
+  } | null>(null);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const messagePageRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
   const navigate = useNavigate();
   const { pages, createPage, loadPages } = useStore();
 
@@ -55,36 +65,63 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     return result.url;
   }, []);
 
-  const requestPageLink = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
-    pageLinkRangeRef.current = props.range;
-    setPageLinkOpen(true);
+  const handleSlashItemSelected = useCallback(({ editor: ed, range, item }: {
+    editor: import('@tiptap/react').Editor;
+    range: { from: number; to: number };
+    item: SlashCommandItem;
+  }) => {
+    if (item.placement === 'format' && item.command) {
+      item.command({ editor: ed, range });
+      setInsertOpen(false);
+      return;
+    }
+    if (item.placement === 'functional' && item.key) {
+      setPlacementModal({ item, range });
+      setInsertOpen(false);
+    }
   }, []);
 
-  const requestNewDatabase = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
-    void (async () => {
-      const current = pageId ? pages.find((p) => p.id === pageId) : undefined;
-      const parentId = current?.type === 'folder' ? current.id : current?.parent_id ?? undefined;
-      const page = await createPage({ type: 'database', title: 'New Database', parentId });
-      await loadPages();
-      props.editor.chain().focus().deleteRange(props.range).run();
+  const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
+    if (!editor) return;
+    const parentId = resolveInsertParentId(pageId, pages);
+    const title = defaultTitleFor('database');
+    const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
+    await loadPages();
+    if (navigateToDb) {
+      editor.chain().focus().deleteRange(range).run();
       navigate(`/page/${page.id}`);
-    })();
-  }, [pageId, pages, createPage, loadPages, navigate]);
+      return;
+    }
+    editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
+  }, [editor, pageId, pages, createPage, loadPages, navigate]);
 
-  const requestMessagePage = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
-    messagePageRangeRef.current = props.range;
-    setMessagePageOpen(true);
-  }, []);
+  const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
+    if (!editor) return;
+    const parentId = resolveInsertParentId(pageId, pages);
+    const pageTitle = title || defaultTitleFor(key);
 
-  const insertItems = useMemo(
-    () => [
-      ...slashCommands,
-      createPageLinkCommand(requestPageLink),
-      createNewDatabaseCommand(requestNewDatabase),
-      createMessagePageCommand(requestMessagePage),
-    ],
-    [requestPageLink, requestNewDatabase, requestMessagePage],
-  );
+    if (key === 'database') {
+      await createDatabaseAndLink(range, true);
+      return;
+    }
+
+    const page = await createPage({
+      type: 'page',
+      title: pageTitle,
+      parentId,
+      icon: defaultIconFor(key),
+    });
+    await api.saveBlocks(page.id, seedBlocksFor(key));
+    applyNewPageSeed(key, page.id);
+    await loadPages();
+    editor.chain().focus().deleteRange(range).run();
+    if (key === 'image') {
+      sessionStorage.setItem(`pickImageFor:${page.id}`, '1');
+    }
+    navigate(`/page/${page.id}`);
+  }, [editor, pageId, pages, createPage, loadPages, navigate, createDatabaseAndLink]);
+
+  const insertItems = slashCommands;
 
   const editor = useEditor({
     extensions: [
@@ -101,9 +138,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       CodeBlockLowlight.configure({ lowlight }),
       SlashCommands.configure({
         onImageUpload: uploadImage,
-        onPageLinkRequest: requestPageLink,
-        onNewDatabaseRequest: requestNewDatabase,
-        onMessagePageRequest: requestMessagePage,
+        onSlashItemSelected: handleSlashItemSelected,
       }),
     ],
     content,
@@ -119,6 +154,19 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     }
   }, [content, editor]);
 
+  useEffect(() => {
+    if (!editor || !pageId) return;
+    const seed = consumeEditorSeed(pageId);
+    if (seed) {
+      editor.commands.setContent(seed);
+      onChange(editor.getHTML(), editor.getJSON());
+    }
+    if (sessionStorage.getItem(`pickImageFor:${pageId}`)) {
+      sessionStorage.removeItem(`pickImageFor:${pageId}`);
+      setTimeout(() => fileInputRef.current?.click(), 100);
+    }
+  }, [editor, pageId, onChange]);
+
   const insertPageLink = useCallback((page: Page) => {
     if (!editor || !pageLinkRangeRef.current) return;
     const { from, to } = pageLinkRangeRef.current;
@@ -127,17 +175,50 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     setPageLinkOpen(false);
   }, [editor]);
 
-  const confirmMessagePage = useCallback(async (title: string) => {
-    if (!editor || !messagePageRangeRef.current) return;
-    const { from, to } = messagePageRangeRef.current;
-    const current = pageId ? pages.find((p) => p.id === pageId) : undefined;
-    const parentId = current?.type === 'folder' ? current.id : current?.parent_id ?? undefined;
-    const page = await createPage({ type: 'page', title, icon: '💬', parentId });
-    await loadPages();
-    editor.chain().focus().deleteRange({ from, to }).insertContent(`[[${page.title}]] `).run();
-    messagePageRangeRef.current = null;
-    setMessagePageOpen(false);
-  }, [editor, pageId, pages, createPage, loadPages]);
+  const confirmNewPageAndNavigate = useCallback(async (title: string) => {
+    if (!editor || !newPageRangeRef.current) return;
+    const range = newPageRangeRef.current;
+    await openNewPageInProject('page-link', range, title);
+    newPageRangeRef.current = null;
+    setNewPagePromptOpen(false);
+  }, [editor, openNewPageInProject]);
+
+  const handleSamePage = useCallback(() => {
+    if (!editor || !placementModal?.item.key) return;
+    const { item, range } = placementModal;
+    const key = item.key!;
+    setPlacementModal(null);
+
+    if (key === 'page-link') {
+      pageLinkRangeRef.current = range;
+      setPageLinkOpen(true);
+      return;
+    }
+
+    runInlineFunctional(key, editor, range, {
+      openPageLinkPicker: () => {
+        pageLinkRangeRef.current = range;
+        setPageLinkOpen(true);
+      },
+      openImagePicker: () => fileInputRef.current?.click(),
+      onDatabaseLink: () => { void createDatabaseAndLink(range, false); },
+    });
+  }, [editor, placementModal, createDatabaseAndLink]);
+
+  const handleNewPage = useCallback(() => {
+    if (!editor || !placementModal?.item.key) return;
+    const { item, range } = placementModal;
+    const key = item.key!;
+    setPlacementModal(null);
+
+    if (key === 'page-link') {
+      newPageRangeRef.current = range;
+      setNewPagePromptOpen(true);
+      return;
+    }
+
+    void openNewPageInProject(key, range);
+  }, [editor, placementModal, openNewPageInProject]);
 
   const addImage = useCallback(() => {
     fileInputRef.current?.click();
@@ -167,9 +248,8 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     const item = insertItems[index];
     if (!item) return;
     const { from, to } = editor.state.selection;
-    item.command({ editor, range: { from, to } });
-    if (!['Page Link', 'Message (new page)'].includes(item.title)) setInsertOpen(false);
-  }, [editor, insertItems]);
+    handleSlashItemSelected({ editor, range: { from, to }, item });
+  }, [editor, insertItems, handleSlashItemSelected]);
 
   if (!editor) return null;
 
@@ -249,7 +329,17 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
           <ToolbarButton tooltip="To-do checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
             <CheckSquare className="w-4 h-4" />
           </ToolbarButton>
-          <ToolbarButton tooltip="Block quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
+          <ToolbarButton
+            tooltip="Block quote"
+            onClick={() => {
+              if (editor.isActive('blockquote')) {
+                editor.chain().focus().lift('blockquote').run();
+              } else {
+                editor.chain().focus().setBlockquote().run();
+              }
+            }}
+            active={editor.isActive('blockquote')}
+          >
             <Quote className="w-4 h-4" />
           </ToolbarButton>
           <ToolbarButton tooltip="Horizontal divider line" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
@@ -320,6 +410,14 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         </div>
       )}
 
+      <InsertPlacementModal
+        open={!!placementModal}
+        itemTitle={placementModal?.item.title ?? ''}
+        onClose={() => setPlacementModal(null)}
+        onSamePage={handleSamePage}
+        onNewPage={handleNewPage}
+      />
+
       <PageLinkModal
         open={pageLinkOpen}
         pages={pages}
@@ -329,15 +427,13 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       />
 
       <NamePromptModal
-        open={messagePageOpen}
-        title="New message page"
-        label="Message title"
-        placeholder="e.g. Follow-up with team"
-        confirmLabel="Create & link"
-        defaultIcon="💬"
-        showIcon
-        onClose={() => { setMessagePageOpen(false); messagePageRangeRef.current = null; }}
-        onConfirm={(name) => void confirmMessagePage(name)}
+        open={newPagePromptOpen}
+        title="New page"
+        label="Page title"
+        placeholder="e.g. Meeting notes"
+        confirmLabel="Create & open"
+        onClose={() => { setNewPagePromptOpen(false); newPageRangeRef.current = null; }}
+        onConfirm={(name) => void confirmNewPageAndNavigate(name)}
       />
     </div>
   );

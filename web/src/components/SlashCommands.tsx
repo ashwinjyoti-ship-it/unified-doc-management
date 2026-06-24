@@ -2,14 +2,7 @@ import { Extension } from '@tiptap/core';
 import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
-import SlashCommandList, {
-  slashCommands,
-  createPageLinkCommand,
-  createNewDatabaseCommand,
-  createMessagePageCommand,
-  type SlashCommandItem,
-  type SlashCommandListRef,
-} from './SlashCommandList';
+import SlashCommandList, { slashCommands, type SlashCommandItem, type SlashCommandListRef } from './SlashCommandList';
 
 export const SlashCommands = Extension.create({
   name: 'slashCommands',
@@ -17,54 +10,18 @@ export const SlashCommands = Extension.create({
   addOptions() {
     return {
       onImageUpload: undefined as ((file: File) => Promise<string>) | undefined,
-      onPageLinkRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
-      onNewDatabaseRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
-      onMessagePageRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
+      onSlashItemSelected: undefined as ((props: {
+        editor: import('@tiptap/react').Editor;
+        range: { from: number; to: number };
+        item: SlashCommandItem;
+      }) => void) | undefined,
     };
   },
 
   addProseMirrorPlugins() {
-    const onImageUpload = this.options.onImageUpload;
-    const onPageLinkRequest = this.options.onPageLinkRequest;
-    const onNewDatabaseRequest = this.options.onNewDatabaseRequest;
-    const onMessagePageRequest = this.options.onMessagePageRequest;
+    const onSlashItemSelected = this.options.onSlashItemSelected;
 
-    let items = onImageUpload
-      ? slashCommands.map((item) =>
-          item.title === 'Image'
-            ? {
-                ...item,
-                command: ({ editor, range }: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
-                  editor.chain().focus().deleteRange(range).run();
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'image/*';
-                  input.onchange = async () => {
-                    const file = input.files?.[0];
-                    if (!file) return;
-                    try {
-                      const url = await onImageUpload(file);
-                      editor.chain().focus().setImage({ src: url }).run();
-                    } catch (err) {
-                      console.error('Image upload failed:', err);
-                    }
-                  };
-                  input.click();
-                },
-              }
-            : item
-        )
-      : slashCommands;
-
-    if (onPageLinkRequest) {
-      items = [...items, createPageLinkCommand(onPageLinkRequest)];
-    }
-    if (onNewDatabaseRequest) {
-      items = [...items, createNewDatabaseCommand(onNewDatabaseRequest)];
-    }
-    if (onMessagePageRequest) {
-      items = [...items, createMessagePageCommand(onMessagePageRequest)];
-    }
+    const items = slashCommands;
 
     return [
       Suggestion({
@@ -80,7 +37,11 @@ export const SlashCommands = Extension.create({
           ),
 
         command: ({ editor, range, props }: { editor: import('@tiptap/react').Editor; range: { from: number; to: number }; props: SlashCommandItem }) => {
-          props.command({ editor, range });
+          if (onSlashItemSelected) {
+            onSlashItemSelected({ editor, range, item: props });
+            return;
+          }
+          props.command?.({ editor, range });
         },
 
         render: () => {

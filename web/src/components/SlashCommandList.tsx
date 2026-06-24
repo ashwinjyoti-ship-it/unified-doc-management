@@ -3,45 +3,21 @@ import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
   Quote, Minus, Code, ImageIcon, FileText, Table2, Database, MessageSquare, Square,
 } from 'lucide-react';
+import type { FunctionalSlashKey } from '../lib/slashInsert';
+
+export type SlashCommandPlacement = 'format' | 'functional';
 
 export interface SlashCommandItem {
   title: string;
   description: string;
   icon: React.ReactNode;
-  command: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void;
-}
-
-export function createPageLinkCommand(
-  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
-): SlashCommandItem {
-  return {
-    title: 'Page Link',
-    description: 'Link to another page ([[Page Title]])',
-    icon: <FileText className="w-4 h-4" />,
-    command: onRequest,
-  };
-}
-
-export function createNewDatabaseCommand(
-  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
-): SlashCommandItem {
-  return {
-    title: 'New Database',
-    description: 'Create a database in this folder',
-    icon: <Database className="w-4 h-4" />,
-    command: onRequest,
-  };
-}
-
-export function createMessagePageCommand(
-  onRequest: (props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void,
-): SlashCommandItem {
-  return {
-    title: 'Message (new page)',
-    description: 'Create a message page and link to it',
-    icon: <MessageSquare className="w-4 h-4" />,
-    command: onRequest,
-  };
+  placement: SlashCommandPlacement;
+  /** Set for functional commands — handled via placement modal */
+  key?: FunctionalSlashKey;
+  command?: (props: {
+    editor: import('@tiptap/react').Editor;
+    range: { from: number; to: number };
+  }) => void;
 }
 
 export const slashCommands: SlashCommandItem[] = [
@@ -49,76 +25,70 @@ export const slashCommands: SlashCommandItem[] = [
     title: 'Heading 1',
     description: 'Large section heading',
     icon: <Heading1 className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHeading({ level: 1 }).run(),
   },
   {
     title: 'Heading 2',
     description: 'Medium section heading',
     icon: <Heading2 className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHeading({ level: 2 }).run(),
   },
   {
     title: 'Heading 3',
     description: 'Small section heading',
     icon: <Heading3 className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run(),
   },
   {
     title: 'Bullet List',
     description: 'Unordered list',
     icon: <List className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBulletList().run(),
   },
   {
     title: 'Numbered List',
     description: 'Ordered list',
     icon: <ListOrdered className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
   },
   {
     title: 'To-do Item',
     description: 'Single checkbox task',
     icon: <Square className="w-4 h-4" />,
-    command: ({ editor, range }) => {
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({
-          type: 'taskList',
-          content: [
-            {
-              type: 'taskItem',
-              attrs: { checked: false },
-              content: [{ type: 'paragraph' }],
-            },
-          ],
-        })
-        .run();
-    },
+    placement: 'functional',
+    key: 'todo-item',
   },
   {
     title: 'To-do List',
     description: 'Task list with checkboxes',
     icon: <CheckSquare className="w-4 h-4" />,
-    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleTaskList().run(),
+    placement: 'functional',
+    key: 'todo-list',
   },
   {
     title: 'Table',
     description: 'Insert a 3×3 table',
     icon: <Table2 className="w-4 h-4" />,
-    command: ({ editor, range }) =>
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-        .run(),
+    placement: 'functional',
+    key: 'table',
   },
   {
-    title: 'Message (inline)',
-    description: 'Callout note in the current page',
+    title: 'Message',
+    description: 'Callout or note',
     icon: <MessageSquare className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'message',
+  },
+  {
+    title: 'Quote',
+    description: 'Block quote',
+    icon: <Quote className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) =>
       editor
         .chain()
@@ -126,42 +96,44 @@ export const slashCommands: SlashCommandItem[] = [
         .deleteRange(range)
         .insertContent({
           type: 'blockquote',
-          content: [
-            {
-              type: 'paragraph',
-              content: [{ type: 'text', text: '💬 ' }],
-            },
-          ],
+          content: [{ type: 'paragraph' }],
         })
         .run(),
-  },
-  {
-    title: 'Quote',
-    description: 'Block quote',
-    icon: <Quote className="w-4 h-4" />,
-    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleBlockquote().run(),
   },
   {
     title: 'Divider',
     description: 'Horizontal rule',
     icon: <Minus className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
   },
   {
     title: 'Code Block',
     description: 'Syntax-highlighted code',
     icon: <Code className="w-4 h-4" />,
+    placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
   },
   {
     title: 'Image',
     description: 'Insert image from URL or upload',
     icon: <ImageIcon className="w-4 h-4" />,
-    command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).run();
-      const url = window.prompt('Image URL:');
-      if (url) editor.chain().focus().setImage({ src: url }).run();
-    },
+    placement: 'functional',
+    key: 'image',
+  },
+  {
+    title: 'New Database',
+    description: 'Spreadsheet-style database',
+    icon: <Database className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'database',
+  },
+  {
+    title: 'Page Link',
+    description: 'Link to another page',
+    icon: <FileText className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'page-link',
   },
 ];
 
@@ -226,7 +198,7 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
         ))}
       </div>
     );
-  }
+  },
 );
 
 SlashCommandList.displayName = 'SlashCommandList';
