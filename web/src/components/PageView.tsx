@@ -710,7 +710,7 @@ export default function PageView() {
                   <button
                     key={bl.id}
                     onClick={() => navigate(`/page/${bl.id}`)}
-                    className="block text-sm text-forest hover:underline"
+                    className="block text-sm text-link text-left w-full"
                   >
                     {bl.icon} {bl.title}
                   </button>

@@ -123,7 +123,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         <select
           value={getPropValue(row, prop.id) as string}
           onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
-          className="w-full bg-transparent border-none outline-none text-sm"
+          className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         >
           <option value="">—</option>
           {JSON.parse(prop.options || '[]').map((opt: string) => (
@@ -138,7 +138,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
           type="date"
           value={getPropValue(row, prop.id) as string}
           onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
-          className="w-full bg-transparent border-none outline-none text-sm"
+          className="w-full bg-transparent border-none outline-none text-sm text-charcoal"
         />
       );
     }
@@ -147,7 +147,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         type={prop.type === 'number' ? 'number' : 'text'}
         value={getPropValue(row, prop.id) as string}
         onChange={(e) => updateCell(row.id, prop.id, e.target.value)}
-        className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm"
+        className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
       />
     );
   };
@@ -164,7 +164,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               type="button"
               onClick={() => setView(id)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view === id ? 'bg-white shadow-sm text-forest font-medium' : 'text-warm-gray hover:text-charcoal'
+                view === id ? 'bg-warm-white shadow-sm text-forest font-medium' : 'text-warm-gray hover:text-charcoal'
               }`}
             >
               <Icon className="w-4 h-4" /> {label}
@@ -187,7 +187,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
           <select
             value={listSortPropId || ''}
             onChange={(e) => setListSortPropId(e.target.value || null)}
-            className="bg-linen rounded-lg px-2 py-1 border-none outline-none text-sm"
+            className="bg-linen rounded-lg px-2 py-1 border-none outline-none text-sm text-charcoal"
           >
             <option value="">Default order</option>
             {properties.map((p) => (

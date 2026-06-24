@@ -139,10 +139,15 @@ html.dark {
   --color-linen: #244632;
   --color-green-mist: #325A41;
   --color-pedestal: #3d5c47;
-  --color-mid-gray: #8a9e8f;
-  --color-warm-gray: #97B79E;
+  --color-mid-gray: #9eb0a3;
+  --color-warm-gray: #b0c4b5;
   --color-charcoal: #e8ede9;
   --color-dark-ink: #0f1a14;
+  /* Accent: light sage for links, labels, and borders on dark surfaces */
+  --color-forest: #a8d4b0;
+  --color-dark-teal: #8ec49a;
+  --color-sage: #b0c9b6;
+  --color-shaded-green: #6a9a78;
 }
 
 html.dark body {
@@ -154,10 +159,87 @@ html.dark .card-surface {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
 }
 
+/* Solid forest fills — keep enough contrast for white label text */
+html.dark .btn-primary,
+html.dark .bg-forest {
+  background-color: #3d6b4f;
+  color: #fff;
+}
+
+html.dark .btn-primary:hover {
+  background-color: #4a7c59;
+}
+
+html.dark .hover\:bg-dark-teal:hover {
+  background-color: #568f67;
+}
+
+html.dark .btn-secondary {
+  background: var(--color-linen);
+  color: var(--color-charcoal);
+}
+
+html.dark .btn-secondary:hover {
+  background: var(--color-green-mist);
+}
+
+/* Hardcoded white surfaces */
+html.dark .bg-white {
+  background-color: var(--color-warm-white);
+  color: var(--color-charcoal);
+}
+
+html.dark .ProseMirror h1,
+html.dark .ProseMirror h2,
+html.dark .ProseMirror h3 {
+  color: var(--color-charcoal);
+}
+
 html.dark .ProseMirror blockquote {
   color: var(--color-warm-gray);
 }
 
 html.dark .ProseMirror code {
   background: var(--color-linen);
+  color: var(--color-charcoal);
+}
+
+html.dark .ProseMirror a {
+  color: var(--color-forest);
+  text-decoration: underline;
+}
+
+html.dark .ProseMirror pre {
+  background: var(--color-dark-ink);
+  color: #e2e8f0;
+}
+
+html.dark .ProseMirror td,
+html.dark .ProseMirror th {
+  border-color: var(--color-green-mist);
+}
+
+html.dark select,
+html.dark input:not([type="checkbox"]):not([type="radio"]),
+html.dark textarea {
+  color: var(--color-charcoal);
+}
+
+html.dark .hover\:bg-red-50:hover {
+  background-color: rgb(127 29 29 / 0.25);
+}
+
+html.dark mark {
+  background: var(--color-shaded-green);
+  color: var(--color-charcoal);
+}
+
+/* Interactive text links */
+.text-link {
+  color: var(--color-forest);
+}
+
+.text-link:hover {
+  color: var(--color-dark-teal);
+  text-decoration: underline;
 }

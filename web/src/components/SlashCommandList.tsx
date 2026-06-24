@@ -124,14 +124,14 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 
     if (items.length === 0) {
       return (
-        <div className="bg-white rounded-xl shadow-lg border border-green-mist p-3 text-sm text-mid-gray">
+        <div className="bg-warm-white rounded-xl shadow-lg border border-green-mist p-3 text-sm text-mid-gray">
           No results
         </div>
       );
     }
 
     return (
-      <div className="bg-white rounded-xl shadow-lg border border-green-mist overflow-hidden min-w-[min(100vw-2rem,280px)] max-h-[min(50vh,360px)] overflow-y-auto overscroll-contain">
+      <div className="bg-warm-white rounded-xl shadow-lg border border-green-mist overflow-hidden min-w-[min(100vw-2rem,280px)] max-h-[min(50vh,360px)] overflow-y-auto overscroll-contain">
         {items.map((item, index) => (
           <button
             key={item.title}
