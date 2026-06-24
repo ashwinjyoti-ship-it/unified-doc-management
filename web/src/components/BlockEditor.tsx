@@ -18,7 +18,7 @@ import {
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
-import { slashCommands, type SlashCommandItem } from './SlashCommandList';
+import { slashCommands, SlashCommandMenu, sortSlashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
 import NamePromptModal from './NamePromptModal';
 import InsertPlacementModal from './InsertPlacementModal';
@@ -51,12 +51,17 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
   const [insertOpen, setInsertOpen] = useState(false);
   const [pageLinkOpen, setPageLinkOpen] = useState(false);
   const [newPagePromptOpen, setNewPagePromptOpen] = useState(false);
+  const [newPagePromptMode, setNewPagePromptMode] = useState<'open' | 'link-here'>('open');
   const [placementModal, setPlacementModal] = useState<{
     item: SlashCommandItem;
     range: { from: number; to: number };
   } | null>(null);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const newPageActionRef = useRef<{
+    range: { from: number; to: number };
+    key: FunctionalSlashKey;
+    mode: 'open' | 'link-here';
+  } | null>(null);
   const navigate = useNavigate();
   const { pages, createPage, loadPages } = useStore();
 
@@ -95,6 +100,39 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
   }, [editor, pageId, pages, createPage, loadPages, navigate]);
 
+  const createAndLinkHere = useCallback(async (
+    key: FunctionalSlashKey,
+    range: { from: number; to: number },
+    title?: string,
+  ) => {
+    if (!editor) return;
+    const parentId = resolveInsertParentId(pageId, pages);
+    const pageTitle = title || defaultTitleFor(key);
+
+    if (key === 'database') {
+      const page = await createPage({
+        type: 'database',
+        title: pageTitle,
+        parentId,
+        icon: defaultIconFor('database'),
+      });
+      await loadPages();
+      editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
+      return;
+    }
+
+    const page = await createPage({
+      type: 'page',
+      title: pageTitle,
+      parentId,
+      icon: defaultIconFor(key),
+    });
+    await api.saveBlocks(page.id, seedBlocksFor(key));
+    applyNewPageSeed(key, page.id);
+    await loadPages();
+    editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
+  }, [editor, pageId, pages, createPage, loadPages]);
+
   const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
     if (!editor) return;
     const parentId = resolveInsertParentId(pageId, pages);
@@ -121,7 +159,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     navigate(`/page/${page.id}`);
   }, [editor, pageId, pages, createPage, loadPages, navigate, createDatabaseAndLink]);
 
-  const insertItems = slashCommands;
+  const insertItems = sortSlashCommands(slashCommands);
 
   const editor = useEditor({
     extensions: [
@@ -175,13 +213,19 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     setPageLinkOpen(false);
   }, [editor]);
 
-  const confirmNewPageAndNavigate = useCallback(async (title: string) => {
-    if (!editor || !newPageRangeRef.current) return;
-    const range = newPageRangeRef.current;
-    await openNewPageInProject('page-link', range, title);
-    newPageRangeRef.current = null;
+  const confirmNewPagePrompt = useCallback(async (title: string) => {
+    if (!editor) return;
+    const action = newPageActionRef.current;
+    if (!action) return;
+    const { range, key, mode } = action;
+    if (mode === 'link-here') {
+      await createAndLinkHere(key, range, title);
+    } else {
+      await openNewPageInProject(key, range, title);
+    }
+    newPageActionRef.current = null;
     setNewPagePromptOpen(false);
-  }, [editor, openNewPageInProject]);
+  }, [editor, createAndLinkHere, openNewPageInProject]);
 
   const handleSamePage = useCallback(() => {
     if (!editor || !placementModal?.item.key) return;
@@ -205,6 +249,22 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     });
   }, [editor, placementModal, createDatabaseAndLink]);
 
+  const handleLinkHere = useCallback(() => {
+    if (!editor || !placementModal?.item.key) return;
+    const { item, range } = placementModal;
+    const key = item.key!;
+    setPlacementModal(null);
+
+    if (key === 'page-link') {
+      newPageActionRef.current = { range, key, mode: 'link-here' };
+      setNewPagePromptMode('link-here');
+      setNewPagePromptOpen(true);
+      return;
+    }
+
+    void createAndLinkHere(key, range);
+  }, [editor, placementModal, createAndLinkHere]);
+
   const handleNewPage = useCallback(() => {
     if (!editor || !placementModal?.item.key) return;
     const { item, range } = placementModal;
@@ -212,7 +272,8 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     setPlacementModal(null);
 
     if (key === 'page-link') {
-      newPageRangeRef.current = range;
+      newPageActionRef.current = { range, key, mode: 'open' };
+      setNewPagePromptMode('open');
       setNewPagePromptOpen(true);
       return;
     }
@@ -243,13 +304,11 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     if (url && editor) editor.chain().focus().setLink({ href: url }).run();
   }, [editor]);
 
-  const runSlashCommand = useCallback((index: number) => {
+  const runSlashCommand = useCallback((item: SlashCommandItem) => {
     if (!editor) return;
-    const item = insertItems[index];
-    if (!item) return;
     const { from, to } = editor.state.selection;
     handleSlashItemSelected({ editor, range: { from, to }, item });
-  }, [editor, insertItems, handleSlashItemSelected]);
+  }, [editor, handleSlashItemSelected]);
 
   if (!editor) return null;
 
@@ -390,21 +449,12 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
                 Close
               </button>
             </div>
-            <div className="overflow-y-auto overscroll-contain p-2">
-              {insertItems.map((item, index) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  onClick={() => runSlashCommand(index)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left rounded-xl hover:bg-linen active:bg-sage/30"
-                >
-                  <span className="text-mid-gray shrink-0">{item.icon}</span>
-                  <div>
-                    <div className="font-medium text-sm">{item.title}</div>
-                    <div className="text-xs text-mid-gray">{item.description}</div>
-                  </div>
-                </button>
-              ))}
+            <div className="overflow-y-auto overscroll-contain">
+              <SlashCommandMenu
+                items={insertItems}
+                selectedIndex={-1}
+                onSelect={(item) => runSlashCommand(item)}
+              />
             </div>
           </div>
         </div>
@@ -415,6 +465,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         itemTitle={placementModal?.item.title ?? ''}
         onClose={() => setPlacementModal(null)}
         onSamePage={handleSamePage}
+        onLinkHere={handleLinkHere}
         onNewPage={handleNewPage}
       />
 
@@ -428,12 +479,12 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
       <NamePromptModal
         open={newPagePromptOpen}
-        title="New page"
+        title={newPagePromptMode === 'link-here' ? 'New page to link' : 'New page'}
         label="Page title"
         placeholder="e.g. Meeting notes"
-        confirmLabel="Create & open"
-        onClose={() => { setNewPagePromptOpen(false); newPageRangeRef.current = null; }}
-        onConfirm={(name) => void confirmNewPageAndNavigate(name)}
+        confirmLabel={newPagePromptMode === 'link-here' ? 'Create & link' : 'Create & open'}
+        onClose={() => { setNewPagePromptOpen(false); newPageActionRef.current = null; }}
+        onConfirm={(name) => void confirmNewPagePrompt(name)}
       />
     </div>
   );

@@ -2,7 +2,7 @@ import { Extension } from '@tiptap/core';
 import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
-import SlashCommandList, { slashCommands, type SlashCommandItem, type SlashCommandListRef } from './SlashCommandList';
+import SlashCommandList, { slashCommands, sortSlashCommands, type SlashCommandItem, type SlashCommandListRef } from './SlashCommandList';
 
 export const SlashCommands = Extension.create({
   name: 'slashCommands',
@@ -31,9 +31,11 @@ export const SlashCommands = Extension.create({
         allowSpaces: false,
 
         items: ({ query }: { query: string }) =>
-          items.filter((item) =>
-            item.title.toLowerCase().includes(query.toLowerCase()) ||
-            item.description.toLowerCase().includes(query.toLowerCase())
+          sortSlashCommands(
+            items.filter((item) =>
+              item.title.toLowerCase().includes(query.toLowerCase()) ||
+              item.description.toLowerCase().includes(query.toLowerCase())
+            )
           ),
 
         command: ({ editor, range, props }: { editor: import('@tiptap/react').Editor; range: { from: number; to: number }; props: SlashCommandItem }) => {

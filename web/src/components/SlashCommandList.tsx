@@ -20,7 +20,24 @@ export interface SlashCommandItem {
   }) => void;
 }
 
+export function sortSlashCommands(items: SlashCommandItem[]): SlashCommandItem[] {
+  return [
+    ...items.filter((i) => i.placement === 'format'),
+    ...items.filter((i) => i.placement === 'functional'),
+  ];
+}
+
+export function groupSlashCommands(items: SlashCommandItem[]) {
+  const sorted = sortSlashCommands(items);
+  return {
+    sorted,
+    format: sorted.filter((i) => i.placement === 'format'),
+    functional: sorted.filter((i) => i.placement === 'functional'),
+  };
+}
+
 export const slashCommands: SlashCommandItem[] = [
+  // —— Format ——
   {
     title: 'Heading 1',
     description: 'Large section heading',
@@ -57,34 +74,6 @@ export const slashCommands: SlashCommandItem[] = [
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run(),
   },
   {
-    title: 'To-do Item',
-    description: 'Single checkbox task',
-    icon: <Square className="w-4 h-4" />,
-    placement: 'functional',
-    key: 'todo-item',
-  },
-  {
-    title: 'To-do List',
-    description: 'Task list with checkboxes',
-    icon: <CheckSquare className="w-4 h-4" />,
-    placement: 'functional',
-    key: 'todo-list',
-  },
-  {
-    title: 'Table',
-    description: 'Insert a 3×3 table',
-    icon: <Table2 className="w-4 h-4" />,
-    placement: 'functional',
-    key: 'table',
-  },
-  {
-    title: 'Message',
-    description: 'Callout or note',
-    icon: <MessageSquare className="w-4 h-4" />,
-    placement: 'functional',
-    key: 'message',
-  },
-  {
     title: 'Quote',
     description: 'Block quote',
     icon: <Quote className="w-4 h-4" />,
@@ -113,6 +102,35 @@ export const slashCommands: SlashCommandItem[] = [
     icon: <Code className="w-4 h-4" />,
     placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run(),
+  },
+  // —— Functional ——
+  {
+    title: 'To-do Item',
+    description: 'Single checkbox task',
+    icon: <Square className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'todo-item',
+  },
+  {
+    title: 'To-do List',
+    description: 'Task list with checkboxes',
+    icon: <CheckSquare className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'todo-list',
+  },
+  {
+    title: 'Table',
+    description: 'Insert a 3×3 table',
+    icon: <Table2 className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'table',
+  },
+  {
+    title: 'Message',
+    description: 'Callout or note',
+    icon: <MessageSquare className="w-4 h-4" />,
+    placement: 'functional',
+    key: 'message',
   },
   {
     title: 'Image',
@@ -144,6 +162,91 @@ export interface SlashCommandListRef {
 interface SlashCommandListProps {
   items: SlashCommandItem[];
   command: (item: SlashCommandItem) => void;
+}
+
+function SlashCommandRow({
+  item,
+  selected,
+  onSelect,
+}: {
+  item: SlashCommandItem;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`w-full flex items-center gap-3 px-3 py-3 md:py-2 text-left text-sm transition-colors ${
+        selected ? 'bg-sage/30 text-forest' : 'hover:bg-linen active:bg-sage/20 text-charcoal'
+      }`}
+    >
+      <span className="text-mid-gray">{item.icon}</span>
+      <div>
+        <div className="font-medium">{item.title}</div>
+        <div className="text-xs text-mid-gray">{item.description}</div>
+      </div>
+    </button>
+  );
+}
+
+function SlashCommandSectionHeader({ label }: { label: string }) {
+  return (
+    <div className="px-3 py-1.5 text-[10px] font-semibold text-mid-gray uppercase tracking-wider bg-linen/60 border-b border-green-mist/50 sticky top-0 z-10">
+      {label}
+    </div>
+  );
+}
+
+/** Grouped slash menu — used by popup and mobile Insert sheet */
+export function SlashCommandMenu({
+  items,
+  selectedIndex,
+  onSelect,
+}: {
+  items: SlashCommandItem[];
+  selectedIndex: number;
+  onSelect: (item: SlashCommandItem) => void;
+}) {
+  const { format, functional } = groupSlashCommands(items);
+  let index = 0;
+
+  return (
+    <>
+      {format.length > 0 && (
+        <>
+          <SlashCommandSectionHeader label="Format" />
+          {format.map((item) => {
+            const rowIndex = index++;
+            return (
+              <SlashCommandRow
+                key={item.title}
+                item={item}
+                selected={rowIndex === selectedIndex}
+                onSelect={() => onSelect(item)}
+              />
+            );
+          })}
+        </>
+      )}
+      {functional.length > 0 && (
+        <>
+          <SlashCommandSectionHeader label="Functional" />
+          {functional.map((item) => {
+            const rowIndex = index++;
+            return (
+              <SlashCommandRow
+                key={item.title}
+                item={item}
+                selected={rowIndex === selectedIndex}
+                onSelect={() => onSelect(item)}
+              />
+            );
+          })}
+        </>
+      )}
+    </>
+  );
 }
 
 const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
@@ -180,22 +283,11 @@ const SlashCommandList = forwardRef<SlashCommandListRef, SlashCommandListProps>(
 
     return (
       <div className="bg-warm-white rounded-xl shadow-lg border border-green-mist overflow-hidden min-w-[min(100vw-2rem,280px)] max-h-[min(50vh,360px)] overflow-y-auto overscroll-contain">
-        {items.map((item, index) => (
-          <button
-            key={item.title}
-            type="button"
-            onClick={() => command(item)}
-            className={`w-full flex items-center gap-3 px-3 py-3 md:py-2 text-left text-sm transition-colors ${
-              index === selectedIndex ? 'bg-sage/30 text-forest' : 'hover:bg-linen active:bg-sage/20 text-charcoal'
-            }`}
-          >
-            <span className="text-mid-gray">{item.icon}</span>
-            <div>
-              <div className="font-medium">{item.title}</div>
-              <div className="text-xs text-mid-gray">{item.description}</div>
-            </div>
-          </button>
-        ))}
+        <SlashCommandMenu
+          items={items}
+          selectedIndex={selectedIndex}
+          onSelect={command}
+        />
       </div>
     );
   },
