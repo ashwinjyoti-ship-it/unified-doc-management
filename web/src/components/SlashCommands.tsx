@@ -2,7 +2,14 @@ import { Extension } from '@tiptap/core';
 import { ReactRenderer } from '@tiptap/react';
 import Suggestion, { type SuggestionProps } from '@tiptap/suggestion';
 import tippy, { type Instance as TippyInstance } from 'tippy.js';
-import SlashCommandList, { slashCommands, createPageLinkCommand, type SlashCommandItem, type SlashCommandListRef } from './SlashCommandList';
+import SlashCommandList, {
+  slashCommands,
+  createPageLinkCommand,
+  createNewDatabaseCommand,
+  createMessagePageCommand,
+  type SlashCommandItem,
+  type SlashCommandListRef,
+} from './SlashCommandList';
 
 export const SlashCommands = Extension.create({
   name: 'slashCommands',
@@ -11,12 +18,16 @@ export const SlashCommands = Extension.create({
     return {
       onImageUpload: undefined as ((file: File) => Promise<string>) | undefined,
       onPageLinkRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
+      onNewDatabaseRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
+      onMessagePageRequest: undefined as ((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => void) | undefined,
     };
   },
 
   addProseMirrorPlugins() {
     const onImageUpload = this.options.onImageUpload;
     const onPageLinkRequest = this.options.onPageLinkRequest;
+    const onNewDatabaseRequest = this.options.onNewDatabaseRequest;
+    const onMessagePageRequest = this.options.onMessagePageRequest;
 
     let items = onImageUpload
       ? slashCommands.map((item) =>
@@ -47,6 +58,12 @@ export const SlashCommands = Extension.create({
 
     if (onPageLinkRequest) {
       items = [...items, createPageLinkCommand(onPageLinkRequest)];
+    }
+    if (onNewDatabaseRequest) {
+      items = [...items, createNewDatabaseCommand(onNewDatabaseRequest)];
+    }
+    if (onMessagePageRequest) {
+      items = [...items, createMessagePageCommand(onMessagePageRequest)];
     }
 
     return [

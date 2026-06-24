@@ -3,18 +3,29 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
-import { slashCommands, createPageLinkCommand } from './SlashCommandList';
+import {
+  slashCommands,
+  createPageLinkCommand,
+  createNewDatabaseCommand,
+  createMessagePageCommand,
+} from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
+import NamePromptModal from './NamePromptModal';
 import { useStore } from '../lib/store';
 import type { Page } from '../types';
 import { api } from '../lib/api';
@@ -33,8 +44,11 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
   const [pageLinkOpen, setPageLinkOpen] = useState(false);
+  const [messagePageOpen, setMessagePageOpen] = useState(false);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
-  const { pages } = useStore();
+  const messagePageRangeRef = useRef<{ from: number; to: number } | null>(null);
+  const navigate = useNavigate();
+  const { pages, createPage, loadPages } = useStore();
 
   const uploadImage = useCallback(async (file: File): Promise<string> => {
     const result = await api.uploadFile(file);
@@ -46,16 +60,51 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     setPageLinkOpen(true);
   }, []);
 
+  const requestNewDatabase = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
+    void (async () => {
+      const current = pageId ? pages.find((p) => p.id === pageId) : undefined;
+      const parentId = current?.type === 'folder' ? current.id : current?.parent_id ?? undefined;
+      const page = await createPage({ type: 'database', title: 'New Database', parentId });
+      await loadPages();
+      props.editor.chain().focus().deleteRange(props.range).run();
+      navigate(`/page/${page.id}`);
+    })();
+  }, [pageId, pages, createPage, loadPages, navigate]);
+
+  const requestMessagePage = useCallback((props: { editor: import('@tiptap/react').Editor; range: { from: number; to: number } }) => {
+    messagePageRangeRef.current = props.range;
+    setMessagePageOpen(true);
+  }, []);
+
+  const insertItems = useMemo(
+    () => [
+      ...slashCommands,
+      createPageLinkCommand(requestPageLink),
+      createNewDatabaseCommand(requestNewDatabase),
+      createMessagePageCommand(requestMessagePage),
+    ],
+    [requestPageLink, requestNewDatabase, requestMessagePage],
+  );
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
       Placeholder.configure({ placeholder: 'Type / for commands, or start writing...' }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
       CodeBlockLowlight.configure({ lowlight }),
-      SlashCommands.configure({ onImageUpload: uploadImage, onPageLinkRequest: requestPageLink }),
+      SlashCommands.configure({
+        onImageUpload: uploadImage,
+        onPageLinkRequest: requestPageLink,
+        onNewDatabaseRequest: requestNewDatabase,
+        onMessagePageRequest: requestMessagePage,
+      }),
     ],
     content,
     editable,
@@ -77,6 +126,18 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     pageLinkRangeRef.current = null;
     setPageLinkOpen(false);
   }, [editor]);
+
+  const confirmMessagePage = useCallback(async (title: string) => {
+    if (!editor || !messagePageRangeRef.current) return;
+    const { from, to } = messagePageRangeRef.current;
+    const current = pageId ? pages.find((p) => p.id === pageId) : undefined;
+    const parentId = current?.type === 'folder' ? current.id : current?.parent_id ?? undefined;
+    const page = await createPage({ type: 'page', title, icon: '💬', parentId });
+    await loadPages();
+    editor.chain().focus().deleteRange({ from, to }).insertContent(`[[${page.title}]] `).run();
+    messagePageRangeRef.current = null;
+    setMessagePageOpen(false);
+  }, [editor, pageId, pages, createPage, loadPages]);
 
   const addImage = useCallback(() => {
     fileInputRef.current?.click();
@@ -103,13 +164,12 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
   const runSlashCommand = useCallback((index: number) => {
     if (!editor) return;
-    const items = [...slashCommands, createPageLinkCommand(requestPageLink)];
-    const item = items[index];
+    const item = insertItems[index];
     if (!item) return;
     const { from, to } = editor.state.selection;
     item.command({ editor, range: { from, to } });
-    if (item.title !== 'Page Link') setInsertOpen(false);
-  }, [editor, requestPageLink]);
+    if (!['Page Link', 'Message (new page)'].includes(item.title)) setInsertOpen(false);
+  }, [editor, insertItems]);
 
   if (!editor) return null;
 
@@ -241,7 +301,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
               </button>
             </div>
             <div className="overflow-y-auto overscroll-contain p-2">
-              {[...slashCommands, createPageLinkCommand(requestPageLink)].map((item, index) => (
+              {insertItems.map((item, index) => (
                 <button
                   key={item.title}
                   type="button"
@@ -266,6 +326,18 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         currentPageId={pageId}
         onClose={() => { setPageLinkOpen(false); pageLinkRangeRef.current = null; }}
         onSelect={insertPageLink}
+      />
+
+      <NamePromptModal
+        open={messagePageOpen}
+        title="New message page"
+        label="Message title"
+        placeholder="e.g. Follow-up with team"
+        confirmLabel="Create & link"
+        defaultIcon="💬"
+        showIcon
+        onClose={() => { setMessagePageOpen(false); messagePageRangeRef.current = null; }}
+        onConfirm={(name) => void confirmMessagePage(name)}
       />
     </div>
   );

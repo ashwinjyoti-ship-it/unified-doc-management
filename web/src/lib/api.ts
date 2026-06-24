@@ -12,7 +12,14 @@ class ApiClient {
   }
 
   getToken() {
+    if (!this.token) {
+      this.token = localStorage.getItem('token');
+    }
     return this.token;
+  }
+
+  syncTokenFromStorage() {
+    this.token = localStorage.getItem('token');
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -26,7 +33,13 @@ class ApiClient {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || 'Request failed');
+      const message = err.error || 'Request failed';
+      if (res.status === 401) {
+        this.setToken(null);
+      }
+      const error = new Error(message) as Error & { status?: number };
+      error.status = res.status;
+      throw error;
     }
 
     return res.json();
