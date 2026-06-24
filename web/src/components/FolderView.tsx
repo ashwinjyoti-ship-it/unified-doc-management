@@ -68,11 +68,11 @@ export default function FolderView({
               key={child.id}
               type="button"
               onClick={() => navigate(`/page/${child.id}`)}
-              className="w-full flex items-center gap-3 p-3 rounded-xl border border-green-mist hover:border-forest hover:bg-sage/10 transition-colors text-left"
+              className="w-full flex items-center gap-3 p-3 rounded-xl border border-green-mist hover:border-forest hover:bg-sage/10 transition-colors text-left text-charcoal"
             >
               <span className="text-xl shrink-0">{pageIcon(child)}</span>
               <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{child.title}</div>
+                <div className="font-medium truncate text-charcoal">{child.title}</div>
                 <div className="text-xs text-mid-gray capitalize">{child.type}</div>
               </div>
             </button>
