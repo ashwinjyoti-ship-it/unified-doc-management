@@ -20,6 +20,7 @@ import type { Page } from '../types';
 import { api } from '../lib/api';
 import { canNestUnder, getChildren, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
 import { pageTreeRowClass } from '../lib/pageSelection';
+import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 
 interface PageTreeProps {
   pages: Page[];
@@ -251,10 +252,14 @@ export default function PageTree({
       onDragEnd={handleDragEnd}
       onDragCancel={() => { setActiveDragId(null); setOverDropId(null); }}
     >
-      <div className="mb-3">
-        <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
-          Projects
-        </div>
+      <CollapsibleSidebarSection
+        id="projects"
+        title="Projects"
+        tooltip="Top-level project folders — click to collapse"
+        count={projects.length}
+        showWhenEmpty
+        isEmpty={projects.length === 0}
+      >
         <RootDropZone
           id="nest-project-root"
           label="Drop folder here for a new top-level project"
@@ -280,12 +285,16 @@ export default function PageTree({
             isProjectRoot
           />
         ))}
-      </div>
+      </CollapsibleSidebarSection>
 
-      <div>
-        <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
-          Inbox
-        </div>
+      <CollapsibleSidebarSection
+        id="inbox"
+        title="Inbox"
+        tooltip="Daily notes and unfiled pages — click to collapse"
+        count={inboxPages.length}
+        showWhenEmpty
+        isEmpty={inboxPages.length === 0}
+      >
         <RootDropZone
           id="nest-inbox-root"
           label="Drop here for inbox (daily notes, quick pages)"
@@ -310,7 +319,7 @@ export default function PageTree({
             onNavigate={onNavigate}
           />
         ))}
-      </div>
+      </CollapsibleSidebarSection>
 
       <DragOverlay>
         {draggedPage ? (

@@ -9,6 +9,7 @@ import OperationBanner from './OperationBanner';
 import NamePromptModal from './NamePromptModal';
 import MoveToModal from './MoveToModal';
 import PageTree from './PageTree';
+import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 import NewMenuDropdown from './NewMenuDropdown';
 import { applyImportContent } from '../lib/importContent';
 import { collectDescendantIds } from '../lib/pageTree';
@@ -25,8 +26,14 @@ function todayNoteTitle() {
 }
 
 function PageListSection({
-  title, icon, pages, tooltip, onNavigate,
+  sectionId,
+  title,
+  icon,
+  pages,
+  tooltip,
+  onNavigate,
 }: {
+  sectionId: string;
   title: string;
   icon: React.ReactNode;
   pages: Page[];
@@ -34,19 +41,21 @@ function PageListSection({
   onNavigate: (pageId: string) => void;
 }) {
   const { pageId } = useParams();
-  if (pages.length === 0) return null;
 
   return (
-    <div className="mb-3">
-      <Tooltip text={tooltip} position="right">
-        <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide">
-          {icon} {title}
-        </div>
-      </Tooltip>
+    <CollapsibleSidebarSection
+      id={sectionId}
+      title={title}
+      icon={icon}
+      tooltip={tooltip}
+      count={pages.length}
+      isEmpty={pages.length === 0}
+    >
       <div className="space-y-0.5">
         {pages.map((p) => (
           <button
             key={p.id}
+            type="button"
             onClick={() => onNavigate(p.id)}
             className={pageItemClass(pageId === p.id, 'py-1.5')}
           >
@@ -55,7 +64,7 @@ function PageListSection({
           </button>
         ))}
       </div>
-    </div>
+    </CollapsibleSidebarSection>
   );
 }
 
@@ -283,17 +292,19 @@ export default function Sidebar() {
 
         <div className="flex-1 overflow-y-auto overscroll-contain p-2 min-h-0">
           <PageListSection
+            sectionId="favorites"
             title="Favorites"
             icon={<Star className="w-3 h-3" />}
             pages={favorites}
-            tooltip="Pages you've pinned for quick access"
+            tooltip="Pages you've pinned for quick access — click to collapse"
             onNavigate={navigateToPage}
           />
           <PageListSection
+            sectionId="recent"
             title="Recent"
             icon={<Clock className="w-3 h-3" />}
             pages={recent.filter((r) => !favorites.some((f) => f.id === r.id))}
-            tooltip="Pages you've opened recently"
+            tooltip="Pages you've opened recently — click to collapse"
             onNavigate={navigateToPage}
           />
 
