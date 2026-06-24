@@ -13,8 +13,10 @@ import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 import NewMenuDropdown from './NewMenuDropdown';
 import { applyImportContent } from '../lib/importContent';
 import { collectDescendantIds } from '../lib/pageTree';
+import { buildDeleteConfirmMessage, getDeleteOrder } from '../lib/pageDelete';
 import { closeSidebarOnMobile } from '../lib/device';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
+import SidebarItemMenu from './SidebarItemMenu';
 import type { Page } from '../types';
 import {
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
@@ -32,6 +34,8 @@ function PageListSection({
   pages,
   tooltip,
   onNavigate,
+  onDelete,
+  bulkMode,
 }: {
   sectionId: string;
   title: string;
@@ -39,6 +43,8 @@ function PageListSection({
   pages: Page[];
   tooltip: string;
   onNavigate: (pageId: string) => void;
+  onDelete: (page: Page) => void;
+  bulkMode?: boolean;
 }) {
   const { pageId } = useParams();
 
@@ -52,17 +58,27 @@ function PageListSection({
       isEmpty={pages.length === 0}
     >
       <div className="space-y-0.5">
-        {pages.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            onClick={() => onNavigate(p.id)}
-            className={pageItemClass(pageId === p.id, 'py-1.5')}
-          >
-            <span>{p.icon || '📄'}</span>
-            <span className="truncate flex-1 text-left">{p.title}</span>
-          </button>
-        ))}
+        {pages.map((p) => {
+          const active = pageId === p.id;
+          return (
+            <div key={p.id} className="group flex items-center min-w-0 pr-1">
+              <button
+                type="button"
+                onClick={() => onNavigate(p.id)}
+                className={`${pageItemClass(active, 'py-1.5 flex-1 min-w-0')}`}
+              >
+                <span>{p.icon || '📄'}</span>
+                <span className="truncate flex-1 text-left">{p.title}</span>
+              </button>
+              <SidebarItemMenu
+                label={p.title}
+                onDelete={() => onDelete(p)}
+                disabled={bulkMode}
+                light={active}
+              />
+            </div>
+          );
+        })}
       </div>
     </CollapsibleSidebarSection>
   );
@@ -102,6 +118,33 @@ export default function Sidebar() {
 
   const navigateToPage = (id: string) => {
     navigate(`/page/${id}`);
+    closeSidebarOnMobile(setSidebarOpen);
+  };
+
+  const handleDeletePage = async (page: Page) => {
+    const message = buildDeleteConfirmMessage(pages, page);
+    if (!window.confirm(message)) return;
+
+    const idsToDelete = getDeleteOrder(pages, page.id);
+    if (idsToDelete.length === 1) {
+      await api.deletePage(page.id);
+    } else {
+      await api.bulkPages('delete', idsToDelete);
+    }
+
+    const deletedCurrent = Boolean(pageId && idsToDelete.includes(pageId));
+    await loadPages();
+    await loadFavorites();
+    await loadRecent();
+
+    if (deletedCurrent) {
+      const remaining = useStore.getState().pages;
+      if (remaining.length > 0) {
+        navigate(`/page/${remaining[0].id}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
     closeSidebarOnMobile(setSidebarOpen);
   };
 
@@ -298,6 +341,8 @@ export default function Sidebar() {
             pages={favorites}
             tooltip="Pages you've pinned for quick access — click to collapse"
             onNavigate={navigateToPage}
+            onDelete={(p) => void handleDeletePage(p)}
+            bulkMode={bulkMode}
           />
           <PageListSection
             sectionId="recent"
@@ -306,6 +351,8 @@ export default function Sidebar() {
             pages={recent.filter((r) => !favorites.some((f) => f.id === r.id))}
             tooltip="Pages you've opened recently — click to collapse"
             onNavigate={navigateToPage}
+            onDelete={(p) => void handleDeletePage(p)}
+            bulkMode={bulkMode}
           />
 
           <PageTree
@@ -315,6 +362,7 @@ export default function Sidebar() {
             onToggleSelect={toggleSelect}
             onPagesChange={loadPages}
             onNavigate={navigateToPage}
+            onDelete={(p) => void handleDeletePage(p)}
           />
         </div>
 

@@ -21,6 +21,7 @@ import { api } from '../lib/api';
 import { canNestUnder, getChildren, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
 import { pageTreeRowClass } from '../lib/pageSelection';
 import CollapsibleSidebarSection from './CollapsibleSidebarSection';
+import SidebarItemMenu from './SidebarItemMenu';
 
 interface PageTreeProps {
   pages: Page[];
@@ -29,6 +30,7 @@ interface PageTreeProps {
   onToggleSelect?: (id: string) => void;
   onPagesChange: () => Promise<void>;
   onNavigate: (pageId: string) => void;
+  onDelete: (page: Page) => void;
 }
 
 function TreeRow({
@@ -41,6 +43,7 @@ function TreeRow({
   activeDragId,
   overDropId,
   onNavigate,
+  onDelete,
   isProjectRoot = false,
 }: {
   page: Page;
@@ -52,6 +55,7 @@ function TreeRow({
   activeDragId: string | null;
   overDropId: string | null;
   onNavigate: (pageId: string) => void;
+  onDelete: (page: Page) => void;
   isProjectRoot?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -80,7 +84,7 @@ function TreeRow({
     <div className={isDragging ? 'opacity-40' : ''}>
       <div
         ref={setRefs}
-        className={`${pageTreeRowClass(isActive)} ${highlight && !isActive ? 'ring-2 ring-forest/50 bg-sage/20' : ''} ${isProjectRoot ? 'font-semibold' : ''}`}
+        className={`group ${pageTreeRowClass(isActive)} ${highlight && !isActive ? 'ring-2 ring-forest/50 bg-sage/20' : ''} ${isProjectRoot ? 'font-semibold' : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {!bulkMode && (
@@ -125,6 +129,12 @@ function TreeRow({
           <span className="shrink-0">{pageIcon(page)}</span>
           <span className="truncate flex-1 text-left">{page.title}</span>
         </button>
+        <SidebarItemMenu
+          label={page.title}
+          onDelete={() => onDelete(page)}
+          disabled={bulkMode}
+          light={isActive}
+        />
       </div>
       {expanded && children.map((child) => (
         <TreeRow
@@ -138,6 +148,7 @@ function TreeRow({
           activeDragId={activeDragId}
           overDropId={overDropId}
           onNavigate={onNavigate}
+          onDelete={onDelete}
         />
       ))}
     </div>
@@ -190,6 +201,7 @@ export default function PageTree({
   onToggleSelect,
   onPagesChange,
   onNavigate,
+  onDelete,
 }: PageTreeProps) {
   const projects = getRootProjects(pages);
   const inboxPages = getInboxPages(pages);
@@ -282,6 +294,7 @@ export default function PageTree({
             activeDragId={activeDragId}
             overDropId={overDropId}
             onNavigate={onNavigate}
+            onDelete={onDelete}
             isProjectRoot
           />
         ))}
@@ -317,6 +330,7 @@ export default function PageTree({
             activeDragId={activeDragId}
             overDropId={overDropId}
             onNavigate={onNavigate}
+            onDelete={onDelete}
           />
         ))}
       </CollapsibleSidebarSection>
