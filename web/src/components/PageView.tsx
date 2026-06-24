@@ -5,6 +5,8 @@ import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
 import BlockEditor, { tiptapJsonToBlocks, blocksToTiptapHtml } from './BlockEditor';
 import DatabaseView from './DatabaseView';
+import FolderView from './FolderView';
+import NamePromptModal from './NamePromptModal';
 import Tooltip from './Tooltip';
 import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
@@ -22,7 +24,7 @@ type SidePanel = 'comments' | 'history' | null;
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace } = useStore();
+  const { user, setSidebarOpen, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore();
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -54,6 +56,7 @@ export default function PageView() {
   const [favorited, setFavorited] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [folderChildModal, setFolderChildModal] = useState<'page' | 'folder' | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const editorJsonRef = useRef<object | null>(null);
   const editorHtmlRef = useRef<string>('');
@@ -676,6 +679,19 @@ export default function PageView() {
         <main className="flex-1 overflow-y-auto p-6 md:p-10 max-w-4xl mx-auto w-full">
           {pageType === 'database' ? (
             <DatabaseView pageId={pageId!} />
+          ) : pageType === 'folder' ? (
+            <FolderView
+              folderId={pageId!}
+              folderTitle={title}
+              pages={pages}
+              onNewPage={async () => {
+                if (!pageId) return;
+                const page = await createPage({ parentId: pageId, type: 'page' });
+                await loadPages();
+                navigate(`/page/${page.id}`);
+              }}
+              onNewFolder={() => setFolderChildModal('folder')}
+            />
           ) : markdownMode ? (
             <textarea
               value={markdown}
@@ -813,6 +829,27 @@ export default function PageView() {
       )}
       {operationLabel && (
         <OperationBanner label={operationLabel} onCancel={cancelOperation} />
+      )}
+      {folderChildModal === 'folder' && pageId && (
+        <NamePromptModal
+          open
+          title="New Folder"
+          label="Folder name"
+          placeholder="e.g. API Documentation"
+          confirmLabel="Create Folder"
+          onClose={() => setFolderChildModal(null)}
+          onConfirm={async (name) => {
+            const page = await createPage({
+              type: 'folder',
+              title: name,
+              parentId: pageId,
+              icon: '📁',
+            });
+            await loadPages();
+            setFolderChildModal(null);
+            navigate(`/page/${page.id}`);
+          }}
+        />
       )}
     </div>
   );

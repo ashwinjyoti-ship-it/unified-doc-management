@@ -3,83 +3,20 @@ import { useStore } from '../lib/store';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
-import { pageItemClass, pageTreeRowClass } from '../lib/pageSelection';
+import { pageItemClass } from '../lib/pageSelection';
 import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
+import NamePromptModal from './NamePromptModal';
+import MoveToModal from './MoveToModal';
+import PageTree from './PageTree';
 import { applyImportContent } from '../lib/importContent';
+import { collectDescendantIds } from '../lib/pageTree';
 import type { Page } from '../types';
 import {
-  Plus, ChevronRight, ChevronDown, FileText, Database,
+  Plus, ChevronDown, FileText, Database, FolderPlus,
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
-  Star, Clock, CheckSquare, Square, Trash2, FolderInput, Link2,
+  Star, Clock, CheckSquare, Trash2, FolderInput, Link2,
 } from 'lucide-react';
-
-function PageTreeItem({
-  page, pages, depth = 0, bulkMode, selected, onToggleSelect,
-}: {
-  page: Page;
-  pages: Page[];
-  depth?: number;
-  bulkMode?: boolean;
-  selected?: Set<string>;
-  onToggleSelect?: (id: string) => void;
-}) {
-  const [expanded, setExpanded] = useState(true);
-  const navigate = useNavigate();
-  const { pageId } = useParams();
-  const children = pages.filter((p) => p.parent_id === page.id);
-  const isSelected = selected?.has(page.id);
-
-  const isActive = pageId === page.id;
-
-  return (
-    <div>
-      <div
-        className={pageTreeRowClass(isActive)}
-        style={{ paddingLeft: `${12 + depth * 16}px` }}
-      >
-        {bulkMode && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleSelect?.(page.id); }}
-            className="p-1 shrink-0"
-          >
-            {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-forest" /> : <Square className="w-3.5 h-3.5 text-mid-gray" />}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => navigate(`/page/${page.id}`)}
-          className="flex-1 flex items-center gap-2 px-1 py-1.5 min-w-0"
-        >
-          {children.length > 0 ? (
-            <span
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="cursor-pointer shrink-0"
-            >
-              {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            </span>
-          ) : (
-            <span className="w-3 shrink-0" />
-          )}
-          <span className="shrink-0">{page.icon || (page.type === 'folder' ? '📁' : page.type === 'database' ? '🗃️' : '📄')}</span>
-          <span className="truncate flex-1 text-left">{page.title}</span>
-        </button>
-      </div>
-      {expanded && children.map((child) => (
-        <PageTreeItem
-          key={child.id}
-          page={child}
-          pages={pages}
-          depth={depth + 1}
-          bulkMode={bulkMode}
-          selected={selected}
-          onToggleSelect={onToggleSelect}
-        />
-      ))}
-    </div>
-  );
-}
 
 function PageListSection({ title, icon, pages, tooltip }: { title: string; icon: React.ReactNode; pages: Page[]; tooltip: string }) {
   const navigate = useNavigate();
@@ -117,13 +54,16 @@ export default function Sidebar() {
   } = useStore();
   const navigate = useNavigate();
   const { pageId } = useParams();
-  const rootPages = pages.filter((p) => !p.parent_id);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [operationLabel, setOperationLabel] = useState<string | null>(null);
+  const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [folderModal, setFolderModal] = useState<{ parentId?: string } | null>(null);
+  const [moveModal, setMoveModal] = useState<string[] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const newMenuRef = useRef<HTMLDivElement>(null);
   const [importModal, setImportModal] = useState<{
     sourceLabel: string;
     sourceType: 'file' | 'url';
@@ -131,8 +71,14 @@ export default function Sidebar() {
     suggestedTitle?: string;
   } | null>(null);
 
-  const handleNewPage = async (type: string = 'page') => {
-    const page = await createPage({ type, title: type === 'database' ? 'New Database' : 'Untitled' });
+  const handleNewPage = async (type: string = 'page', parentId?: string) => {
+    setNewMenuOpen(false);
+    const page = await createPage({
+      type,
+      title: type === 'database' ? 'New Database' : 'Untitled',
+      parentId,
+      icon: type === 'folder' ? '📁' : undefined,
+    });
     navigate(`/page/${page.id}`);
   };
 
@@ -157,13 +103,23 @@ export default function Sidebar() {
     navigate('/');
   };
 
-  const handleBulkMove = async () => {
-    if (selected.size === 0) return;
-    const parentId = window.prompt('Move to parent page ID (leave empty for root):');
-    await api.bulkPages('move', [...selected], parentId || null);
+  const handleBulkMoveConfirm = async (parentId: string | null) => {
+    if (!moveModal?.length) return;
+    await api.bulkPages('move', moveModal, parentId);
+    setMoveModal(null);
     setSelected(new Set());
     setBulkMode(false);
     await loadPages();
+  };
+
+  const getMoveExcludeIds = (ids: string[]): string[] => {
+    const exclude = new Set<string>();
+    for (const id of ids) {
+      for (const descId of collectDescendantIds(pages, id)) {
+        exclude.add(descId);
+      }
+    }
+    return [...exclude];
   };
 
   const cancelOperation = () => {
@@ -240,16 +196,56 @@ export default function Sidebar() {
             </button>
           </div>
           <div className="flex gap-2">
-            <Tooltip text="Create a new blank page">
-              <button onClick={() => handleNewPage('page')} className="btn-primary flex-1 text-sm flex items-center justify-center gap-1">
-                <Plus className="w-4 h-4" /> Page
-              </button>
-            </Tooltip>
-            <Tooltip text="Create a new database (table/board view)">
-              <button onClick={() => handleNewPage('database')} className="btn-secondary text-sm p-2">
-                <Database className="w-4 h-4" />
-              </button>
-            </Tooltip>
+            <div className="relative flex-1" ref={newMenuRef}>
+              <div className="flex">
+                <Tooltip text="Create a new page, folder, or database">
+                  <button
+                    onClick={() => setNewMenuOpen(!newMenuOpen)}
+                    className="btn-primary flex-1 text-sm flex items-center justify-center gap-1 rounded-r-none"
+                  >
+                    <Plus className="w-4 h-4" /> New
+                  </button>
+                </Tooltip>
+                <button
+                  onClick={() => setNewMenuOpen(!newMenuOpen)}
+                  className="btn-primary px-2 rounded-l-none border-l border-white/20"
+                  aria-label="More create options"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+              </div>
+              {newMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setNewMenuOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-warm-white border border-green-mist rounded-xl shadow-lg z-20 py-1">
+                    <button
+                      type="button"
+                      onClick={() => handleNewPage('page')}
+                      className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" /> New Page
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewMenuOpen(false);
+                        setFolderModal({});
+                      }}
+                      className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2"
+                    >
+                      <FolderPlus className="w-4 h-4" /> New Folder
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleNewPage('database')}
+                      className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2"
+                    >
+                      <Database className="w-4 h-4" /> New Database
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <Tooltip text="Import a web page from a URL">
               <button onClick={handleImportUrl} disabled={!!operationLabel} className="btn-secondary text-sm p-2">
                 <Link2 className="w-4 h-4" />
@@ -273,8 +269,8 @@ export default function Sidebar() {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </Tooltip>
-                <Tooltip text={`Move ${selected.size} selected page(s) to another folder`}>
-                  <button onClick={handleBulkMove} className="btn-secondary text-xs p-2">
+                <Tooltip text={`Move ${selected.size} selected page(s) to a folder`}>
+                  <button onClick={() => setMoveModal([...selected])} className="btn-secondary text-xs p-2">
                     <FolderInput className="w-3.5 h-3.5" />
                   </button>
                 </Tooltip>
@@ -297,21 +293,18 @@ export default function Sidebar() {
             tooltip="Pages you've opened recently"
           />
 
-          <Tooltip text="All pages in your workspace, organized in a tree">
+          <Tooltip text="Drag pages onto folders to organize. Drop on the dashed zone for top level.">
             <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide mb-1">
               <FileText className="w-3 h-3" /> All Pages
             </div>
           </Tooltip>
-          {rootPages.map((page) => (
-            <PageTreeItem
-              key={page.id}
-              page={page}
-              pages={pages}
-              bulkMode={bulkMode}
-              selected={selected}
-              onToggleSelect={toggleSelect}
-            />
-          ))}
+          <PageTree
+            pages={pages}
+            bulkMode={bulkMode}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+            onPagesChange={loadPages}
+          />
         </div>
 
         <div className="p-3 border-t border-green-mist space-y-1">
@@ -352,6 +345,48 @@ export default function Sidebar() {
           sourceType={importModal.sourceType}
           onClose={() => setImportModal(null)}
           onConfirm={runImport}
+        />
+      )}
+      {folderModal && (
+        <NamePromptModal
+          open
+          title="New Folder"
+          label="Folder name"
+          placeholder="e.g. Project Documentation"
+          defaultValue=""
+          confirmLabel="Create Folder"
+          onClose={() => setFolderModal(null)}
+          onConfirm={async (name) => {
+            if (folderModal.parentId) {
+              const { page } = await api.createPage(workspace!.id, {
+                type: 'folder',
+                title: name,
+                parentId: folderModal.parentId,
+                icon: '📁',
+              });
+              await loadPages();
+              navigate(`/page/${page.id}`);
+            } else {
+              const { page } = await api.createPage(workspace!.id, {
+                type: 'folder',
+                title: name,
+                icon: '📁',
+              });
+              await loadPages();
+              navigate(`/page/${page.id}`);
+            }
+            setFolderModal(null);
+          }}
+        />
+      )}
+      {moveModal && (
+        <MoveToModal
+          open
+          pages={pages}
+          excludeIds={getMoveExcludeIds(moveModal)}
+          title={`Move ${moveModal.length} item(s)`}
+          onClose={() => setMoveModal(null)}
+          onConfirm={handleBulkMoveConfirm}
         />
       )}
       {operationLabel && (

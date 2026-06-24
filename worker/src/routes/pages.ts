@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
-import { generateId, blocksToMarkdown, markdownToBlocks } from '../utils';
+import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant } from '../utils';
 
 const pages = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -125,8 +125,17 @@ pages.patch('/pages/:pageId', async (c) => {
   const now = Math.floor(Date.now() / 1000);
   const title = body.title ?? page.title;
   const icon = body.icon ?? page.icon;
-  const parentId = body.parentId !== undefined ? body.parentId : page.parent_id;
+  let parentId = body.parentId !== undefined ? body.parentId : page.parent_id;
   const visibility = body.visibility ?? page.visibility;
+
+  if (body.parentId !== undefined) {
+    if (parentId === pageId) {
+      return c.json({ error: 'A page cannot be its own parent' }, 400);
+    }
+    if (parentId && await isPageDescendant(c.env.DB, pageId, parentId)) {
+      return c.json({ error: 'Cannot move a page into its own descendant' }, 400);
+    }
+  }
 
   await c.env.DB.prepare(
     'UPDATE pages SET title = ?, icon = ?, parent_id = ?, visibility = ?, updated_at = ? WHERE id = ?'

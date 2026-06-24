@@ -72,7 +72,7 @@ class ApiClient {
     );
   }
 
-  updatePage(pageId: string, data: Partial<{ title: string; icon: string; parentId: string; visibility: string }>) {
+  updatePage(pageId: string, data: Partial<{ title: string; icon: string; parentId: string | null; visibility: string }>) {
     return this.request<{ page: Page }>(
       `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify(data) }
     );

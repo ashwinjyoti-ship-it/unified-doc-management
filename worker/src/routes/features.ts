@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
-import { generateId, blocksToMarkdown, markdownToBlocks } from '../utils';
+import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant } from '../utils';
 
 const features = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -160,6 +160,14 @@ features.post('/bulk', async (c) => {
       await c.env.DB.prepare('DELETE FROM pages_fts WHERE page_id = ?').bind(pageId).run();
       results.push({ id: pageId, status: 'deleted' });
     } else if (action === 'move') {
+      if (parentId === pageId) {
+        results.push({ id: pageId, status: 'invalid' });
+        continue;
+      }
+      if (parentId && await isPageDescendant(c.env.DB, pageId, parentId)) {
+        results.push({ id: pageId, status: 'invalid' });
+        continue;
+      }
       const now = Math.floor(Date.now() / 1000);
       await c.env.DB.prepare('UPDATE pages SET parent_id = ?, updated_at = ? WHERE id = ?')
         .bind(parentId ?? null, now, pageId).run();
