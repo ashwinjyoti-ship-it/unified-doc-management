@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
 import {
@@ -6,10 +8,14 @@ import {
   applySort,
   getPropValue,
   getRowTitle,
+  parseRelationOptions,
   parseRelationValue,
+  ROLLUP_AGGREGATIONS,
   type DatabaseFilter,
   type DatabaseSort,
   type FilterOperator,
+  type RelatedSchemaProperty,
+  type RollupAggregation,
   type ViewType,
 } from '../lib/databaseFilters';
 import {
@@ -36,6 +42,8 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const [rows, setRows] = useState<DatabaseRow[]>([]);
   const [savedViews, setSavedViews] = useState<SavedDatabaseView[]>([]);
   const [relationData, setRelationData] = useState<Record<string, Array<{ id: string; page_id: string | null; title: string }>>>({});
+  const [relatedSchemas, setRelatedSchemas] = useState<Record<string, RelatedSchemaProperty[]>>({});
+  const [rollupValues, setRollupValues] = useState<Record<string, Record<string, string | number>>>({});
   const [workspaceDatabases, setWorkspaceDatabases] = useState<Array<{ id: string; title: string; icon: string | null }>>([]);
   const [view, setView] = useState<ViewType>('table');
   const [filters, setFilters] = useState<DatabaseFilter[]>([]);
@@ -49,6 +57,9 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const [newPropType, setNewPropType] = useState('text');
   const [newPropOptions, setNewPropOptions] = useState('');
   const [newRelationDbId, setNewRelationDbId] = useState('');
+  const [newRollupRelationPropId, setNewRollupRelationPropId] = useState('');
+  const [newRollupTargetPropId, setNewRollupTargetPropId] = useState('');
+  const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
 
   useEffect(() => {
     void loadDatabase();
@@ -62,6 +73,8 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       setRows(data.rows);
       setSavedViews(data.views || []);
       setRelationData(data.relationData || {});
+      setRelatedSchemas(data.relatedSchemas || {});
+      setRollupValues(data.rollupValues || {});
       setWorkspaceDatabases(data.databases || []);
     } finally {
       setLoading(false);
@@ -118,6 +131,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     } else if (newPropType === 'relation') {
       if (!newRelationDbId) return;
       options = { relatedDatabaseId: newRelationDbId };
+    } else if (newPropType === 'rollup') {
+      if (!newRollupRelationPropId || !newRollupTargetPropId) return;
+      options = {
+        relationPropertyId: newRollupRelationPropId,
+        targetPropertyId: newRollupTargetPropId,
+        aggregation: newRollupAggregation,
+      };
     }
     const { property } = await api.createDatabaseProperty(pageId, {
       name: newPropName.trim(),
@@ -128,6 +148,9 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     setNewPropName('');
     setNewPropOptions('');
     setNewRelationDbId('');
+    setNewRollupRelationPropId('');
+    setNewRollupTargetPropId('');
+    setNewRollupAggregation('count');
     setShowAddProp(false);
     await loadDatabase();
   };
@@ -167,10 +190,27 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     || properties.find((p) => p.type === 'select');
   const dateProp = properties.find((p) => p.type === 'date');
   const nameProp = properties.find((p) => p.name.toLowerCase() === 'name') || properties[0];
+  const relationProperties = properties.filter((p) => p.type === 'relation');
+
+  const rollupTargetProperties = useMemo(() => {
+    if (!newRollupRelationPropId) return [];
+    const relProp = properties.find((p) => p.id === newRollupRelationPropId);
+    if (!relProp) return [];
+    const relatedDbId = parseRelationOptions(relProp.options).relatedDatabaseId;
+    if (!relatedDbId) return [];
+    return relatedSchemas[relatedDbId] || [];
+  }, [newRollupRelationPropId, properties, relatedSchemas]);
+
+  const cellValue = useCallback((row: DatabaseRow, propId: string): unknown => {
+    if (rollupValues[row.id]?.[propId] !== undefined) {
+      return rollupValues[row.id][propId];
+    }
+    return getPropValue(row, propId);
+  }, [rollupValues]);
 
   const displayRows = useMemo(
-    () => applySort(applyFilters(rows, filters), sorts, properties),
-    [rows, filters, sorts, properties],
+    () => applySort(applyFilters(rows, filters, cellValue), sorts, properties, cellValue),
+    [rows, filters, sorts, properties, cellValue],
   );
 
   const galleryCoverStyle = (status: string) => {
@@ -248,6 +288,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     );
 
   const renderCell = (row: DatabaseRow, prop: DatabaseProperty) => {
+    if (prop.type === 'rollup') {
+      return (
+        <span className="text-sm text-charcoal bg-linen/50 px-2 py-1 rounded">
+          {String(cellValue(row, prop.id) ?? '—')}
+        </span>
+      );
+    }
     if (prop.type === 'relation') return renderRelationCell(row, prop);
     if (nameProp && prop.id === nameProp.id) return renderNameCell(row, prop);
 
@@ -291,6 +338,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     return selected
       .map((id) => options.find((o) => o.id === id)?.title || id)
       .join(', ') || '—';
+  };
+
+  const formatCellDisplay = (row: DatabaseRow, prop: DatabaseProperty) => {
+    if (prop.type === 'relation') return formatRelationDisplay(row, prop);
+    return String(cellValue(row, prop.id) || '—');
   };
 
   const RowTitleButton = ({ row }: { row: DatabaseRow }) => (
@@ -499,9 +551,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   <div key={row.id} className="bg-linen rounded-lg p-3 text-sm">
                     <RowTitleButton row={row} />
                     {properties.filter((p) => p.id !== nameProp?.id && p.id !== statusProp.id).map((p) => {
-                      const val = p.type === 'relation'
-                        ? formatRelationDisplay(row, p)
-                        : getPropValue(row, p.id);
+                      const val = formatCellDisplay(row, p);
                       if (!val || val === '—') return null;
                       return <div key={p.id} className="text-xs text-mid-gray mt-1">{p.name}: {String(val)}</div>;
                     })}
@@ -595,10 +645,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               <div className="flex flex-wrap gap-4 text-sm text-warm-gray">
                 {properties.filter((p) => p.id !== nameProp?.id).map((prop) => (
                   <span key={prop.id}>
-                    <span className="text-mid-gray">{prop.name}:</span>{' '}
-                    {prop.type === 'relation'
-                      ? formatRelationDisplay(row, prop)
-                      : String(getPropValue(row, prop.id) || '—')}
+                    <span className="text-mid-gray">{prop.name}:</span> {formatCellDisplay(row, prop)}
                   </span>
                 ))}
               </div>
@@ -654,6 +701,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               <option value="date">Date</option>
               <option value="select">Select</option>
               <option value="relation">Relation</option>
+              <option value="rollup">Rollup</option>
             </select>
             {newPropType === 'select' && (
               <>
@@ -679,6 +727,52 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                     <option key={db.id} value={db.id}>{db.icon || '🗃️'} {db.title}</option>
                   ))}
                 </select>
+              </>
+            )}
+            {newPropType === 'rollup' && (
+              <>
+                {relationProperties.length === 0 ? (
+                  <p className="text-sm text-mid-gray mb-4">Add a Relation property first, then create a rollup from it.</p>
+                ) : (
+                  <>
+                    <label className="block text-sm text-mid-gray mb-1">Relation property</label>
+                    <select
+                      value={newRollupRelationPropId}
+                      onChange={(e) => {
+                        setNewRollupRelationPropId(e.target.value);
+                        setNewRollupTargetPropId('');
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-green-mist mb-3 outline-none"
+                    >
+                      <option value="">Select relation…</option>
+                      {relationProperties.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <label className="block text-sm text-mid-gray mb-1">Property to roll up</label>
+                    <select
+                      value={newRollupTargetPropId}
+                      onChange={(e) => setNewRollupTargetPropId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-green-mist mb-3 outline-none"
+                      disabled={!newRollupRelationPropId}
+                    >
+                      <option value="">Select property…</option>
+                      {rollupTargetProperties.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+                      ))}
+                    </select>
+                    <label className="block text-sm text-mid-gray mb-1">Calculate</label>
+                    <select
+                      value={newRollupAggregation}
+                      onChange={(e) => setNewRollupAggregation(e.target.value as RollupAggregation)}
+                      className="w-full px-3 py-2 rounded-lg border border-green-mist mb-4 outline-none"
+                    >
+                      {ROLLUP_AGGREGATIONS.map((a) => (
+                        <option key={a.value} value={a.value}>{a.label}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </>
             )}
             <div className="flex gap-2">
