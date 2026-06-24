@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useStore } from './lib/store';
+import { createProject } from './lib/projectCreate';
 import AuthPage from './components/AuthPage';
 import Sidebar from './components/Sidebar';
 import PageView from './components/PageView';
@@ -11,7 +12,7 @@ import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
 
 function HomePage() {
-  const { pages, createPage } = useStore();
+  const { pages, workspace, loadPages } = useStore();
 
   useEffect(() => {
     if (pages.length > 0) {
@@ -26,16 +27,22 @@ function HomePage() {
         Welcome to <span className="text-forest">Unified Doc Management</span>
       </h1>
       <p className="text-warm-gray mb-6 max-w-md">
-        Create pages, databases, and collaborate in real-time. Select a page from the sidebar or create a new one.
+        Create a project to organize pages, databases, and folders. Daily notes and quick captures stay in Inbox.
       </p>
       <button
         onClick={async () => {
-          const page = await createPage({ title: 'My First Page', icon: '✨' });
-          window.location.href = `/page/${page.id}`;
+          if (!workspace) return;
+          const project = await createProject(workspace.id, {
+            projectTitle: 'My First Project',
+            projectIcon: '🗂️',
+            child: { type: 'page', title: 'My First Page', icon: '✨' },
+          });
+          await loadPages();
+          window.location.href = `/page/${project.id}`;
         }}
         className="btn-primary"
       >
-        Create Your First Page
+        Create Your First Project
       </button>
     </div>
   );

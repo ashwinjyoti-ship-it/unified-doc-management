@@ -50,7 +50,6 @@ export default function MobileTopBar() {
           variant="compact"
           onNewPage={() => void handleNewPage()}
           onNewProject={() => handleNewProjectRequest()}
-          onNewFolder={() => handleNewFolderRequest()}
           onNewDatabase={() => void handleNewDatabase()}
         />
       </div>

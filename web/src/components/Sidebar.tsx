@@ -234,7 +234,6 @@ export default function Sidebar() {
               className="flex-1"
               onNewPage={() => void handleNewPage()}
               onNewProject={() => handleNewProjectRequest()}
-              onNewFolder={() => handleNewFolderRequest()}
               onNewDatabase={() => void handleNewDatabase()}
             />
             <Tooltip text="Import a web page from a URL">

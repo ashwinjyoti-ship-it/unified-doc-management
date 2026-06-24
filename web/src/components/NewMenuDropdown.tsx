@@ -4,9 +4,9 @@ import Tooltip from './Tooltip';
 
 interface NewMenuDropdownProps {
   onNewPage: () => void;
-  onNewFolder: () => void;
   onNewProject: () => void;
   onNewDatabase: () => void;
+  onNewFolder?: () => void;
   className?: string;
   /** Compact icon-only style for tight mobile headers */
   variant?: 'default' | 'compact';
@@ -14,9 +14,9 @@ interface NewMenuDropdownProps {
 
 export default function NewMenuDropdown({
   onNewPage,
-  onNewFolder,
   onNewProject,
   onNewDatabase,
+  onNewFolder,
   className = '',
   variant = 'default',
 }: NewMenuDropdownProps) {
@@ -31,7 +31,7 @@ export default function NewMenuDropdown({
   return (
     <div className={`relative ${className}`} ref={ref}>
       {variant === 'compact' ? (
-        <Tooltip text="Create page, folder, or database">
+        <Tooltip text="Create project, page, or database">
           <button
             type="button"
             onClick={() => setOpen(!open)}
@@ -44,7 +44,7 @@ export default function NewMenuDropdown({
         </Tooltip>
       ) : (
         <div className="flex">
-          <Tooltip text="Create a new page, folder, or database">
+          <Tooltip text="Create a new project, page, or database">
             <button
               type="button"
               onClick={() => setOpen(!open)}
@@ -97,14 +97,16 @@ export default function NewMenuDropdown({
             >
               <Briefcase className="w-4 h-4 shrink-0" /> New Project
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => { close(); onNewFolder(); }}
-              className={itemClass}
-            >
-              <FolderPlus className="w-4 h-4 shrink-0" /> New Folder
-            </button>
+            {onNewFolder && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => { close(); onNewFolder(); }}
+                className={itemClass}
+              >
+                <FolderPlus className="w-4 h-4 shrink-0" /> New Folder
+              </button>
+            )}
             <button
               type="button"
               role="menuitem"
