@@ -92,7 +92,7 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full">
+    <div className="p-6 md:p-10 max-w-2xl mx-auto w-full min-h-full safe-top">
       <Tooltip text="Go back to the previous page">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-warm-gray hover:text-charcoal mb-6">
           <ArrowLeft className="w-4 h-4" /> Back
