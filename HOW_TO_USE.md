@@ -103,7 +103,7 @@ Default properties on new databases:
 
 Add more via the API: `POST /api/pages/:id/database/properties`
 
-Supported types: text, number, date, select, multi_select, relation.
+Supported types: text, number, date, select, multi_select, checkbox, relation, rollup.
 
 ### Adding Rows
 

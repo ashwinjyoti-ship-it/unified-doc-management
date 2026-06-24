@@ -122,6 +122,14 @@ export function parseRelationValue(raw: unknown): string[] {
   return [];
 }
 
+export function parseMultiSelectValue(raw: unknown): string[] {
+  return parseRelationValue(raw);
+}
+
+export function parseCheckboxValue(raw: unknown): boolean {
+  return raw === true || raw === 'true' || raw === 1 || raw === '1';
+}
+
 export function parseRollupOptions(options: string): Partial<RollupOptions> {
   try {
     const parsed = JSON.parse(options || '{}');
