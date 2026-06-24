@@ -19,7 +19,7 @@ export default function InsertPlacementModal({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 z-[110] flex items-end md:items-center justify-center p-0 md:p-4"
+      className="fixed inset-0 bg-black/40 z-[120] flex items-end md:items-center justify-center p-0 md:p-4"
       onClick={onClose}
     >
       <div

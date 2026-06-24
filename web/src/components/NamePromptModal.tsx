@@ -48,7 +48,7 @@ export default function NamePromptModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-[120] flex items-end md:items-center justify-center p-0 md:p-4" onClick={onClose}>
       <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
         <h3 className="font-semibold text-lg mb-4">{title}</h3>
         {showIcon && (

@@ -76,7 +76,12 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       return;
     }
     if (item.placement === 'functional' && item.key) {
-      setPlacementModal({ item, range });
+      // Remove typed "/" query so the slash popup closes before the placement sheet opens
+      const insertAt = range.from;
+      if (range.from !== range.to) {
+        ed.chain().focus().deleteRange(range).run();
+      }
+      setPlacementModal({ item, range: { from: insertAt, to: insertAt } });
       setInsertOpen(false);
     }
   }, []);
@@ -383,7 +388,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
       <EditorContent editor={editor} className="prose-forest max-w-none" />
 
-      {insertOpen && (
+      {insertOpen && !placementModal && (
         <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-label="Insert block">
           <div className="absolute inset-0 bg-black/40" onClick={() => setInsertOpen(false)} />
           <div className="absolute bottom-0 left-0 right-0 bg-warm-white rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
