@@ -173,6 +173,25 @@ class ApiClient {
     );
   }
 
+  updateDatabaseProperty(pageId: string, propId: string, data: {
+    name?: string;
+    type?: string;
+    options?: string[] | {
+      relatedDatabaseId?: string;
+      relationPropertyId?: string;
+      targetPropertyId?: string;
+      aggregation?: string;
+    };
+  }) {
+    return this.request<{ property: DatabaseProperty }>(
+      `/pages/${pageId}/database/properties/${propId}`, { method: 'PATCH', body: JSON.stringify(data) }
+    );
+  }
+
+  deleteDatabaseProperty(pageId: string, propId: string) {
+    return this.request(`/pages/${pageId}/database/properties/${propId}`, { method: 'DELETE' });
+  }
+
   createDatabaseView(pageId: string, data: {
     name: string;
     viewType?: string;
@@ -203,9 +222,43 @@ class ApiClient {
     return this.request<{ comments: Comment[] }>(`/pages/${pageId}/comments`);
   }
 
-  addComment(pageId: string, content: string, blockId?: string) {
+  addComment(
+    pageId: string,
+    content: string,
+    blockId?: string,
+    extra?: {
+      commentType?: 'discussion' | 'agent_instruction';
+      selectionQuote?: string;
+      selectionMeta?: object;
+      status?: string;
+    },
+  ) {
     return this.request<{ comment: Comment }>(
-      `/pages/${pageId}/comments`, { method: 'POST', body: JSON.stringify({ content, blockId }) }
+      `/pages/${pageId}/comments`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          content,
+          blockId,
+          commentType: extra?.commentType,
+          selectionQuote: extra?.selectionQuote,
+          selectionMeta: extra?.selectionMeta,
+          status: extra?.status,
+        }),
+      },
+    );
+  }
+
+  getAgentComments(pageId: string, status = 'open') {
+    return this.request<{ comments: Comment[] }>(
+      `/pages/${pageId}/agent-comments?status=${encodeURIComponent(status)}`,
+    );
+  }
+
+  updateComment(commentId: string, data: { status?: string; content?: string }) {
+    return this.request<{ comment: Comment }>(
+      `/comments/${commentId}`,
+      { method: 'PATCH', body: JSON.stringify(data) },
     );
   }
 

@@ -101,13 +101,27 @@ Default properties on new databases:
 - **Status** (select: To Do, In Progress, Done)
 - **Due Date** (date)
 
-Add more via the API: `POST /api/pages/:id/database/properties`
+Add more columns via the **+** button at the end of the table header, or via API: `POST /api/pages/:id/database/properties`
+
+Click **⋯** on any column header to rename, change type, or delete (Name column cannot be deleted).
 
 Supported types: text, number, date, select, multi_select, checkbox, relation, rollup.
 
-### Adding Rows
+**Row identity:** each row has a stable UUID (`database_rows.id`). The **Name** column is the display title.
 
-Click **+ New Row** in any database view.
+**Row detail:** click a row title to open the Notion-style panel with all properties and notes. Row pages are hidden from the sidebar.
+
+### Inbox
+
+Root-level pages (no parent folder) appear in **Inbox** — e.g. Quick Capture, Daily Note, or drag a page to the Inbox drop zone.
+
+### Wikilinks
+
+Type `/` → **Page link** to insert `[[Page Title]]`. These create backlinks when the page is saved.
+
+### AI agent comments
+
+Select text in the editor → click the **AI comment** icon in the bubble menu (separate from Bold/Italic). Add an instruction for your agent to act on later.
 
 ---
 

@@ -120,6 +120,119 @@ database.post('/pages/:pageId/database/properties', async (c) => {
   return c.json({ property: prop }, 201);
 });
 
+database.patch('/pages/:pageId/database/properties/:propId', async (c) => {
+  const { pageId, propId } = c.req.param();
+  const body = await c.req.json<{
+    name?: string;
+    type?: string;
+    options?: string[] | {
+      relatedDatabaseId?: string;
+      relationPropertyId?: string;
+      targetPropertyId?: string;
+      aggregation?: string;
+    };
+  }>();
+
+  if (!(await getDatabasePage(c.env.DB, pageId))) {
+    return c.json({ error: 'Database not found' }, 404);
+  }
+
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM database_properties WHERE id = ? AND database_id = ?'
+  ).bind(propId, pageId).first<{ id: string; name: string; type: string; options: string }>();
+
+  if (!existing) return c.json({ error: 'Property not found' }, 404);
+
+  if (body.name !== undefined && existing.name.toLowerCase() === 'name' && body.name.toLowerCase() !== 'name') {
+    return c.json({ error: 'Cannot rename the Name property' }, 400);
+  }
+
+  const newType = body.type ?? existing.type;
+  const newName = body.name ?? existing.name;
+
+  let optionsJson = existing.options;
+  if (body.options !== undefined) {
+    if (newType === 'relation' && body.options && !Array.isArray(body.options)) {
+      optionsJson = JSON.stringify(body.options);
+    } else if (newType === 'rollup' && body.options && !Array.isArray(body.options)) {
+      optionsJson = JSON.stringify(body.options);
+    } else if (Array.isArray(body.options)) {
+      optionsJson = JSON.stringify(body.options);
+    } else {
+      optionsJson = '[]';
+    }
+  }
+
+  if (newType !== existing.type) {
+    const rows = await c.env.DB.prepare(
+      'SELECT id, properties FROM database_rows WHERE database_id = ?'
+    ).bind(pageId).all<{ id: string; properties: string }>();
+
+    for (const row of rows.results || []) {
+      const props = JSON.parse(row.properties || '{}') as Record<string, unknown>;
+      if (!(propId in props)) continue;
+      const raw = props[propId];
+      delete props[propId];
+      if (newType === 'checkbox') {
+        props[propId] = raw === true || raw === 'true' || raw === 1;
+      } else if (newType === 'number') {
+        const n = Number(raw);
+        props[propId] = Number.isFinite(n) ? n : '';
+      } else if (newType === 'multi_select') {
+        props[propId] = Array.isArray(raw) ? raw : (raw ? [String(raw)] : []);
+      } else if (newType === 'relation') {
+        props[propId] = Array.isArray(raw) ? raw : [];
+      } else {
+        props[propId] = raw != null ? String(raw) : '';
+      }
+      await c.env.DB.prepare(
+        'UPDATE database_rows SET properties = ?, updated_at = ? WHERE id = ?'
+      ).bind(JSON.stringify(props), Math.floor(Date.now() / 1000), row.id).run();
+    }
+  }
+
+  await c.env.DB.prepare(
+    'UPDATE database_properties SET name = ?, type = ?, options = ? WHERE id = ?'
+  ).bind(newName, newType, optionsJson, propId).run();
+
+  const property = await c.env.DB.prepare('SELECT * FROM database_properties WHERE id = ?').bind(propId).first();
+  return c.json({ property });
+});
+
+database.delete('/pages/:pageId/database/properties/:propId', async (c) => {
+  const { pageId, propId } = c.req.param();
+
+  if (!(await getDatabasePage(c.env.DB, pageId))) {
+    return c.json({ error: 'Database not found' }, 404);
+  }
+
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM database_properties WHERE id = ? AND database_id = ?'
+  ).bind(propId, pageId).first<{ name: string }>();
+
+  if (!existing) return c.json({ error: 'Property not found' }, 404);
+  if (existing.name.toLowerCase() === 'name') {
+    return c.json({ error: 'Cannot delete the Name property' }, 400);
+  }
+
+  const rows = await c.env.DB.prepare(
+    'SELECT id, properties FROM database_rows WHERE database_id = ?'
+  ).bind(pageId).all<{ id: string; properties: string }>();
+
+  const now = Math.floor(Date.now() / 1000);
+  for (const row of rows.results || []) {
+    const props = JSON.parse(row.properties || '{}') as Record<string, unknown>;
+    if (!(propId in props)) continue;
+    delete props[propId];
+    await c.env.DB.prepare(
+      'UPDATE database_rows SET properties = ?, updated_at = ? WHERE id = ?'
+    ).bind(JSON.stringify(props), now, row.id).run();
+  }
+
+  await c.env.DB.prepare('DELETE FROM database_properties WHERE id = ?').bind(propId).run();
+  return c.json({ ok: true });
+});
+
 database.post('/pages/:pageId/database/rows', async (c) => {
   const pageId = c.req.param('pageId');
   const auth = c.get('auth');
@@ -147,8 +260,8 @@ database.post('/pages/:pageId/database/rows', async (c) => {
 
   const linkedPageId = generateId();
   await c.env.DB.prepare(`
-    INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, '📄', 'page', 'private', ?, ?, ?)
+    INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, is_row_page, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, '📄', 'page', 'private', 1, ?, ?, ?)
   `).bind(linkedPageId, dbPage.workspace_id, pageId, title, auth.user.id, now, now).run();
 
   await c.env.DB.prepare(

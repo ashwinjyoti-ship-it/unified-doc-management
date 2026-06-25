@@ -24,6 +24,7 @@ export interface Page {
   type: 'page' | 'folder' | 'database';
   visibility: 'private' | 'shared' | 'public';
   content_md: string | null;
+  is_row_page?: number;
   created_by: string;
   created_at: number;
   updated_at: number;

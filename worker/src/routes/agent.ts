@@ -89,6 +89,18 @@ const CATALOG = {
       description: 'Add database column',
     },
     {
+      method: 'PATCH',
+      path: '/api/pages/:pageId/database/properties/:propId',
+      auth: true,
+      description: 'Rename column, change type, or update options',
+    },
+    {
+      method: 'DELETE',
+      path: '/api/pages/:pageId/database/properties/:propId',
+      auth: true,
+      description: 'Delete column (cannot delete Name)',
+    },
+    {
       method: 'POST',
       path: '/api/pages/:pageId/database/rows',
       auth: true,
@@ -154,6 +166,9 @@ const CATALOG = {
     { method: 'POST', path: '/api/sync', auth: true, description: 'Offline sync queue' },
     { method: 'POST', path: '/api/seed/knowledge-base', auth: true },
     { method: 'POST', path: '/api/seed/migrate-knowledge-base', auth: true },
+
+    { method: 'GET', path: '/api/pages/:pageId/agent-comments', auth: true, description: 'Open AI agent instructions' },
+    { method: 'PATCH', path: '/api/comments/:id', auth: true, description: 'Update/resolve comment' },
 
     { method: 'GET', path: '/api/agent/catalog', auth: true, description: 'This catalog' },
   ],

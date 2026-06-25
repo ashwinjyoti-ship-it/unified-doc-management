@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
@@ -12,6 +11,7 @@ import {
   parseRelationValue,
   parseMultiSelectValue,
   parseCheckboxValue,
+  parseRollupOptions,
   ROLLUP_AGGREGATIONS,
   type DatabaseFilter,
   type DatabaseSort,
@@ -21,10 +21,12 @@ import {
   type ViewType,
 } from '../lib/databaseFilters';
 import {
-  Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2, Images,
-  Filter, Save, ExternalLink, X,
+  Plus, Table, LayoutGrid, Calendar, List, Trash2, Images,
+  Filter, Save, ExternalLink, X, MoreHorizontal,
 } from 'lucide-react';
 import DatabaseTextCell from './DatabaseTextCell';
+import RelationPicker from './RelationPicker';
+import DatabaseRowPanel from './DatabaseRowPanel';
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -39,8 +41,8 @@ interface DatabaseViewProps {
 }
 
 export default function DatabaseView({ pageId }: DatabaseViewProps) {
-  const navigate = useNavigate();
-  const { loadPages } = useStore();
+  const addPageToStore = useStore((s) => s.addPageToStore);
+  const removePageFromStore = useStore((s) => s.removePageFromStore);
   const [properties, setProperties] = useState<DatabaseProperty[]>([]);
   const [rows, setRows] = useState<DatabaseRow[]>([]);
   const [savedViews, setSavedViews] = useState<SavedDatabaseView[]>([]);
@@ -53,7 +55,10 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const [sorts, setSorts] = useState<DatabaseSort[]>([]);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showAddProp, setShowAddProp] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<DatabaseRow | null>(null);
+  const [addingColumn, setAddingColumn] = useState(false);
+  const [columnMenuId, setColumnMenuId] = useState<string | null>(null);
+  const [editingColumnId, setEditingColumnId] = useState<string | null>(null);
   const [showSaveView, setShowSaveView] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [newPropName, setNewPropName] = useState('');
@@ -104,9 +109,30 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
   const addRow = async () => {
     const { row } = await api.createDatabaseRow(pageId);
-    setRows([...rows, row]);
-    await loadPages();
+    setRows((prev) => [...prev, row]);
+    if (row.page_id) {
+      addPageToStore({
+        id: row.page_id,
+        workspace_id: '',
+        parent_id: pageId,
+        title: row.page_title || 'Untitled',
+        icon: '📄',
+        type: 'page',
+        visibility: 'private',
+        content_md: '',
+        is_row_page: 1,
+        created_by: '',
+        created_at: 0,
+        updated_at: 0,
+      });
+    }
   };
+
+  const refreshRollups = useCallback(async () => {
+    const data = await api.getDatabase(pageId);
+    setRollupValues(data.rollupValues || {});
+    setRelationData(data.relationData || {});
+  }, [pageId]);
 
   const patchRowLocal = useCallback((rowId: string, propId: string, value: unknown) => {
     setRows((prev) =>
@@ -148,14 +174,14 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   }, [patchRowLocal, flushSave]);
 
   const deleteRow = async (rowId: string) => {
+    const row = rows.find((r) => r.id === rowId);
     await api.deleteDatabaseRow(pageId, rowId);
-    setRows(rows.filter((r) => r.id !== rowId));
-    await loadPages();
+    setRows((prev) => prev.filter((r) => r.id !== rowId));
+    if (row?.page_id) removePageFromStore(row.page_id);
+    if (selectedRow?.id === rowId) setSelectedRow(null);
   };
 
-  const openRowPage = (row: DatabaseRow) => {
-    if (row.page_id) navigate(`/page/${row.page_id}`);
-  };
+  const openRowPanel = (row: DatabaseRow) => setSelectedRow(row);
 
   const addProperty = async () => {
     if (!newPropName.trim()) return;
@@ -185,8 +211,37 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     setNewRollupRelationPropId('');
     setNewRollupTargetPropId('');
     setNewRollupAggregation('count');
-    setShowAddProp(false);
+    setAddingColumn(false);
+    setEditingColumnId(null);
     await loadDatabase();
+  };
+
+  const updateProperty = async (propId: string, data: {
+    name?: string;
+    type?: string;
+    options?: string[] | Record<string, unknown>;
+  }) => {
+    const { property } = await api.updateDatabaseProperty(pageId, propId, data);
+    setProperties((prev) => prev.map((p) => (p.id === propId ? property : p)));
+    setEditingColumnId(null);
+    setColumnMenuId(null);
+    await loadDatabase();
+  };
+
+  const deleteProperty = async (propId: string) => {
+    if (!window.confirm('Delete this column? Values in all rows will be removed.')) return;
+    await api.deleteDatabaseProperty(pageId, propId);
+    setProperties((prev) => prev.filter((p) => p.id !== propId));
+    setColumnMenuId(null);
+    await loadDatabase();
+  };
+
+  const rollupHeaderHint = (prop: DatabaseProperty) => {
+    const opts = parseRollupOptions(prop.options);
+    if (!opts.relationPropertyId) return 'Computed rollup';
+    const rel = properties.find((p) => p.id === opts.relationPropertyId);
+    const agg = ROLLUP_AGGREGATIONS.find((a) => a.value === opts.aggregation)?.label || opts.aggregation;
+    return `Shows ${agg} via relation "${rel?.name || '?'}"`;
   };
 
   const saveCurrentView = async () => {
@@ -283,20 +338,14 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     const options = relationData[prop.id] || [];
     const selected = parseRelationValue(getPropValue(row, prop.id));
     return (
-      <select
-        multiple
-        value={selected}
-        onChange={(e) => {
-          const vals = Array.from(e.target.selectedOptions, (o) => o.value);
+      <RelationPicker
+        options={options}
+        selected={selected}
+        onChange={(vals) => {
           updateCellImmediate(row.id, prop.id, vals);
+          void refreshRollups();
         }}
-        className="w-full min-w-[120px] bg-transparent border-none outline-none text-sm text-charcoal"
-        size={Math.min(3, Math.max(1, options.length))}
-      >
-        {options.map((opt) => (
-          <option key={opt.id} value={opt.id}>{opt.title}</option>
-        ))}
-      </select>
+      />
     );
   };
 
@@ -313,9 +362,9 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         {row.page_id && (
           <button
             type="button"
-            onClick={() => openRowPage(row)}
+            onClick={() => openRowPanel(row)}
             className="p-1 rounded hover:bg-linen text-forest shrink-0"
-            title="Open page"
+            title="Open row"
           >
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
@@ -431,12 +480,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const RowTitleButton = ({ row }: { row: DatabaseRow }) => (
     <button
       type="button"
-      onClick={() => openRowPage(row)}
+      onClick={() => openRowPanel(row)}
       className="font-medium text-left text-forest hover:underline flex items-center gap-1"
-      disabled={!row.page_id}
     >
       {getRowTitle(row, nameProp)}
-      {row.page_id && <ExternalLink className="w-3 h-3 opacity-60" />}
+      <ExternalLink className="w-3 h-3 opacity-60" />
     </button>
   );
 
@@ -460,9 +508,6 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
           ))}
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button type="button" onClick={() => setShowAddProp(true)} className="btn-secondary text-sm flex items-center gap-1">
-            <Settings2 className="w-4 h-4" /> Add Property
-          </button>
           <button type="button" onClick={addRow} className="btn-primary text-sm flex items-center gap-1">
             <Plus className="w-4 h-4" /> New Row
           </button>
@@ -601,8 +646,53 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             <thead>
               <tr className="border-b border-green-mist">
                 {properties.map((prop) => (
-                  <th key={prop.id} className="text-left p-3 font-medium text-charcoal">{prop.name}</th>
+                  <th key={prop.id} className="text-left p-3 font-medium text-charcoal relative group">
+                    <div className="flex items-center gap-1">
+                      <span title={prop.type === 'rollup' ? rollupHeaderHint(prop) : undefined}>{prop.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
+                        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-linen"
+                        aria-label="Column options"
+                      >
+                        <MoreHorizontal className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    {columnMenuId === prop.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setColumnMenuId(null)} />
+                        <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-green-mist bg-warm-white shadow-lg py-1 text-sm">
+                          <button type="button" className="w-full px-3 py-2 text-left hover:bg-linen" onClick={() => {
+                            setEditingColumnId(prop.id);
+                            setNewPropName(prop.name);
+                            setNewPropType(prop.type);
+                            setColumnMenuId(null);
+                            setAddingColumn(true);
+                          }}>Rename / change type</button>
+                          {prop.name.toLowerCase() !== 'name' && (
+                            <button type="button" className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50" onClick={() => void deleteProperty(prop.id)}>Delete column</button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </th>
                 ))}
+                <th className="p-2 w-10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingColumnId(null);
+                      setNewPropName('');
+                      setNewPropType('text');
+                      setNewPropOptions('');
+                      setAddingColumn(true);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-linen text-forest"
+                    title="Add column"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </th>
                 <th className="w-10" />
               </tr>
             </thead>
@@ -612,6 +702,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   {properties.map((prop) => (
                     <td key={prop.id} className="p-2">{renderCell(row, prop)}</td>
                   ))}
+                  <td className="p-2" />
                   <td className="p-2">
                     <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600">
                       <Trash2 className="w-4 h-4" />
@@ -670,7 +761,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                     <button
                       key={row.id}
                       type="button"
-                      onClick={() => openRowPage(row)}
+                      onClick={() => openRowPanel(row)}
                       className="block w-full text-left bg-sage/30 rounded px-1 py-0.5 mt-0.5 truncate hover:bg-sage/50"
                     >
                       {getRowTitle(row, nameProp)}
@@ -697,7 +788,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               <div key={row.id} className="card-surface overflow-hidden group">
                 <button
                   type="button"
-                  onClick={() => openRowPage(row)}
+                  onClick={() => openRowPanel(row)}
                   className={`w-full h-28 bg-gradient-to-br ${galleryCoverStyle(status)} flex items-center justify-center hover:opacity-90`}
                 >
                   <span className="text-3xl opacity-80">{status === 'Done' ? '✅' : status === 'In Progress' ? '🔄' : '📄'}</span>
@@ -762,10 +853,10 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         </div>
       )}
 
-      {showAddProp && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setShowAddProp(false)}>
+      {(addingColumn || editingColumnId) && (
+        <div className="fixed inset-0 bg-black/40 z-[120] flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => { setAddingColumn(false); setEditingColumnId(null); }}>
           <div className="card-surface w-full max-w-md p-6 rounded-t-2xl md:rounded-[14px] safe-bottom" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-semibold mb-4">Add property</h3>
+            <h3 className="font-semibold mb-4">{editingColumnId ? 'Edit property' : 'Add property'}</h3>
             <label className="block text-sm text-mid-gray mb-1">Name</label>
             <input
               value={newPropName}
@@ -861,11 +952,53 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               </>
             )}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setShowAddProp(false)} className="btn-secondary flex-1 text-sm">Cancel</button>
-              <button type="button" onClick={() => void addProperty()} className="btn-primary flex-1 text-sm">Add</button>
+              <button type="button" onClick={() => { setAddingColumn(false); setEditingColumnId(null); }} className="btn-secondary flex-1 text-sm">Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (editingColumnId) {
+                    let options: string[] | Record<string, unknown> | undefined;
+                    if (newPropType === 'select' || newPropType === 'multi_select') {
+                      options = newPropOptions.split(',').map((s) => s.trim()).filter(Boolean);
+                    } else if (newPropType === 'relation' && newRelationDbId) {
+                      options = { relatedDatabaseId: newRelationDbId };
+                    } else if (newPropType === 'rollup' && newRollupRelationPropId && newRollupTargetPropId) {
+                      options = {
+                        relationPropertyId: newRollupRelationPropId,
+                        targetPropertyId: newRollupTargetPropId,
+                        aggregation: newRollupAggregation,
+                      };
+                    }
+                    void updateProperty(editingColumnId, { name: newPropName.trim(), type: newPropType, options });
+                  } else {
+                    void addProperty();
+                  }
+                }}
+                className="btn-primary flex-1 text-sm"
+              >
+                {editingColumnId ? 'Save' : 'Add'}
+              </button>
             </div>
           </div>
         </div>
+      )}
+
+      {selectedRow && (
+        <DatabaseRowPanel
+          pageId={pageId}
+          row={rows.find((r) => r.id === selectedRow.id) || selectedRow}
+          properties={properties}
+          relationData={relationData}
+          rollupValues={rollupValues[selectedRow.id] || {}}
+          nameProp={nameProp}
+          onClose={() => setSelectedRow(null)}
+          onPersistCell={persistCell}
+          onRowUpdated={(updated) => {
+            setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+            setSelectedRow(updated);
+          }}
+          onPropertiesChange={() => void loadDatabase()}
+        />
       )}
     </div>
   );

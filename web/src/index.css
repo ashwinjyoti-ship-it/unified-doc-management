@@ -263,6 +263,11 @@ html.dark textarea {
   color: var(--color-charcoal);
 }
 
+html.dark select option {
+  color: var(--color-charcoal);
+  background: var(--color-warm-white);
+}
+
 html.dark .hover\:bg-red-50:hover {
   background-color: rgb(127 29 29 / 0.25);
 }

@@ -147,22 +147,26 @@ export default function PageView() {
 
   useEffect(() => {
     loadPage();
-    loadComments();
-    loadVersionHistory();
-    loadPageTags();
     loadFavoriteStatus();
     if (pageId && online) {
       api.recordPageView(pageId).then(() => loadRecent()).catch(() => {});
     }
   }, [loadPage]);
 
+  useEffect(() => {
+    if (!pageId || pageType === 'folder' || pageType === 'database') return;
+    loadComments();
+    loadVersionHistory();
+    loadPageTags();
+  }, [pageId, pageType]);
+
   const saveTitle = useCallback(async (newTitle: string) => {
     if (!pageId) return;
     if (online) {
       await api.updatePage(pageId, { title: newTitle });
-      loadPages();
+      useStore.getState().patchPageInStore(pageId, { title: newTitle });
     }
-  }, [pageId, online, loadPages]);
+  }, [pageId, online]);
 
   useEffect(() => {
     if (!pageId || !dirty || !title.trim()) return;
@@ -856,8 +860,18 @@ export default function PageView() {
                     <p className="text-sm text-mid-gray text-center py-8">No comments yet.</p>
                   ) : (
                     comments.map((c) => (
-                      <div key={c.id} className="text-sm">
-                        <div className="font-medium text-charcoal">{c.author_name}</div>
+                      <div key={c.id} className={`text-sm rounded-lg p-2 ${c.comment_type === 'agent_instruction' ? 'bg-amber-50 border border-amber-200/60' : ''}`}>
+                        <div className="font-medium text-charcoal flex items-center gap-2">
+                          {c.author_name}
+                          {c.comment_type === 'agent_instruction' && (
+                            <span className="text-xs font-normal text-amber-700">AI instruction</span>
+                          )}
+                        </div>
+                        {c.selection_quote && (
+                          <blockquote className="text-xs text-mid-gray italic border-l-2 border-sage pl-2 my-1">
+                            &ldquo;{c.selection_quote}&rdquo;
+                          </blockquote>
+                        )}
                         <div className="text-warm-gray mt-1">{c.content}</div>
                         <div className="text-xs text-mid-gray mt-1">
                           {new Date(c.created_at * 1000).toLocaleString()}

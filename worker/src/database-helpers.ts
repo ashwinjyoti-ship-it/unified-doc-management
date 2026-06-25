@@ -19,8 +19,8 @@ export async function ensureRowPage(
   const now = Math.floor(Date.now() / 1000);
   const pageId = generateId();
   await db.prepare(`
-    INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, '📄', 'page', 'private', ?, ?, ?)
+    INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, is_row_page, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, '📄', 'page', 'private', 1, ?, ?, ?)
   `).bind(pageId, database.workspace_id, databaseId, title, userId, now, now).run();
 
   await db.prepare(
