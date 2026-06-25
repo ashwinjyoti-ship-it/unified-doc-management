@@ -71,6 +71,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     range: { from: number; to: number };
   } | null>(null);
   const [agentComment, setAgentComment] = useState<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
+  const agentCommentOpenRef = useRef(false);
   const selectionRef = useRef<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
@@ -211,10 +212,13 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     const captured = captureEditorSelection(ed) || selectionRef.current;
     if (!captured?.quote.trim()) return;
     selectionRef.current = captured;
-    setAgentComment(captured);
+    // Hide bubble menu via shouldShow — do NOT unmount BubbleMenu (crashes Tippy DOM cleanup).
+    agentCommentOpenRef.current = true;
+    queueMicrotask(() => setAgentComment(captured));
   }, [captureEditorSelection]);
 
   const dismissAgentComment = useCallback(() => {
+    agentCommentOpenRef.current = false;
     setAgentComment(null);
     if (editor) {
       const pos = editor.state.selection.from;
@@ -361,6 +365,12 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     handleSlashItemSelected({ editor, range: { from, to }, item });
   }, [editor, insertItems, handleSlashItemSelected]);
 
+  const bubbleMenuShouldShow = useCallback(({ state }: { state: import('@tiptap/pm/state').EditorState }) => {
+    if (agentCommentOpenRef.current) return false;
+    const { from, to, empty } = state.selection;
+    return !empty && from !== to;
+  }, []);
+
   if (!editor) {
     return <div className="text-mid-gray text-sm py-8">Loading editor...</div>;
   }
@@ -400,8 +410,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
         />
       )}
 
-      {editable && !agentComment && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
+      {editable && (
+        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} shouldShow={bubbleMenuShouldShow}>
           <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg items-center">
             <BubbleButton
               title="Make selected text bold"
@@ -449,6 +459,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
           onCancel={dismissAgentComment}
           onSubmit={(instruction) => {
             const payload = agentComment;
+            agentCommentOpenRef.current = false;
             setAgentComment(null);
             if (editor) {
               editor.chain().setTextSelection(payload.from).blur().run();

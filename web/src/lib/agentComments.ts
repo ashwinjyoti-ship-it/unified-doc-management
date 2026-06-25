@@ -1,7 +1,7 @@
 /** Build a single prompt string agents can consume directly. */
 export function buildAgentPrompt(selectionQuote: string, instruction: string): string {
-  const quote = selectionQuote.trim();
-  const text = instruction.trim();
+  const quote = (selectionQuote ?? '').trim();
+  const text = (instruction ?? '').trim();
   if (!quote) return text;
   if (!text) return `Selected text: "${quote}"`;
   return `Selected text: "${quote}"\n\nInstruction: ${text}`;
