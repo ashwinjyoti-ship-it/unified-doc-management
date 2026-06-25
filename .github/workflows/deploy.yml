@@ -49,6 +49,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Add Pages SPA redirects
+        run: printf '%s\n' '/*    /index.html   200' > web/dist/_redirects
+
       - name: Set JWT secret for Worker
         working-directory: worker
         run: printf '%s' "$JWT_SECRET" | npx wrangler secret put JWT_SECRET --config wrangler.worker.jsonc
