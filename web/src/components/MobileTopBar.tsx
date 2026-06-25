@@ -1,6 +1,7 @@
 import { Menu, Search as SearchIcon, Bell } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../lib/store';
+import { useShallow } from 'zustand/react/shallow';
 import { pageIcon } from '../lib/pageTree';
 import NewMenuDropdown from './NewMenuDropdown';
 import NamePromptModal from './NamePromptModal';
@@ -10,7 +11,15 @@ import Tooltip from './Tooltip';
 export default function MobileTopBar() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { workspace, pages, notifications, setSidebarOpen, setSearchOpen } = useStore();
+  const { workspace, pages, notifications, setSidebarOpen, setSearchOpen } = useStore(
+    useShallow((s) => ({
+      workspace: s.workspace,
+      pages: s.pages,
+      notifications: s.notifications,
+      setSidebarOpen: s.setSidebarOpen,
+      setSearchOpen: s.setSearchOpen,
+    })),
+  );
   const {
     folderModal,
     setFolderModal,

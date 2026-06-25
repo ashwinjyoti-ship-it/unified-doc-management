@@ -5,6 +5,7 @@ import BlockEditor, { blocksToTiptapHtml, tiptapJsonToBlocks } from './BlockEdit
 import DatabaseTextCell from './DatabaseTextCell';
 import RelationPicker from './RelationPicker';
 import Tooltip from './Tooltip';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import type { DatabaseProperty, DatabaseRow } from '../types';
 import {
   getPropValue,
@@ -54,7 +55,7 @@ export default function DatabaseRowPanel({
       .finally(() => setNotesLoading(false));
   }, [row.page_id]);
 
-  const saveNotes = useCallback(async (html: string, json: object) => {
+  const saveNotes = useCallback(async (_html: string, json: object) => {
     if (!row.page_id) return;
     const blockData = tiptapJsonToBlocks(json as Record<string, unknown>).map((b, i) => ({
       ...b,
@@ -62,6 +63,8 @@ export default function DatabaseRowPanel({
     }));
     await api.saveBlocks(row.page_id, blockData);
   }, [row.page_id]);
+
+  const debouncedSaveNotes = useDebouncedCallback(saveNotes, 500);
 
   const addProperty = async () => {
     if (!newPropName.trim()) return;
@@ -240,11 +243,9 @@ export default function DatabaseRowPanel({
                 <p className="text-sm text-mid-gray">Loading notes…</p>
               ) : (
                 <BlockEditor
-                  content={editorContent}
-                  onChange={(html, json) => {
-                    setEditorContent(html);
-                    void saveNotes(html, json);
-                  }}
+                  key={row.page_id}
+                  initialContent={editorContent}
+                  onChange={debouncedSaveNotes}
                   pageId={row.page_id}
                 />
               )}
