@@ -65,13 +65,13 @@ export default function PageView() {
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
   useEffect(() => {
-    if (lastUpdate?.type === 'blocks_updated') {
+    if (lastUpdate?.type === 'blocks_updated' && !dirty) {
       loadPage();
     }
     if (lastUpdate?.type === 'comment_added') {
       loadComments();
     }
-  }, [lastUpdate]);
+  }, [lastUpdate, dirty]);
 
   const loadPage = useCallback(async () => {
     if (!pageId) return;
@@ -156,13 +156,21 @@ export default function PageView() {
     }
   }, [loadPage]);
 
-  const saveTitle = async (newTitle: string) => {
+  const saveTitle = useCallback(async (newTitle: string) => {
     if (!pageId) return;
     if (online) {
       await api.updatePage(pageId, { title: newTitle });
       loadPages();
     }
-  };
+  }, [pageId, online, loadPages]);
+
+  useEffect(() => {
+    if (!pageId || !dirty || !title.trim()) return;
+    const timer = setTimeout(() => {
+      void saveTitle(title);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [title, dirty, pageId, saveTitle]);
 
   const persistBlocks = useCallback(async (html: string, json: object) => {
     if (!pageId) return;
@@ -481,7 +489,7 @@ export default function PageView() {
             value={title}
             onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
             onBlur={(e) => saveTitle(e.target.value)}
-            className="flex-1 min-w-0 text-xl font-semibold bg-transparent border-none outline-none text-charcoal"
+            className="flex-1 min-w-0 text-base md:text-xl font-semibold bg-transparent border-none outline-none text-charcoal page-title-input"
             placeholder="Untitled"
           />
 
