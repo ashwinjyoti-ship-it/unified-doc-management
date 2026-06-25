@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
@@ -24,6 +24,7 @@ import {
   Plus, Table, LayoutGrid, Calendar, List, Trash2, Settings2, Images,
   Filter, Save, ExternalLink, X,
 } from 'lucide-react';
+import DatabaseTextCell from './DatabaseTextCell';
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -62,16 +63,10 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   const [newRollupRelationPropId, setNewRollupRelationPropId] = useState('');
   const [newRollupTargetPropId, setNewRollupTargetPropId] = useState('');
   const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
-  const pendingSaves = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
     void loadDatabase();
   }, [pageId]);
-
-  useEffect(() => () => {
-    pendingSaves.current.forEach((timer) => clearTimeout(timer));
-    pendingSaves.current.clear();
-  }, []);
 
   const loadDatabase = async () => {
     setLoading(true);
@@ -124,39 +119,28 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
   }, []);
 
   const flushSave = useCallback(async (rowId: string, propId: string, value: unknown) => {
-    const key = `${rowId}:${propId}`;
-    const timer = pendingSaves.current.get(key);
-    if (timer) {
-      clearTimeout(timer);
-      pendingSaves.current.delete(key);
-    }
+    patchRowLocal(rowId, propId, value);
     try {
       const { row: updated } = await api.updateDatabaseRow(pageId, rowId, {
         properties: { [propId]: value },
       });
-      setRows((prev) => prev.map((r) => (r.id === rowId ? updated : r)));
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.id !== rowId) return r;
+          const currentProps = JSON.parse(r.properties || '{}') as Record<string, unknown>;
+          if (currentProps[propId] !== value) return r;
+          return updated;
+        }),
+      );
     } catch {
       await loadDatabase();
     }
-  }, [pageId]);
+  }, [pageId, patchRowLocal]);
 
-  const scheduleSave = useCallback((rowId: string, propId: string, value: unknown) => {
-    const key = `${rowId}:${propId}`;
-    const existing = pendingSaves.current.get(key);
-    if (existing) clearTimeout(existing);
-    pendingSaves.current.set(
-      key,
-      setTimeout(() => {
-        pendingSaves.current.delete(key);
-        void flushSave(rowId, propId, value);
-      }, 400),
-    );
-  }, [flushSave]);
-
-  const updateCellText = useCallback((rowId: string, propId: string, value: unknown) => {
+  const persistCell = useCallback((rowId: string, propId: string, value: unknown) => {
     patchRowLocal(rowId, propId, value);
-    scheduleSave(rowId, propId, value);
-  }, [patchRowLocal, scheduleSave]);
+    void flushSave(rowId, propId, value);
+  }, [patchRowLocal, flushSave]);
 
   const updateCellImmediate = useCallback((rowId: string, propId: string, value: unknown) => {
     patchRowLocal(rowId, propId, value);
@@ -318,12 +302,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
 
   const renderNameCell = (row: DatabaseRow, prop: DatabaseProperty) => (
       <div className="flex items-center gap-1 min-w-[120px]">
-        <input
-          type="text"
+        <DatabaseTextCell
+          rowId={row.id}
+          propId={prop.id}
           value={String(getPropValue(row, prop.id) || '')}
-          onChange={(e) => updateCellText(row.id, prop.id, e.target.value)}
-          onBlur={(e) => void flushSave(row.id, prop.id, e.target.value)}
-          className="flex-1 bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
+          type="text"
+          onPersist={persistCell}
+          className="flex-1 bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal db-cell-input"
         />
         {row.page_id && (
           <button
@@ -412,12 +397,13 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       );
     }
     return (
-      <input
+      <DatabaseTextCell
+        rowId={row.id}
+        propId={prop.id}
+        value={String(getPropValue(row, prop.id) ?? '')}
         type={prop.type === 'number' ? 'number' : 'text'}
-        value={getPropValue(row, prop.id) as string}
-        onChange={(e) => updateCellText(row.id, prop.id, e.target.value)}
-        onBlur={(e) => void flushSave(row.id, prop.id, e.target.value)}
-        className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal"
+        onPersist={persistCell}
+        className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal db-cell-input"
       />
     );
   };

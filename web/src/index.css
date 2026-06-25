@@ -77,6 +77,21 @@ input, textarea {
   font-family: inherit;
 }
 
+/* Prevent iOS zoom-on-focus (inputs < 16px feel broken on mobile) */
+@media (max-width: 768px) {
+  input,
+  textarea,
+  select,
+  .ProseMirror {
+    font-size: 16px !important;
+  }
+
+  .db-cell-input,
+  .page-title-input {
+    font-size: 16px !important;
+  }
+}
+
 .ProseMirror {
   outline: none;
   min-height: 200px;
