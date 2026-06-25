@@ -16,12 +16,13 @@ import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
 import { jsPDF } from 'jspdf';
 import {
-  History, MessageSquare, FileCode, Link2, Send, RotateCcw,
+  History, MessageSquare, FileCode, Link2, Send, RotateCcw, CheckCircle2,
   Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal,
 } from 'lucide-react';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
 type SidePanel = 'comments' | 'history' | null;
+type CommentFilter = 'all' | 'open' | 'addressed';
 
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
@@ -36,6 +37,7 @@ export default function PageView() {
   const [editorContent, setEditorContent] = useState('');
   const [markdown, setMarkdown] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
+  const [commentFilter, setCommentFilter] = useState<CommentFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const [versions, setVersions] = useState<Array<{ id: string; title: string; created_at: number; author_name: string }>>([]);
@@ -72,6 +74,9 @@ export default function PageView() {
       loadPage();
     }
     if (lastUpdate?.type === 'comment_added') {
+      loadComments();
+    }
+    if (lastUpdate?.type === 'comment_deleted') {
       loadComments();
     }
   }, [lastUpdate, dirty]);
@@ -481,6 +486,39 @@ export default function PageView() {
     setNewComment('');
     loadComments();
   };
+
+  const deleteComment = async (comment: Comment) => {
+    const label = comment.comment_type === 'agent_instruction' ? 'AI instruction' : 'comment';
+    if (!window.confirm(`Delete this ${label}?`)) return;
+    await api.deleteComment(comment.id);
+    setComments((prev) => prev.filter((c) => c.id !== comment.id));
+  };
+
+  const setCommentStatus = async (commentId: string, status: 'open' | 'resolved') => {
+    const { comment } = await api.updateComment(commentId, { status });
+    setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, ...comment } : c)));
+  };
+
+  const filteredComments = comments.filter((c) => {
+    if (commentFilter === 'all') return true;
+    if (c.comment_type !== 'agent_instruction') return commentFilter === 'open';
+    if (commentFilter === 'open') return c.status !== 'resolved';
+    return c.status === 'resolved';
+  });
+
+  const sortedComments = [...filteredComments].sort((a, b) => {
+    const rank = (c: Comment) => (
+      c.comment_type === 'agent_instruction' && c.status !== 'resolved' ? 0
+        : c.comment_type === 'agent_instruction' ? 1
+          : 2
+    );
+    const diff = rank(a) - rank(b);
+    return diff !== 0 ? diff : a.created_at - b.created_at;
+  });
+
+  const openAgentCount = comments.filter(
+    (c) => c.comment_type === 'agent_instruction' && c.status !== 'resolved',
+  ).length;
 
   const togglePanel = (panel: SidePanel) => {
     setSidePanel((current) => (current === panel ? null : panel));
@@ -904,19 +942,96 @@ export default function PageView() {
 
             {sidePanel === 'comments' && (
               <>
+                <div className="px-4 pt-3 pb-2 border-b border-green-mist shrink-0 space-y-2">
+                  {openAgentCount > 0 && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200/70 rounded-lg px-2.5 py-1.5">
+                      {openAgentCount} AI instruction{openAgentCount === 1 ? '' : 's'} need attention
+                    </p>
+                  )}
+                  <div className="flex gap-1 bg-linen rounded-lg p-0.5">
+                    {([
+                      ['all', 'All'],
+                      ['open', 'Needs action'],
+                      ['addressed', 'Addressed'],
+                    ] as const).map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setCommentFilter(id)}
+                        className={`flex-1 text-xs py-1.5 rounded-md transition-colors ${
+                          commentFilter === id ? 'bg-warm-white shadow-sm text-forest font-medium' : 'text-mid-gray hover:text-charcoal'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {comments.length === 0 ? (
-                    <p className="text-sm text-mid-gray text-center py-8">No comments yet.</p>
+                  {sortedComments.length === 0 ? (
+                    <p className="text-sm text-mid-gray text-center py-8">No comments in this view.</p>
                   ) : (
-                    comments.map((c) => (
-                      <div key={c.id} className={`text-sm rounded-lg p-2 ${c.comment_type === 'agent_instruction' ? 'bg-amber-50 border border-amber-200/60' : ''}`}>
-                        <div className="font-medium text-charcoal flex items-center gap-2">
-                          {c.author_name}
-                          {c.comment_type === 'agent_instruction' && (
-                            <span className="text-xs font-normal text-amber-700">AI instruction</span>
-                          )}
+                    sortedComments.map((c) => {
+                      const isAgent = c.comment_type === 'agent_instruction';
+                      const isResolved = c.status === 'resolved';
+                      return (
+                      <div
+                        key={c.id}
+                        className={`text-sm rounded-lg p-2 ${
+                          isAgent
+                            ? isResolved
+                              ? 'bg-linen/60 border border-green-mist opacity-80'
+                              : 'bg-amber-50 border border-amber-200/60'
+                            : 'bg-warm-white border border-green-mist/50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="font-medium text-charcoal flex items-center gap-2 flex-wrap min-w-0">
+                            {c.author_name}
+                            {isAgent && (
+                              <span className={`text-xs font-normal ${isResolved ? 'text-sage' : 'text-amber-700'}`}>
+                                {isResolved ? 'Addressed' : 'Needs action'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            {isAgent && !isResolved && (
+                              <Tooltip text="Mark as addressed — agent will skip this on next run">
+                                <button
+                                  type="button"
+                                  onClick={() => void setCommentStatus(c.id, 'resolved')}
+                                  className="p-1 rounded hover:bg-sage/20 text-forest"
+                                  aria-label="Mark addressed"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </button>
+                              </Tooltip>
+                            )}
+                            {isAgent && isResolved && (
+                              <Tooltip text="Reopen — agent will see this again">
+                                <button
+                                  type="button"
+                                  onClick={() => void setCommentStatus(c.id, 'open')}
+                                  className="p-1 rounded hover:bg-linen text-mid-gray"
+                                  aria-label="Reopen"
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              </Tooltip>
+                            )}
+                            <Tooltip text="Delete comment">
+                              <button
+                                type="button"
+                                onClick={() => void deleteComment(c)}
+                                className="p-1 rounded hover:bg-red-50 text-red-500"
+                                aria-label="Delete comment"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </Tooltip>
+                          </div>
                         </div>
-                        {c.comment_type === 'agent_instruction' && c.selection_quote ? (
+                        {isAgent && c.selection_quote ? (
                           <>
                             <div className="text-xs font-medium text-amber-800 mt-1">Selected text</div>
                             <blockquote className="text-xs text-charcoal border-l-2 border-amber-400 pl-2 my-1 whitespace-pre-wrap">
@@ -928,13 +1043,13 @@ export default function PageView() {
                         ) : (
                           <div className="text-warm-gray mt-1">{c.content}</div>
                         )}
-                        {c.comment_type === 'agent_instruction' && c.selection_quote && (
+                        {isAgent && c.selection_quote && (
                           <div className="text-xs text-mid-gray mt-2 pt-2 border-t border-amber-200/50 whitespace-pre-wrap">
                             <span className="font-medium">Agent prompt: </span>
                             {buildAgentPrompt(c.selection_quote, c.content)}
                           </div>
                         )}
-                        {c.comment_type !== 'agent_instruction' && c.selection_quote && (
+                        {!isAgent && c.selection_quote && (
                           <blockquote className="text-xs text-mid-gray italic border-l-2 border-sage pl-2 my-1">
                             &ldquo;{c.selection_quote}&rdquo;
                           </blockquote>
@@ -943,7 +1058,7 @@ export default function PageView() {
                           {new Date(c.created_at * 1000).toLocaleString()}
                         </div>
                       </div>
-                    ))
+                    ); })
                   )}
                 </div>
                 <div className="p-3 border-t border-green-mist flex gap-2">

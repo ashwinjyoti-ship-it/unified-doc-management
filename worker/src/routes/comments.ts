@@ -64,8 +64,15 @@ comments.get('/pages/:pageId/agent-comments', async (c) => {
     WHERE c.page_id = ? AND c.comment_type = 'agent_instruction' AND c.status = ?
     ORDER BY c.created_at ASC
   `).bind(pageId, status).all();
+  const rows = (result.results || []).map((row) => enrichAgentComment(row as Record<string, unknown>));
+  const openCount = await c.env.DB.prepare(`
+    SELECT COUNT(*) as count FROM comments
+    WHERE page_id = ? AND comment_type = 'agent_instruction' AND status = 'open'
+  `).bind(pageId).first<{ count: number }>();
   return c.json({
-    comments: (result.results || []).map((row) => enrichAgentComment(row as Record<string, unknown>)),
+    status,
+    open_count: openCount?.count ?? 0,
+    comments: rows,
   });
 });
 
@@ -92,6 +99,25 @@ comments.patch('/comments/:id', async (c) => {
     JOIN users u ON c.user_id = u.id WHERE c.id = ?
   `).bind(id).first();
   return c.json({ comment });
+});
+
+comments.delete('/comments/:id', async (c) => {
+  const id = c.req.param('id');
+  const existing = await c.env.DB.prepare(
+    'SELECT id, page_id FROM comments WHERE id = ?',
+  ).bind(id).first<{ id: string; page_id: string }>();
+  if (!existing) return c.json({ error: 'Comment not found' }, 404);
+
+  await c.env.DB.prepare('DELETE FROM comments WHERE id = ?').bind(id).run();
+
+  const roomId = c.env.COLLAB_ROOM.idFromName(existing.page_id);
+  const room = c.env.COLLAB_ROOM.get(roomId);
+  await room.fetch(new Request('http://internal/broadcast', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'comment_deleted', payload: { id } }),
+  }));
+
+  return c.json({ ok: true });
 });
 
 comments.post('/pages/:pageId/comments', async (c) => {

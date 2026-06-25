@@ -168,7 +168,8 @@ const CATALOG = {
     { method: 'POST', path: '/api/seed/migrate-knowledge-base', auth: true },
 
     { method: 'GET', path: '/api/pages/:pageId/agent-comments', auth: true, description: 'Open AI agent instructions' },
-    { method: 'PATCH', path: '/api/comments/:id', auth: true, description: 'Update/resolve comment' },
+    { method: 'PATCH', path: '/api/comments/:id', auth: true, description: 'Update/resolve comment (status: open|resolved)' },
+    { method: 'DELETE', path: '/api/comments/:id', auth: true, description: 'Delete a comment' },
 
     { method: 'GET', path: '/api/agent/catalog', auth: true, description: 'This catalog' },
   ],
