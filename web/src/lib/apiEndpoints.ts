@@ -21,6 +21,7 @@ export const API_ENDPOINT_GROUPS = [
       'DELETE /api/pages/:id',
       'PUT /api/pages/:id/blocks',
       'GET · PUT /api/pages/:id/markdown',
+      'POST /api/pages/:id/edit-section — surgical text replace',
       'GET /api/pages/:id/versions',
       'POST /api/pages/:id/restore/:versionId',
       'POST /api/pages/:id/duplicate',
@@ -45,6 +46,8 @@ export const API_ENDPOINT_GROUPS = [
     endpoints: [
       'GET · POST /api/pages/:id/comments',
       'GET /api/pages/:id/agent-comments?status=open',
+      'POST /api/comments/:id/apply — surgical edit + resolve',
+      'POST /api/pages/:id/edit-section — surgical text replace',
       'PATCH /api/comments/:id — resolve (status: resolved)',
       'DELETE /api/comments/:id',
     ],

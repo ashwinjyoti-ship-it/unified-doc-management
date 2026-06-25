@@ -233,8 +233,12 @@ POST /api/import-url
 | PATCH | `/api/pages/:id/database/rows/:rowId` | Update row |
 | DELETE | `/api/pages/:id/database/rows/:rowId` | Delete row |
 | POST/PATCH/DELETE | `/api/pages/:id/database/views/...` | Saved views |
+| GET | `/api/pages/:id/markdown` | Read page as markdown |
+| PUT | `/api/pages/:id/markdown` | Full page rewrite (avoid for comment edits) |
+| POST | `/api/pages/:id/edit-section` | Surgical text replace |
 | GET/POST | `/api/pages/:id/comments` | Comments |
 | GET | `/api/pages/:id/agent-comments?status=open` | AI agent instructions |
+| POST | `/api/comments/:id/apply` | Apply instruction surgically + resolve |
 | PATCH | `/api/comments/:id` | Resolve/update comment |
 | DELETE | `/api/comments/:id` | Delete comment |
 | GET | `/api/search?q=` | Search |
@@ -286,14 +290,37 @@ Selected text: "hello world"
 Instruction: Add a hyphen between these two words
 ```
 
-Mark resolved after editing (agent or user):
+**Preferred agent workflow (surgical edit):**
+
+```http
+POST /api/comments/{commentId}/apply
+{ "new_text": "hello-world" }
+```
+
+Uses `selection_quote` as `old_text`. Resolves the comment by default. Returns `open_count`.
+
+```http
+POST /api/pages/{pageId}/edit-section
+{
+  "old_text": "hello world",
+  "new_text": "hello-world",
+  "comment_id": "{commentId}",
+  "occurrence": "first",
+  "require_unique": false
+}
+```
+
+- `404` + `code: "not_found"` — `old_text` not in page (quote may not match markdown; try longer context)
+- `409` + `code: "ambiguous"` — multiple matches; use `require_unique: true` or longer `old_text`
+
+Resolve without editing:
 
 ```http
 PATCH /api/comments/{commentId}
 { "status": "resolved" }
 ```
 
-**Agent workflow:** Always fetch `?status=open` — resolved/addressed instructions are excluded. After applying an edit, PATCH `status: "resolved"`. The response includes `open_count` for remaining work.
+**Agent workflow:** Fetch `?status=open`. For each instruction, POST `/apply` with only the edited selection — **never PUT full markdown** for selection-scoped tasks.
 
 Delete a comment:
 
