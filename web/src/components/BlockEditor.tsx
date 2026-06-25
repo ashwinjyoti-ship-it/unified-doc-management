@@ -12,23 +12,21 @@ import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { common, createLowlight } from 'lowlight';
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash, MessageSquarePlus,
-} from 'lucide-react';
+import { Bold, Italic, Strikethrough, MessageSquarePlus } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
 import NamePromptModal from './NamePromptModal';
 import InsertPlacementModal from './InsertPlacementModal';
+import EditorToolbar from './EditorToolbar';
 import { useStore } from '../lib/store';
 import type { Page } from '../types';
 import { api } from '../lib/api';
 import AgentCommentPopover from './AgentCommentPopover';
-import Tooltip from './Tooltip';
 import { consumeEditorSeed } from '../lib/editorSeed';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import {
   applyNewPageSeed,
   defaultIconFor,
@@ -49,13 +47,21 @@ export { blocksToTiptapHtml } from '../lib/markdownBlocks';
 const lowlight = createLowlight(common);
 
 interface BlockEditorProps {
-  content: string;
+  initialContent: string;
   onChange: (html: string, json: object) => void;
+  onDirty?: () => void;
   editable?: boolean;
   pageId?: string;
 }
 
-export default function BlockEditor({ content, onChange, editable = true, pageId }: BlockEditorProps) {
+export interface BlockEditorHandle {
+  getSnapshot: () => { html: string; json: object } | null;
+}
+
+const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function BlockEditor(
+  { initialContent, onChange, onDirty, editable = true, pageId },
+  ref,
+) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [insertOpen, setInsertOpen] = useState(false);
   const [pageLinkOpen, setPageLinkOpen] = useState(false);
@@ -69,7 +75,19 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
   const navigate = useNavigate();
-  const { pages, createPage, loadPages } = useStore();
+  const createPage = useStore((s) => s.createPage);
+  const loadPages = useStore((s) => s.loadPages);
+  const pages = useStore((s) => s.pages);
+  const onChangeRef = useRef(onChange);
+  const onDirtyRef = useRef(onDirty);
+  onChangeRef.current = onChange;
+  onDirtyRef.current = onDirty;
+
+  const emitContent = useCallback((ed: import('@tiptap/react').Editor) => {
+    onChangeRef.current(ed.getHTML(), ed.getJSON());
+  }, []);
+
+  const debouncedEmitContent = useDebouncedCallback(emitContent, 300);
 
   const uploadImage = useCallback(async (file: File): Promise<string> => {
     const result = await api.uploadFile(file);
@@ -117,7 +135,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         onSlashItemSelected: handleSlashItemSelected,
       }),
     ],
-    content,
+    content: initialContent,
     editable,
     immediatelyRender: false,
     editorProps: {
@@ -148,9 +166,17 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       },
     },
     onUpdate: ({ editor: ed }) => {
-      onChange(ed.getHTML(), ed.getJSON());
+      onDirtyRef.current?.();
+      debouncedEmitContent(ed);
     },
-  });
+  }, [debouncedEmitContent, handleSlashItemSelected, uploadImage]);
+
+  useImperativeHandle(ref, () => ({
+    getSnapshot: () => {
+      if (!editor) return null;
+      return { html: editor.getHTML(), json: editor.getJSON() };
+    },
+  }), [editor]);
 
   const captureEditorSelection = useCallback((ed: NonNullable<typeof editor>) => {
     const { from, to, empty } = ed.state.selection;
@@ -198,6 +224,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
   const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
     if (!editor) return;
+    const pages = useStore.getState().pages;
     const parentId = resolveInsertParentId(pageId, pages);
     const title = defaultTitleFor('database');
     const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
@@ -208,10 +235,11 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       return;
     }
     editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
-  }, [editor, pageId, pages, createPage, loadPages, navigate]);
+  }, [editor, pageId, createPage, loadPages, navigate]);
 
   const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
     if (!editor) return;
+    const pages = useStore.getState().pages;
     const parentId = resolveInsertParentId(pageId, pages);
     const pageTitle = title || defaultTitleFor(key);
 
@@ -234,13 +262,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       sessionStorage.setItem(`pickImageFor:${page.id}`, '1');
     }
     navigate(`/page/${page.id}`);
-  }, [editor, pageId, pages, createPage, loadPages, navigate, createDatabaseAndLink]);
-
-  useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      editor.commands.setContent(content);
-    }
-  }, [content, editor]);
+  }, [editor, pageId, createPage, loadPages, navigate, createDatabaseAndLink]);
 
   useEffect(() => {
     if (!editor || !pageId) return;
@@ -343,18 +365,6 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     return <div className="text-mid-gray text-sm py-8">Loading editor...</div>;
   }
 
-  const ToolbarButton = ({ onClick, active, tooltip, children }: { onClick: () => void; active?: boolean; tooltip: string; children: React.ReactNode }) => (
-    <Tooltip text={tooltip}>
-      <button
-        type="button"
-        onClick={onClick}
-        className={`p-1.5 rounded-md transition-colors ${active ? 'bg-sage/40 text-forest' : 'hover:bg-linen text-charcoal'}`}
-      >
-        {children}
-      </button>
-    </Tooltip>
-  );
-
   const BubbleButton = ({ onMouseDown, active, title, children }: {
     onMouseDown: (e: React.MouseEvent) => void;
     active?: boolean;
@@ -381,91 +391,13 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         onChange={handleFileSelect}
       />
       {editable && (
-        <div className="mb-4 p-2 bg-linen/50 rounded-xl md:sticky md:top-0 md:z-10">
-          {/* Mobile: slim toolbar — Insert sheet + basic formatting */}
-          <div className="flex gap-1 md:hidden">
-            <Tooltip text="Insert block — headings, lists, images">
-              <button
-                type="button"
-                onClick={() => setInsertOpen(true)}
-                className="p-2 rounded-md bg-forest text-white hover:bg-dark-teal flex items-center gap-1 text-xs font-medium"
-              >
-                <Slash className="w-4 h-4" />
-                Insert
-              </button>
-            </Tooltip>
-            <ToolbarButton tooltip="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
-              <Bold className="w-4 h-4" />
-            </ToolbarButton>
-            <ToolbarButton tooltip="Italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
-              <Italic className="w-4 h-4" />
-            </ToolbarButton>
-          </div>
-          {/* Desktop: full toolbar */}
-          <div className="hidden md:flex flex-wrap gap-1">
-          <ToolbarButton tooltip="Bold (Ctrl+B)" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
-            <Bold className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Italic (Ctrl+I)" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
-            <Italic className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Strikethrough" onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
-            <Strikethrough className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Inline code" onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive('code')}>
-            <Code className="w-4 h-4" />
-          </ToolbarButton>
-          <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton tooltip="Heading 1 — large section title" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })}>
-            <Heading1 className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Heading 2 — medium section title" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })}>
-            <Heading2 className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Heading 3 — small section title" onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })}>
-            <Heading3 className="w-4 h-4" />
-          </ToolbarButton>
-          <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton tooltip="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
-            <List className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
-            <ListOrdered className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="To-do checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
-            <CheckSquare className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton
-            tooltip="Block quote"
-            onClick={() => {
-              if (editor.isActive('blockquote')) {
-                editor.chain().focus().lift('blockquote').run();
-              } else {
-                editor.chain().focus().setBlockquote().run();
-              }
-            }}
-            active={editor.isActive('blockquote')}
-          >
-            <Quote className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Horizontal divider line" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
-            <Minus className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Code block with syntax highlighting" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
-            <Code className="w-4 h-4" />
-          </ToolbarButton>
-          <div className="w-px bg-green-mist mx-1" />
-          <ToolbarButton tooltip="Insert image from file or URL" onClick={addImage} active={editor.isActive('image')}>
-            <ImageIcon className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Upload a file (image, PDF, document)" onClick={() => fileInputRef.current?.click()}>
-            <Upload className="w-4 h-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Insert a hyperlink" onClick={addLink} active={editor.isActive('link')}>
-            <Link2 className="w-4 h-4" />
-          </ToolbarButton>
-          </div>
-        </div>
+        <EditorToolbar
+          editor={editor}
+          onInsertOpen={() => setInsertOpen(true)}
+          onAddImage={addImage}
+          onUploadClick={() => fileInputRef.current?.click()}
+          onAddLink={addLink}
+        />
       )}
 
       {editable && !agentComment && (
@@ -592,7 +524,9 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       />
     </div>
   );
-}
+});
+
+export default memo(BlockEditor);
 
 export function tiptapJsonToBlocks(json: Record<string, unknown>): Array<{ type: string; content: object; orderIndex: number }> {
   const blocks: Array<{ type: string; content: object; orderIndex: number }> = [];

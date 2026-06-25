@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
-import BlockEditor, { tiptapJsonToBlocks, blocksToTiptapHtml } from './BlockEditor';
+import BlockEditor, { tiptapJsonToBlocks, blocksToTiptapHtml, type BlockEditorHandle } from './BlockEditor';
 import DatabaseView from './DatabaseView';
 import FolderView from './FolderView';
 import NamePromptModal from './NamePromptModal';
@@ -27,7 +28,21 @@ type CommentFilter = 'all' | 'open' | 'addressed';
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore();
+  const { user, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore(
+    useShallow((s) => ({
+      user: s.user,
+      markdownMode: s.markdownMode,
+      setMarkdownMode: s.setMarkdownMode,
+      online: s.online,
+      loadPages: s.loadPages,
+      loadFavorites: s.loadFavorites,
+      loadRecent: s.loadRecent,
+      loadTags: s.loadTags,
+      workspace: s.workspace,
+      pages: s.pages,
+      createPage: s.createPage,
+    })),
+  );
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState<Block[]>([]);
@@ -66,7 +81,12 @@ export default function PageView() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const editorJsonRef = useRef<object | null>(null);
   const editorHtmlRef = useRef<string>('');
-  const [editGeneration, setEditGeneration] = useState(0);
+  const editorRef = useRef<BlockEditorHandle>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const dirtyRef = useRef(false);
+  const [editorContentEpoch, setEditorContentEpoch] = useState(0);
+  const sidePanelRef = useRef<SidePanel>(null);
+  sidePanelRef.current = sidePanel;
 
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
@@ -95,6 +115,7 @@ export default function PageView() {
         setBlocks(data.blocks);
         setBacklinks(data.backlinks);
         setEditorContent(blocksToTiptapHtml(data.blocks));
+        setEditorContentEpoch((n) => n + 1);
         await cachePage(pageId, data);
         setDirty(false);
         setLastSaved(new Date());
@@ -106,6 +127,7 @@ export default function PageView() {
           setVisibility(cached.page.visibility);
           setBlocks(cached.blocks);
           setEditorContent(blocksToTiptapHtml(cached.blocks));
+          setEditorContentEpoch((n) => n + 1);
         } else {
           setLoadError('Page not available offline');
         }
@@ -207,10 +229,12 @@ export default function PageView() {
       try {
         const { blocks: saved } = await api.saveBlocks(pageId, blockData);
         setBlocks(saved);
-        setEditorContent(html);
+        dirtyRef.current = false;
         setDirty(false);
         setLastSaved(new Date());
-        loadVersionHistory();
+        if (sidePanelRef.current === 'history') {
+          loadVersionHistory();
+        }
       } finally {
         setSaving(false);
       }
@@ -221,6 +245,7 @@ export default function PageView() {
         entityId: pageId,
         payload: { pageId, blocks: blockData },
       });
+      dirtyRef.current = false;
       setDirty(false);
       setLastSaved(new Date());
     }
@@ -229,28 +254,53 @@ export default function PageView() {
   const handleEditorChange = useCallback((html: string, json: object) => {
     editorHtmlRef.current = html;
     editorJsonRef.current = json;
-    setDirty(true);
-    setEditGeneration((g) => g + 1);
   }, []);
+
+  const scheduleAutosave = useCallback(() => {
+    clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveNowRef.current?.();
+    }, 1500);
+  }, []);
+
+  const handleEditorDirty = useCallback(() => {
+    if (!dirtyRef.current) {
+      dirtyRef.current = true;
+      setDirty(true);
+    }
+    scheduleAutosave();
+  }, [scheduleAutosave]);
+
+  const saveNowRef = useRef<() => Promise<void>>(async () => {});
 
   const saveNow = useCallback(async () => {
     if (!pageId || saving) return;
+    const snapshot = editorRef.current?.getSnapshot();
+    if (snapshot) {
+      editorHtmlRef.current = snapshot.html;
+      editorJsonRef.current = snapshot.json;
+    }
     await saveTitle(title);
     if (markdownMode) {
       setSaving(true);
       try {
         await api.saveMarkdown(pageId, markdown);
+        dirtyRef.current = false;
         setDirty(false);
         setLastSaved(new Date());
         await loadPage();
-        loadVersionHistory();
+        if (sidePanelRef.current === 'history') {
+          loadVersionHistory();
+        }
       } finally {
         setSaving(false);
       }
     } else if (editorJsonRef.current) {
       await persistBlocks(editorHtmlRef.current, editorJsonRef.current);
     }
-  }, [pageId, saving, title, markdownMode, markdown, persistBlocks]);
+  }, [pageId, saving, title, markdownMode, markdown, persistBlocks, saveTitle, loadPage]);
+
+  saveNowRef.current = saveNow;
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -263,13 +313,9 @@ export default function PageView() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [saveNow]);
 
-  useEffect(() => {
-    if (!dirty || !pageId || pageType === 'folder' || pageType === 'database') return;
-    const timer = setTimeout(() => {
-      void saveNow();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [dirty, editGeneration, pageId, pageType, saveNow]);
+  useEffect(() => () => {
+    clearTimeout(autosaveTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -899,12 +945,26 @@ export default function PageView() {
           ) : markdownMode ? (
             <textarea
               value={markdown}
-              onChange={(e) => { setMarkdown(e.target.value); setDirty(true); setEditGeneration((g) => g + 1); }}
+              onChange={(e) => {
+                setMarkdown(e.target.value);
+                if (!dirtyRef.current) {
+                  dirtyRef.current = true;
+                  setDirty(true);
+                }
+                scheduleAutosave();
+              }}
               className="w-full min-h-[400px] font-mono text-sm bg-linen/50 rounded-xl p-4 border-none outline-none resize-none"
               placeholder="Write markdown here..."
             />
           ) : (
-            <BlockEditor content={editorContent} onChange={handleEditorChange} pageId={pageId} />
+            <BlockEditor
+              key={`${pageId}-${editorContentEpoch}`}
+              ref={editorRef}
+              initialContent={editorContent}
+              onChange={handleEditorChange}
+              onDirty={handleEditorDirty}
+              pageId={pageId}
+            />
           )}
 
           {backlinks.length > 0 && (
