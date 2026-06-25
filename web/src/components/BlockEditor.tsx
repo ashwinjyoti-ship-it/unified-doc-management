@@ -10,6 +10,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { common, createLowlight } from 'lowlight';
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -37,6 +38,13 @@ import {
   seedBlocksFor,
   type FunctionalSlashKey,
 } from '../lib/slashInsert';
+import {
+  convertPasteToTiptapHtml,
+  sanitizePastedHtml,
+  shouldPreferPlainTextPaste,
+} from '../lib/pasteMarkdown';
+
+export { blocksToTiptapHtml } from '../lib/markdownBlocks';
 
 const lowlight = createLowlight(common);
 
@@ -112,6 +120,33 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     content,
     editable,
     immediatelyRender: false,
+    editorProps: {
+      handlePaste(view, event) {
+        const clipboard = event.clipboardData;
+        if (!clipboard) return false;
+
+        const plain = clipboard.getData('text/plain');
+        const html = clipboard.getData('text/html');
+        if (!shouldPreferPlainTextPaste(plain, html)) return false;
+
+        event.preventDefault();
+        const tiptapHtml = convertPasteToTiptapHtml(plain, html);
+        const element = document.createElement('div');
+        element.innerHTML = tiptapHtml;
+        const slice = PMDOMParser.fromSchema(view.state.schema).parseSlice(element, { preserveWhitespace: 'full' });
+        const tr = view.state.tr.replaceSelection(slice).scrollIntoView();
+        view.dispatch(tr);
+        return true;
+      },
+      transformPastedHTML(html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const plain = doc.body.textContent ?? '';
+        if (shouldPreferPlainTextPaste(plain, html)) {
+          return convertPasteToTiptapHtml(plain, html);
+        }
+        return sanitizePastedHtml(html);
+      },
+    },
     onUpdate: ({ editor: ed }) => {
       onChange(ed.getHTML(), ed.getJSON());
     },
@@ -643,52 +678,4 @@ function getTextContent(node: Record<string, unknown>): string {
       return getTextContent(n);
     })
     .join('');
-}
-
-export function blocksToTiptapHtml(blocks: Array<{ type: string; content: string }>): string {
-  const parts: string[] = [];
-
-  for (const block of blocks) {
-    const content = JSON.parse(block.content || '{}');
-    switch (block.type) {
-      case 'heading1':
-        parts.push(`<h1>${escapeHtml(content.text || '')}</h1>`);
-        break;
-      case 'heading2':
-        parts.push(`<h2>${escapeHtml(content.text || '')}</h2>`);
-        break;
-      case 'heading3':
-        parts.push(`<h3>${escapeHtml(content.text || '')}</h3>`);
-        break;
-      case 'bulletList':
-        parts.push(`<ul>${(content.items || []).map((i: string) => `<li>${escapeHtml(i)}</li>`).join('')}</ul>`);
-        break;
-      case 'numberedList':
-        parts.push(`<ol>${(content.items || []).map((i: string) => `<li>${escapeHtml(i)}</li>`).join('')}</ol>`);
-        break;
-      case 'todo':
-        parts.push(`<ul data-type="taskList"><li data-type="taskItem" data-checked="${content.checked}">${escapeHtml(content.text || '')}</li></ul>`);
-        break;
-      case 'code':
-        parts.push(`<pre><code>${escapeHtml(content.code || '')}</code></pre>`);
-        break;
-      case 'quote':
-        parts.push(`<blockquote><p>${escapeHtml(content.text || '')}</p></blockquote>`);
-        break;
-      case 'divider':
-        parts.push('<hr>');
-        break;
-      case 'image':
-        parts.push(`<img src="${content.url || ''}" alt="${content.alt || ''}" />`);
-        break;
-      default:
-        parts.push(`<p>${escapeHtml(content.text || '')}</p>`);
-    }
-  }
-
-  return parts.join('') || '<p></p>';
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

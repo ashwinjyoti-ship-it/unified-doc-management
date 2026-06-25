@@ -667,16 +667,15 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   <th key={prop.id} className="text-left p-3 font-medium text-charcoal relative group">
                     <div className="flex items-center gap-1">
                       <span title={prop.type === 'rollup' ? rollupHeaderHint(prop) : undefined}>{prop.name}</span>
-                      <Tooltip text="Column options — rename, change type, or delete">
-                        <button
-                          type="button"
-                          onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
-                          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-linen"
-                          aria-label="Column options"
-                        >
-                          <MoreHorizontal className="w-3.5 h-3.5" />
-                        </button>
-                      </Tooltip>
+                      <button
+                        type="button"
+                        onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
+                        className="p-0.5 rounded opacity-30 group-hover:opacity-100 hover:bg-linen focus-visible:opacity-100"
+                        aria-label="Column options"
+                        title="Column options — rename, change type, or delete"
+                      >
+                        <MoreHorizontal className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     {columnMenuId === prop.id && (
                       <>
@@ -698,21 +697,21 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   </th>
                 ))}
                 <th className="p-2 w-10">
-                  <Tooltip text="Add a new column to this table">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingColumnId(null);
-                        setNewPropName('');
-                        setNewPropType('text');
-                        setNewPropOptions('');
-                        setAddingColumn(true);
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-linen text-forest"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </Tooltip>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingColumnId(null);
+                      setNewPropName('');
+                      setNewPropType('text');
+                      setNewPropOptions('');
+                      setAddingColumn(true);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-linen text-forest"
+                    title="Add a new column to this table"
+                    aria-label="Add a new column to this table"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
                 </th>
                 <th className="w-10" />
               </tr>
@@ -725,11 +724,15 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   ))}
                   <td className="p-2" />
                   <td className="p-2">
-                    <Tooltip text="Delete this row">
-                      <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </Tooltip>
+                    <button
+                      type="button"
+                      onClick={() => void deleteRow(row.id)}
+                      className="text-red-400 hover:text-red-600"
+                      title="Delete this row"
+                      aria-label="Delete this row"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

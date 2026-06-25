@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback, type ReactNode } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface TooltipProps {
   text: string;
@@ -9,27 +10,64 @@ interface TooltipProps {
 
 export default function Tooltip({ text, children, position = 'bottom', className = '' }: TooltipProps) {
   const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  const updateCoords = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const gap = 8;
+    switch (position) {
+      case 'top':
+        setCoords({ top: rect.top - gap, left: rect.left + rect.width / 2 });
+        break;
+      case 'left':
+        setCoords({ top: rect.top + rect.height / 2, left: rect.left - gap });
+        break;
+      case 'right':
+        setCoords({ top: rect.top + rect.height / 2, left: rect.right + gap });
+        break;
+      default:
+        setCoords({ top: rect.bottom + gap, left: rect.left + rect.width / 2 });
+    }
+  }, [position]);
 
   const show = useCallback(() => {
     clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setVisible(true), 400);
-  }, []);
+    timeoutRef.current = setTimeout(() => {
+      updateCoords();
+      setVisible(true);
+    }, 400);
+  }, [updateCoords]);
 
   const hide = useCallback(() => {
     clearTimeout(timeoutRef.current);
     setVisible(false);
   }, []);
 
-  const positionClasses = {
-    top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-    bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-    left: 'right-full top-1/2 -translate-y-1/2 mr-2',
-    right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-  };
+  useLayoutEffect(() => {
+    if (!visible) return;
+    updateCoords();
+    const onScrollOrResize = () => updateCoords();
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+    };
+  }, [visible, updateCoords]);
+
+  const transform =
+    position === 'top' ? 'translate(-50%, -100%)' :
+    position === 'left' ? 'translate(-100%, -50%)' :
+    position === 'right' ? 'translate(0, -50%)' :
+    'translate(-50%, 0)';
 
   return (
     <span
+      ref={triggerRef}
       className={`relative inline-flex ${className}`}
       onMouseEnter={show}
       onMouseLeave={hide}
@@ -37,21 +75,15 @@ export default function Tooltip({ text, children, position = 'bottom', className
       onBlur={hide}
     >
       {children}
-      {visible && text && (
+      {visible && text && coords && createPortal(
         <span
           role="tooltip"
-          className={`absolute z-50 px-2.5 py-1.5 text-xs font-medium text-tooltip-fg bg-tooltip-bg rounded-lg shadow-lg max-w-[220px] whitespace-normal text-left pointer-events-none ${positionClasses[position]}`}
+          style={{ position: 'fixed', top: coords.top, left: coords.left, transform, zIndex: 9999 }}
+          className="px-2.5 py-1.5 text-xs font-medium text-tooltip-fg bg-tooltip-bg rounded-lg shadow-lg max-w-[220px] whitespace-normal text-left pointer-events-none"
         >
           {text}
-          <span
-            className={`absolute w-2 h-2 bg-tooltip-bg rotate-45 ${
-              position === 'bottom' ? '-top-1 left-1/2 -translate-x-1/2' :
-              position === 'top' ? '-bottom-1 left-1/2 -translate-x-1/2' :
-              position === 'left' ? '-right-1 top-1/2 -translate-y-1/2' :
-              '-left-1 top-1/2 -translate-y-1/2'
-            }`}
-          />
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );
