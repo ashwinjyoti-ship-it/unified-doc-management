@@ -6,21 +6,82 @@ const comments = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>()
 
 comments.get('/pages/:pageId/comments', async (c) => {
   const pageId = c.req.param('pageId');
-  const result = await c.env.DB.prepare(`
+  const typeFilter = c.req.query('type');
+  const statusFilter = c.req.query('status');
+
+  let query = `
     SELECT c.*, u.name as author_name, u.avatar_url as author_avatar
     FROM comments c JOIN users u ON c.user_id = u.id
-    WHERE c.page_id = ? ORDER BY c.created_at ASC
-  `).bind(pageId).all();
+    WHERE c.page_id = ?
+  `;
+  const binds: string[] = [pageId];
+  if (typeFilter) {
+    query += ' AND c.comment_type = ?';
+    binds.push(typeFilter);
+  }
+  if (statusFilter) {
+    query += ' AND c.status = ?';
+    binds.push(statusFilter);
+  }
+  query += ' ORDER BY c.created_at ASC';
+
+  const result = await c.env.DB.prepare(query).bind(...binds).all();
   return c.json({ comments: result.results });
+});
+
+comments.get('/pages/:pageId/agent-comments', async (c) => {
+  const pageId = c.req.param('pageId');
+  const status = c.req.query('status') || 'open';
+  const result = await c.env.DB.prepare(`
+    SELECT c.*, u.name as author_name
+    FROM comments c JOIN users u ON c.user_id = u.id
+    WHERE c.page_id = ? AND c.comment_type = 'agent_instruction' AND c.status = ?
+    ORDER BY c.created_at ASC
+  `).bind(pageId, status).all();
+  return c.json({ comments: result.results });
+});
+
+comments.patch('/comments/:id', async (c) => {
+  const auth = c.get('auth');
+  const id = c.req.param('id');
+  const body = await c.req.json<{ status?: string; content?: string }>();
+
+  const existing = await c.env.DB.prepare('SELECT * FROM comments WHERE id = ?').bind(id).first<{ user_id: string }>();
+  if (!existing) return c.json({ error: 'Comment not found' }, 404);
+
+  const now = Math.floor(Date.now() / 1000);
+  if (body.content !== undefined) {
+    await c.env.DB.prepare('UPDATE comments SET content = ?, updated_at = ? WHERE id = ?')
+      .bind(body.content, now, id).run();
+  }
+  if (body.status !== undefined) {
+    await c.env.DB.prepare('UPDATE comments SET status = ?, updated_at = ? WHERE id = ?')
+      .bind(body.status, now, id).run();
+  }
+
+  const comment = await c.env.DB.prepare(`
+    SELECT c.*, u.name as author_name FROM comments c
+    JOIN users u ON c.user_id = u.id WHERE c.id = ?
+  `).bind(id).first();
+  return c.json({ comment });
 });
 
 comments.post('/pages/:pageId/comments', async (c) => {
   const auth = c.get('auth');
   const pageId = c.req.param('pageId');
-  const body = await c.req.json<{ content: string; blockId?: string }>();
+  const body = await c.req.json<{
+    content: string;
+    blockId?: string;
+    commentType?: 'discussion' | 'agent_instruction';
+    selectionQuote?: string;
+    selectionMeta?: object;
+    status?: string;
+  }>();
 
   const commentId = generateId();
   const now = Math.floor(Date.now() / 1000);
+  const commentType = body.commentType || 'discussion';
+  const status = body.status || (commentType === 'agent_instruction' ? 'open' : 'open');
 
   const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
   const mentions: string[] = [];
@@ -29,9 +90,23 @@ comments.post('/pages/:pageId/comments', async (c) => {
     mentions.push(match[2]);
   }
 
-  await c.env.DB.prepare(
-    'INSERT INTO comments (id, page_id, block_id, user_id, content, mentions, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(commentId, pageId, body.blockId || null, auth.user.id, body.content, JSON.stringify(mentions), now, now).run();
+  await c.env.DB.prepare(`
+    INSERT INTO comments (id, page_id, block_id, user_id, content, mentions, comment_type, selection_quote, selection_meta, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    commentId,
+    pageId,
+    body.blockId || null,
+    auth.user.id,
+    body.content,
+    JSON.stringify(mentions),
+    commentType,
+    body.selectionQuote || null,
+    body.selectionMeta ? JSON.stringify(body.selectionMeta) : null,
+    status,
+    now,
+    now,
+  ).run();
 
   for (const userId of mentions) {
     await c.env.DB.prepare(

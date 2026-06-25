@@ -27,7 +27,7 @@ export default function FolderView({
       <div className="flex items-center gap-3 mb-6">
         <span className="text-4xl">📁</span>
         <div>
-          <h2 className="text-lg font-medium text-mid-gray">Folder</h2>
+          <h2 className="text-lg font-medium text-charcoal">{folderTitle}</h2>
           <p className="text-sm text-mid-gray">{children.length} item{children.length === 1 ? '' : 's'}</p>
         </div>
       </div>

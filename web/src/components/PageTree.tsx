@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   DndContext,
@@ -18,7 +18,8 @@ import {
 } from 'lucide-react';
 import type { Page } from '../types';
 import { api } from '../lib/api';
-import { canNestUnder, getChildren, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
+import { canNestUnder, buildChildrenIndex, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
+import { useStore } from '../lib/store';
 import { pageTreeRowClass } from '../lib/pageSelection';
 import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 import SidebarItemMenu from './SidebarItemMenu';
@@ -35,7 +36,7 @@ interface PageTreeProps {
 
 function TreeRow({
   page,
-  pages,
+  childrenIndex,
   depth,
   bulkMode,
   selected,
@@ -47,7 +48,7 @@ function TreeRow({
   isProjectRoot = false,
 }: {
   page: Page;
-  pages: Page[];
+  childrenIndex: Map<string | null, Page[]>;
   depth: number;
   bulkMode?: boolean;
   selected?: Set<string>;
@@ -60,7 +61,7 @@ function TreeRow({
 }) {
   const [expanded, setExpanded] = useState(true);
   const { pageId } = useParams();
-  const children = getChildren(pages, page.id);
+  const children = childrenIndex.get(page.id) ?? [];
   const isActive = pageId === page.id;
   const isSelected = selected?.has(page.id);
   const dropId = `nest-${page.id}`;
@@ -140,7 +141,7 @@ function TreeRow({
         <TreeRow
           key={child.id}
           page={child}
-          pages={pages}
+          childrenIndex={childrenIndex}
           depth={depth + 1}
           bulkMode={bulkMode}
           selected={selected}
@@ -203,10 +204,14 @@ export default function PageTree({
   onNavigate,
   onDelete,
 }: PageTreeProps) {
+  const patchPageInStore = useStore((s) => s.patchPageInStore);
+  const childrenIndex = useMemo(() => buildChildrenIndex(pages), [pages]);
   const projects = getRootProjects(pages);
   const inboxPages = getInboxPages(pages);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overDropId, setOverDropId] = useState<string | null>(null);
+  const overDropRaf = useRef<number | null>(null);
+  const pendingOverId = useRef<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -218,7 +223,13 @@ export default function PageTree({
   };
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
-    setOverDropId(event.over ? String(event.over.id) : null);
+    const next = event.over ? String(event.over.id) : null;
+    pendingOverId.current = next;
+    if (overDropRaf.current != null) return;
+    overDropRaf.current = requestAnimationFrame(() => {
+      overDropRaf.current = null;
+      setOverDropId(pendingOverId.current);
+    });
   }, []);
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -246,10 +257,11 @@ export default function PageTree({
     if (!canNestUnder(pages, draggedId, newParentId)) return;
     if (dragged.parent_id === newParentId) return;
 
+    patchPageInStore(draggedId, { parent_id: newParentId });
     try {
       await api.updatePage(draggedId, { parentId: newParentId });
-      await onPagesChange();
     } catch (err) {
+      patchPageInStore(draggedId, { parent_id: dragged.parent_id });
       alert(err instanceof Error ? err.message : 'Could not move page');
     }
   };
@@ -286,7 +298,7 @@ export default function PageTree({
           <TreeRow
             key={page.id}
             page={page}
-            pages={pages}
+            childrenIndex={childrenIndex}
             depth={0}
             bulkMode={bulkMode}
             selected={selected}
@@ -322,7 +334,7 @@ export default function PageTree({
           <TreeRow
             key={page.id}
             page={page}
-            pages={pages}
+            childrenIndex={childrenIndex}
             depth={0}
             bulkMode={bulkMode}
             selected={selected}

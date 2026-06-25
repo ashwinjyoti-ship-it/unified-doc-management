@@ -14,6 +14,7 @@ export interface Page {
   type: 'page' | 'folder' | 'database';
   visibility: 'private' | 'shared' | 'public';
   content_md: string | null;
+  is_row_page?: number;
   created_by: string;
   created_at: number;
   updated_at: number;
@@ -69,6 +70,10 @@ export interface Comment {
   user_id: string;
   content: string;
   author_name: string;
+  comment_type?: 'discussion' | 'agent_instruction';
+  selection_quote?: string | null;
+  selection_meta?: string | null;
+  status?: 'open' | 'resolved';
   created_at: number;
 }
 

@@ -15,7 +15,7 @@ import { useEffect, useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Slash, MessageSquarePlus,
 } from 'lucide-react';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
@@ -25,6 +25,7 @@ import InsertPlacementModal from './InsertPlacementModal';
 import { useStore } from '../lib/store';
 import type { Page } from '../types';
 import { api } from '../lib/api';
+import AgentCommentPopover from './AgentCommentPopover';
 import Tooltip from './Tooltip';
 import { consumeEditorSeed } from '../lib/editorSeed';
 import {
@@ -55,6 +56,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     item: SlashCommandItem;
     range: { from: number; to: number };
   } | null>(null);
+  const [agentComment, setAgentComment] = useState<{ quote: string; from: number; to: number } | null>(null);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
   const navigate = useNavigate();
@@ -372,7 +374,7 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
 
       {editable && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
-          <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg">
+          <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg items-center">
             <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
               <Bold className="w-4 h-4 text-tooltip-fg" />
             </ToolbarButton>
@@ -382,8 +384,38 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
             <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
               <Strikethrough className="w-4 h-4 text-tooltip-fg" />
             </ToolbarButton>
+            {pageId && (
+              <>
+                <span className="w-px h-5 bg-white/20 mx-0.5" />
+                <ToolbarButton
+                  tooltip="Comment for AI agent"
+                  onClick={() => {
+                    const { from, to } = editor.state.selection;
+                    const quote = editor.state.doc.textBetween(from, to, ' ');
+                    if (quote.trim()) setAgentComment({ quote, from, to });
+                  }}
+                >
+                  <MessageSquarePlus className="w-4 h-4 text-amber-300" />
+                </ToolbarButton>
+              </>
+            )}
           </div>
         </BubbleMenu>
+      )}
+
+      {agentComment && pageId && (
+        <AgentCommentPopover
+          quote={agentComment.quote}
+          onCancel={() => setAgentComment(null)}
+          onSubmit={async (instruction) => {
+            await api.addComment(pageId, instruction, undefined, {
+              commentType: 'agent_instruction',
+              selectionQuote: agentComment.quote,
+              selectionMeta: { from: agentComment.from, to: agentComment.to },
+            });
+            setAgentComment(null);
+          }}
+        />
       )}
 
       <EditorContent editor={editor} className="prose-forest max-w-none" />

@@ -166,10 +166,8 @@ pages.patch('/pages/:pageId', async (c) => {
 
   await syncRowPageTitle(c.env.DB, pageId, title);
 
-  const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all<Block>();
-  const md = blocksToMarkdown(blocks.results || []);
-  await c.env.DB.prepare('UPDATE pages SET content_md = ? WHERE id = ?').bind(md, pageId).run();
-  await updatePageFts(c.env.DB, pageId, title, md);
+  const contentMd = page.content_md || '';
+  await updatePageFts(c.env.DB, pageId, title, contentMd);
 
   const updated = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first<Page>();
   return c.json({ page: updated });

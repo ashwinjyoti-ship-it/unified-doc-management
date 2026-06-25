@@ -43,6 +43,9 @@ interface AppState {
   loadWorkspace: () => Promise<void>;
   renameWorkspace: (name: string) => Promise<void>;
   loadPages: () => Promise<void>;
+  addPageToStore: (page: Page) => void;
+  patchPageInStore: (pageId: string, patch: Partial<Page>) => void;
+  removePageFromStore: (pageId: string) => void;
   loadFavorites: () => Promise<void>;
   loadRecent: () => Promise<void>;
   loadTags: () => Promise<void>;
@@ -168,6 +171,20 @@ export const useStore = create<AppState>((set, get) => ({
     if (!workspace) return;
     const { pages } = await api.getPages(workspace.id);
     set({ pages });
+  },
+
+  patchPageInStore: (pageId, patch) => {
+    set({
+      pages: get().pages.map((p) => (p.id === pageId ? { ...p, ...patch } : p)),
+    });
+  },
+
+  addPageToStore: (page) => {
+    set({ pages: [...get().pages, page] });
+  },
+
+  removePageFromStore: (pageId) => {
+    set({ pages: get().pages.filter((p) => p.id !== pageId) });
   },
 
   loadFavorites: async () => {

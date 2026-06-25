@@ -1,7 +1,23 @@
 import type { Page } from '../types';
 
+/** Children for sidebar tree — excludes hidden database row backing pages */
 export function getChildren(pages: Page[], parentId: string | null): Page[] {
-  return pages.filter((p) => p.parent_id === parentId);
+  return pages.filter((p) => p.parent_id === parentId && !p.is_row_page);
+}
+
+export function buildChildrenIndex(pages: Page[]): Map<string | null, Page[]> {
+  const index = new Map<string | null, Page[]>();
+  for (const page of pages) {
+    if (page.is_row_page) continue;
+    const key = page.parent_id;
+    const list = index.get(key) ?? [];
+    list.push(page);
+    index.set(key, list);
+  }
+  for (const list of index.values()) {
+    list.sort((a, b) => a.title.localeCompare(b.title));
+  }
+  return index;
 }
 
 /** Top-level folders — treated as projects in the sidebar */

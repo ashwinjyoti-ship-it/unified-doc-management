@@ -227,11 +227,15 @@ POST /api/import-url
 | POST | `/api/pages/:id/restore/:versionId` | Restore version |
 | GET | `/api/pages/:id/database` | Full database state |
 | POST | `/api/pages/:id/database/properties` | Add column |
+| PATCH | `/api/pages/:id/database/properties/:propId` | Rename/change column |
+| DELETE | `/api/pages/:id/database/properties/:propId` | Delete column |
 | POST | `/api/pages/:id/database/rows` | Add row |
 | PATCH | `/api/pages/:id/database/rows/:rowId` | Update row |
 | DELETE | `/api/pages/:id/database/rows/:rowId` | Delete row |
 | POST/PATCH/DELETE | `/api/pages/:id/database/views/...` | Saved views |
 | GET/POST | `/api/pages/:id/comments` | Comments |
+| GET | `/api/pages/:id/agent-comments?status=open` | AI agent instructions |
+| PATCH | `/api/comments/:id` | Resolve/update comment |
 | GET | `/api/search?q=` | Search |
 | GET | `/api/notifications` | Notifications |
 | GET | `/api/favorites` | Favorites |
@@ -244,6 +248,37 @@ POST /api/import-url
 | GET/POST/DELETE | `/api/pages/:id/tags` | Page tags |
 | POST | `/api/uploads` | File upload |
 | GET | `/api/agent/catalog` | Machine-readable catalog |
+
+## Concepts for agents
+
+### Row identity
+- **Stable row ID:** `database_rows.id` (UUID) — use in API paths and relation values.
+- **Display title:** linked page title → **Name** property → `"Untitled"`.
+- **Property values:** keyed by property UUID in `rows[].properties`, not column name.
+- Row backing pages have `is_row_page: 1` and are hidden from the sidebar tree.
+
+### Inbox
+Pages with `parent_id: null` and `type !== 'folder'` appear in Inbox (Quick Capture, Daily Note, drag to inbox).
+
+### Wikilinks
+`[[Page Title]]` in block content creates backlinks when saved. Optional form: `[[Title|page-id]]`.
+
+### Rollups
+Read-only computed values on `GET .../database` → `rollupValues[rowId][propId]`. Aggregates linked rows via a relation property.
+
+### AI agent instructions
+Users can select text and add `agent_instruction` comments. Fetch open items:
+
+```http
+GET /api/pages/{pageId}/agent-comments?status=open
+```
+
+Mark resolved after editing:
+
+```http
+PATCH /api/comments/{commentId}
+{ "status": "resolved" }
+```
 
 ## Error handling
 
