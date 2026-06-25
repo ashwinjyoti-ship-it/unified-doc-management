@@ -39,9 +39,10 @@ const FILTER_OPS: { value: FilterOperator; label: string }[] = [
 
 interface DatabaseViewProps {
   pageId: string;
+  embedded?: boolean;
 }
 
-export default function DatabaseView({ pageId }: DatabaseViewProps) {
+export default function DatabaseView({ pageId, embedded = false }: DatabaseViewProps) {
   const addPageToStore = useStore((s) => s.addPageToStore);
   const removePageFromStore = useStore((s) => s.removePageFromStore);
   const [properties, setProperties] = useState<DatabaseProperty[]>([]);
@@ -501,10 +502,10 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
     </button>
   );
 
-  if (loading) return <div className="p-8 text-mid-gray">Loading database...</div>;
+  if (loading) return <div className={`${embedded ? 'p-4' : 'p-8'} text-mid-gray`}>Loading database...</div>;
 
   return (
-    <div className="space-y-4">
+    <div className={embedded ? 'space-y-3' : 'space-y-4'}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 bg-linen rounded-xl p-1 flex-wrap">
           {viewTabs.map(({ id, icon: Icon, label }) => (
