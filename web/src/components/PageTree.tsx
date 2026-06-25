@@ -23,6 +23,7 @@ import { useStore } from '../lib/store';
 import { pageTreeRowClass } from '../lib/pageSelection';
 import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 import SidebarItemMenu from './SidebarItemMenu';
+import Tooltip from './Tooltip';
 
 interface PageTreeProps {
   pages: Page[];
@@ -31,6 +32,7 @@ interface PageTreeProps {
   onToggleSelect?: (id: string) => void;
   onPagesChange: () => Promise<void>;
   onNavigate: (pageId: string) => void;
+  onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
 }
 
@@ -44,6 +46,7 @@ function TreeRow({
   activeDragId,
   overDropId,
   onNavigate,
+  onRename,
   onDelete,
   isProjectRoot = false,
 }: {
@@ -56,6 +59,7 @@ function TreeRow({
   activeDragId: string | null;
   overDropId: string | null;
   onNavigate: (pageId: string) => void;
+  onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
   isProjectRoot?: boolean;
 }) {
@@ -89,15 +93,17 @@ function TreeRow({
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {!bulkMode && (
-          <button
-            type="button"
-            className="p-0.5 shrink-0 cursor-grab active:cursor-grabbing text-mid-gray hover:text-charcoal touch-none"
-            {...listeners}
-            {...attributes}
-            aria-label="Drag to reorder"
-          >
-            <GripVertical className="w-3.5 h-3.5" />
-          </button>
+          <Tooltip text="Drag to move this page into a folder or inbox">
+            <button
+              type="button"
+              className="p-0.5 shrink-0 cursor-grab active:cursor-grabbing text-mid-gray hover:text-charcoal touch-none"
+              {...listeners}
+              {...attributes}
+              aria-label="Drag to reorder"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
         )}
         {bulkMode && (
           <button
@@ -118,12 +124,14 @@ function TreeRow({
           className="flex-1 flex items-center gap-2 px-1 py-1.5 min-w-0"
         >
           {children.length > 0 ? (
-            <span
-              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-              className="cursor-pointer shrink-0"
-            >
-              {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            </span>
+            <Tooltip text={expanded ? 'Collapse nested pages' : 'Expand nested pages'}>
+              <span
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+                className="cursor-pointer shrink-0"
+              >
+                {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </span>
+            </Tooltip>
           ) : (
             <span className="w-3 shrink-0" />
           )}
@@ -132,6 +140,7 @@ function TreeRow({
         </button>
         <SidebarItemMenu
           label={page.title}
+          onRename={() => onRename(page)}
           onDelete={() => onDelete(page)}
           disabled={bulkMode}
           light={isActive}
@@ -149,6 +158,7 @@ function TreeRow({
           activeDragId={activeDragId}
           overDropId={overDropId}
           onNavigate={onNavigate}
+          onRename={onRename}
           onDelete={onDelete}
         />
       ))}
@@ -202,6 +212,7 @@ export default function PageTree({
   onToggleSelect,
   onPagesChange,
   onNavigate,
+  onRename,
   onDelete,
 }: PageTreeProps) {
   const patchPageInStore = useStore((s) => s.patchPageInStore);
@@ -306,6 +317,7 @@ export default function PageTree({
             activeDragId={activeDragId}
             overDropId={overDropId}
             onNavigate={onNavigate}
+            onRename={onRename}
             onDelete={onDelete}
             isProjectRoot
           />
@@ -342,6 +354,7 @@ export default function PageTree({
             activeDragId={activeDragId}
             overDropId={overDropId}
             onNavigate={onNavigate}
+            onRename={onRename}
             onDelete={onDelete}
           />
         ))}

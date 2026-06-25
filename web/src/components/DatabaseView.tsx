@@ -27,6 +27,7 @@ import {
 import DatabaseTextCell from './DatabaseTextCell';
 import RelationPicker from './RelationPicker';
 import DatabaseRowPanel from './DatabaseRowPanel';
+import Tooltip from './Tooltip';
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -445,6 +446,18 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
         />
       );
     }
+    if (prop.type === 'long_text') {
+      return (
+        <DatabaseTextCell
+          rowId={row.id}
+          propId={prop.id}
+          value={String(getPropValue(row, prop.id) ?? '')}
+          type="long_text"
+          onPersist={persistCell}
+          className="w-full bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal db-cell-input"
+        />
+      );
+    }
     return (
       <DatabaseTextCell
         rowId={row.id}
@@ -495,22 +508,25 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 bg-linen rounded-xl p-1 flex-wrap">
           {viewTabs.map(({ id, icon: Icon, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => { setView(id); setActiveViewId(null); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                view === id ? 'bg-warm-white shadow-sm text-forest font-medium' : 'text-warm-gray hover:text-charcoal'
-              }`}
-            >
-              <Icon className="w-4 h-4" /> {label}
-            </button>
+            <Tooltip key={id} text={`Switch to ${label.toLowerCase()} view`}>
+              <button
+                type="button"
+                onClick={() => { setView(id); setActiveViewId(null); }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                  view === id ? 'bg-warm-white shadow-sm text-forest font-medium' : 'text-warm-gray hover:text-charcoal'
+                }`}
+              >
+                <Icon className="w-4 h-4" /> {label}
+              </button>
+            </Tooltip>
           ))}
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button type="button" onClick={addRow} className="btn-primary text-sm flex items-center gap-1">
-            <Plus className="w-4 h-4" /> New Row
-          </button>
+          <Tooltip text="Add a new row to this database">
+            <button type="button" onClick={addRow} className="btn-primary text-sm flex items-center gap-1">
+              <Plus className="w-4 h-4" /> New Row
+            </button>
+          </Tooltip>
         </div>
       </div>
 
@@ -532,9 +548,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
             ))}
           </select>
         )}
-        <button type="button" onClick={() => setShowSaveView(true)} className="btn-secondary text-xs flex items-center gap-1">
-          <Save className="w-3.5 h-3.5" /> Save view
-        </button>
+        <Tooltip text="Save the current filters, sort, and view type">
+          <button type="button" onClick={() => setShowSaveView(true)} className="btn-secondary text-xs flex items-center gap-1">
+            <Save className="w-3.5 h-3.5" /> Save view
+          </button>
+        </Tooltip>
         {activeViewId && (
           <button type="button" onClick={() => void updateActiveView()} className="btn-secondary text-xs">
             Update view
@@ -649,14 +667,16 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   <th key={prop.id} className="text-left p-3 font-medium text-charcoal relative group">
                     <div className="flex items-center gap-1">
                       <span title={prop.type === 'rollup' ? rollupHeaderHint(prop) : undefined}>{prop.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
-                        className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-linen"
-                        aria-label="Column options"
-                      >
-                        <MoreHorizontal className="w-3.5 h-3.5" />
-                      </button>
+                      <Tooltip text="Column options — rename, change type, or delete">
+                        <button
+                          type="button"
+                          onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
+                          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-linen"
+                          aria-label="Column options"
+                        >
+                          <MoreHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                      </Tooltip>
                     </div>
                     {columnMenuId === prop.id && (
                       <>
@@ -678,20 +698,21 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   </th>
                 ))}
                 <th className="p-2 w-10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingColumnId(null);
-                      setNewPropName('');
-                      setNewPropType('text');
-                      setNewPropOptions('');
-                      setAddingColumn(true);
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-linen text-forest"
-                    title="Add column"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
+                  <Tooltip text="Add a new column to this table">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingColumnId(null);
+                        setNewPropName('');
+                        setNewPropType('text');
+                        setNewPropOptions('');
+                        setAddingColumn(true);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-linen text-forest"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </Tooltip>
                 </th>
                 <th className="w-10" />
               </tr>
@@ -704,9 +725,11 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
                   ))}
                   <td className="p-2" />
                   <td className="p-2">
-                    <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <Tooltip text="Delete this row">
+                      <button type="button" onClick={() => void deleteRow(row.id)} className="text-red-400 hover:text-red-600">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </Tooltip>
                   </td>
                 </tr>
               ))}
@@ -871,6 +894,7 @@ export default function DatabaseView({ pageId }: DatabaseViewProps) {
               className="w-full px-3 py-2 rounded-lg border border-green-mist mb-3 outline-none"
             >
               <option value="text">Text</option>
+              <option value="long_text">Long text</option>
               <option value="number">Number</option>
               <option value="date">Date</option>
               <option value="select">Select</option>

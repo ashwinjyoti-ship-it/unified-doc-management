@@ -52,23 +52,35 @@ function HomePage() {
         Welcome to <span className="text-forest">Unified Doc Management</span>
       </h1>
       <p className="text-warm-gray mb-6 max-w-md">
-        Create a project to organize pages, databases, and folders. Daily notes and quick captures stay in Inbox.
+        New pages and databases open in Inbox. Create a project folder when you want to organize them later.
       </p>
-      <button
-        onClick={async () => {
-          if (!workspace) return;
-          const project = await createProject(workspace.id, {
-            projectTitle: 'My First Project',
-            projectIcon: '🗂️',
-            child: { type: 'page', title: 'My First Page', icon: '✨' },
-          });
-          await loadPages();
-          navigate(`/page/${project.id}`, { replace: true });
-        }}
-        className="btn-primary"
-      >
-        Create Your First Project
-      </button>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button
+          onClick={async () => {
+            if (!workspace) return;
+            const page = await createPage({ type: 'page', title: 'Untitled', icon: '📄' });
+            await loadPages();
+            navigate(`/page/${page.id}`, { replace: true });
+          }}
+          className="btn-primary"
+        >
+          New Page
+        </button>
+        <button
+          onClick={async () => {
+            if (!workspace) return;
+            const project = await createProject(workspace.id, {
+              projectTitle: 'My First Project',
+              projectIcon: '🗂️',
+            });
+            await loadPages();
+            navigate(`/page/${project.id}`, { replace: true });
+          }}
+          className="btn-secondary"
+        >
+          New Project
+        </button>
+      </div>
     </div>
   );
 }

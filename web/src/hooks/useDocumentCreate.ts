@@ -23,30 +23,14 @@ export function useDocumentCreate() {
 
   const handleNewPage = async (parentId?: string) => {
     if (!workspace) return;
-    if (parentId) {
-      const page = await createPage({ type: 'page', title: 'Untitled', parentId });
-      await afterCreate(page.id);
-      return;
-    }
-    const project = await createProject(workspace.id, {
-      projectTitle: 'Untitled',
-      child: { type: 'page', title: 'Untitled' },
-    });
-    await afterCreate(project.id);
+    const page = await createPage({ type: 'page', title: 'Untitled', parentId });
+    await afterCreate(page.id);
   };
 
   const handleNewDatabase = async (parentId?: string) => {
     if (!workspace) return;
-    if (parentId) {
-      const page = await createPage({ type: 'database', title: 'New Database', parentId });
-      await afterCreate(page.id);
-      return;
-    }
-    const project = await createProject(workspace.id, {
-      projectTitle: 'New Database',
-      child: { type: 'database', title: 'New Database' },
-    });
-    await afterCreate(project.id);
+    const page = await createPage({ type: 'database', title: 'New Database', parentId });
+    await afterCreate(page.id);
   };
 
   const handleNewFolderRequest = (parentId?: string) => {

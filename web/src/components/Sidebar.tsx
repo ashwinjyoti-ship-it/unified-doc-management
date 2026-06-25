@@ -34,6 +34,7 @@ function PageListSection({
   pages,
   tooltip,
   onNavigate,
+  onRename,
   onDelete,
   bulkMode,
 }: {
@@ -43,6 +44,7 @@ function PageListSection({
   pages: Page[];
   tooltip: string;
   onNavigate: (pageId: string) => void;
+  onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
   bulkMode?: boolean;
 }) {
@@ -72,6 +74,7 @@ function PageListSection({
               </button>
               <SidebarItemMenu
                 label={p.title}
+                onRename={() => onRename(p)}
                 onDelete={() => onDelete(p)}
                 disabled={bulkMode}
                 light={active}
@@ -88,7 +91,7 @@ export default function Sidebar() {
   const {
     pages, favorites, recent, workspace, sidebarOpen, setSidebarOpen,
     createPage, logout, online, notifications, setSearchOpen,
-    loadPages, loadFavorites, loadRecent,
+    loadPages, loadFavorites, loadRecent, patchPageInStore,
   } = useStore();
   const navigate = useNavigate();
   const { pageId } = useParams();
@@ -108,6 +111,7 @@ export default function Sidebar() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [operationLabel, setOperationLabel] = useState<string | null>(null);
   const [moveModal, setMoveModal] = useState<string[] | null>(null);
+  const [renameModal, setRenameModal] = useState<Page | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [importModal, setImportModal] = useState<{
     sourceLabel: string;
@@ -119,6 +123,13 @@ export default function Sidebar() {
   const navigateToPage = (id: string) => {
     navigate(`/page/${id}`);
     closeSidebarOnMobile(setSidebarOpen);
+  };
+
+  const handleRenamePage = async (name: string) => {
+    if (!renameModal) return;
+    await api.updatePage(renameModal.id, { title: name });
+    patchPageInStore(renameModal.id, { title: name });
+    setRenameModal(null);
   };
 
   const handleDeletePage = async (page: Page) => {
@@ -277,9 +288,11 @@ export default function Sidebar() {
         <div className="p-4 border-b border-green-mist shrink-0">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-forest truncate">{workspace?.name || 'Workspace'}</h2>
-            <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2 -mr-1 rounded-lg hover:bg-linen">
-              <X className="w-5 h-5" />
-            </button>
+            <Tooltip text="Close sidebar">
+              <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2 -mr-1 rounded-lg hover:bg-linen">
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
           <div className="flex gap-2">
             <NewMenuDropdown
@@ -341,6 +354,7 @@ export default function Sidebar() {
             pages={favorites}
             tooltip="Pages you've pinned for quick access — click to collapse"
             onNavigate={navigateToPage}
+            onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
             bulkMode={bulkMode}
           />
@@ -351,6 +365,7 @@ export default function Sidebar() {
             pages={recent.filter((r) => !favorites.some((f) => f.id === r.id))}
             tooltip="Pages you've opened recently — click to collapse"
             onNavigate={navigateToPage}
+            onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
             bulkMode={bulkMode}
           />
@@ -362,6 +377,7 @@ export default function Sidebar() {
             onToggleSelect={toggleSelect}
             onPagesChange={loadPages}
             onNavigate={navigateToPage}
+            onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
           />
         </div>
@@ -429,6 +445,17 @@ export default function Sidebar() {
           defaultIcon={folderModal.kind === 'project' ? '🗂️' : '📁'}
           onClose={() => setFolderModal(null)}
           onConfirm={(name, icon) => void confirmNewFolder(name, icon)}
+        />
+      )}
+      {renameModal && (
+        <NamePromptModal
+          open
+          title="Rename"
+          label="New name"
+          defaultValue={renameModal.title}
+          confirmLabel="Rename"
+          onClose={() => setRenameModal(null)}
+          onConfirm={(name) => void handleRenamePage(name)}
         />
       )}
       {moveModal && (

@@ -5,7 +5,7 @@ interface DatabaseTextCellProps {
   rowId: string;
   propId: string;
   value: string;
-  type: 'text' | 'number';
+  type: 'text' | 'number' | 'long_text';
   onPersist: (rowId: string, propId: string, value: string) => void;
   className?: string;
 }
@@ -19,6 +19,19 @@ function DatabaseTextCell({ rowId, propId, value, type, onPersist, className }: 
     value,
     onPersist: persist,
   });
+
+  if (type === 'long_text') {
+    return (
+      <textarea
+        value={local}
+        rows={3}
+        onFocus={onFocus}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
+        className={`${className} resize-y min-h-[4rem]`}
+      />
+    );
+  }
 
   return (
     <input
