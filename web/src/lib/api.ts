@@ -250,7 +250,7 @@ class ApiClient {
   }
 
   getAgentComments(pageId: string, status = 'open') {
-    return this.request<{ comments: Comment[] }>(
+    return this.request<{ comments: Comment[]; status: string; open_count: number }>(
       `/pages/${pageId}/agent-comments?status=${encodeURIComponent(status)}`,
     );
   }
@@ -260,6 +260,10 @@ class ApiClient {
       `/comments/${commentId}`,
       { method: 'PATCH', body: JSON.stringify(data) },
     );
+  }
+
+  deleteComment(commentId: string) {
+    return this.request<{ ok: boolean }>(`/comments/${commentId}`, { method: 'DELETE' });
   }
 
   search(q: string) {

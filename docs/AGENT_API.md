@@ -285,11 +285,19 @@ Selected text: "hello world"
 Instruction: Add a hyphen between these two words
 ```
 
-Mark resolved after editing:
+Mark resolved after editing (agent or user):
 
 ```http
 PATCH /api/comments/{commentId}
 { "status": "resolved" }
+```
+
+**Agent workflow:** Always fetch `?status=open` — resolved/addressed instructions are excluded. After applying an edit, PATCH `status: "resolved"`. The response includes `open_count` for remaining work.
+
+Delete a comment:
+
+```http
+DELETE /api/comments/{commentId}
 ```
 
 ## Error handling
