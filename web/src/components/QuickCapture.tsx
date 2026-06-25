@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { Zap, X, CheckSquare, FileText, Camera } from 'lucide-react';
+import Tooltip from './Tooltip';
 
 export default function QuickCapture() {
   const [open, setOpen] = useState(false);
@@ -40,13 +41,15 @@ export default function QuickCapture() {
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="fixed fixed-bottom-safe right-6 w-14 h-14 bg-forest text-white rounded-full shadow-lg flex items-center justify-center z-40 md:hidden hover:bg-dark-teal transition-colors"
-        aria-label="Quick capture"
-      >
-        <Zap className="w-6 h-6" />
-      </button>
+      <Tooltip text="Quickly capture a note or task to Inbox">
+        <button
+          onClick={() => setOpen(true)}
+          className="fixed fixed-bottom-safe right-6 w-14 h-14 bg-forest text-white rounded-full shadow-lg flex items-center justify-center z-40 md:hidden hover:bg-dark-teal transition-colors"
+          aria-label="Quick capture"
+        >
+          <Zap className="w-6 h-6" />
+        </button>
+      </Tooltip>
 
       {open && (
         <div className="fixed inset-0 bg-black/30 z-50 flex items-end md:items-center justify-center p-0 md:p-4" onClick={() => setOpen(false)}>

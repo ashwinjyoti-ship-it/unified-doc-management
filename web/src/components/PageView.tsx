@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
@@ -11,7 +11,8 @@ import Tooltip from './Tooltip';
 import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
-import type { Block, Comment, Tag } from '../types';
+import { folderToMarkdown, databaseToMarkdown, markdownToPdf } from '../lib/pageExport';
+import type { Block, Comment, Tag, DatabaseProperty } from '../types';
 import { jsPDF } from 'jspdf';
 import {
   History, MessageSquare, FileCode, Link2, Send, RotateCcw,
@@ -61,6 +62,7 @@ export default function PageView() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const editorJsonRef = useRef<object | null>(null);
   const editorHtmlRef = useRef<string>('');
+  const [editGeneration, setEditGeneration] = useState(0);
 
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
@@ -212,6 +214,7 @@ export default function PageView() {
     editorHtmlRef.current = html;
     editorJsonRef.current = json;
     setDirty(true);
+    setEditGeneration((g) => g + 1);
   }, []);
 
   const saveNow = useCallback(async () => {
@@ -243,6 +246,55 @@ export default function PageView() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [saveNow]);
+
+  useEffect(() => {
+    if (!dirty || !pageId || pageType === 'folder' || pageType === 'database') return;
+    const timer = setTimeout(() => {
+      void saveNow();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [dirty, editGeneration, pageId, pageType, saveNow]);
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
+  );
+
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return;
+    const leave = window.confirm(
+      'You have unsaved changes. Leave this page without saving?',
+    );
+    if (leave) blocker.proceed();
+    else blocker.reset();
+  }, [blocker]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (dirty && !saving) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty, saving]);
+
+  const getExportContent = useCallback(async () => {
+    if (!pageId) throw new Error('No page');
+    if (pageType === 'folder') {
+      return { markdown: folderToMarkdown(title, pages, pageId), title };
+    }
+    if (pageType === 'database') {
+      const data = await api.getDatabase(pageId);
+      const nameProp = data.properties.find((p) => p.name === 'Name' && p.type === 'text') as DatabaseProperty | undefined;
+      return {
+        markdown: databaseToMarkdown(title, data.properties, data.rows, nameProp),
+        title,
+      };
+    }
+    return api.getMarkdown(pageId);
+  }, [pageId, pageType, title, pages]);
 
   const toggleMarkdown = async () => {
     if (!pageId) return;
@@ -317,7 +369,7 @@ export default function PageView() {
     setExporting(true);
     startOperation('Exporting Markdown...');
     try {
-      const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
+      const { markdown: md, title: pageTitle } = await getExportContent();
       if (operationCancelledRef.current) return;
       const blob = new Blob([md], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
@@ -339,20 +391,10 @@ export default function PageView() {
     setExporting(true);
     startOperation('Generating PDF...');
     try {
-      const { markdown: md, title: pageTitle } = await api.getMarkdown(pageId);
+      const { markdown: md, title: pageTitle } = await getExportContent();
       if (operationCancelledRef.current) return;
       const doc = new jsPDF();
-      doc.setFontSize(16);
-      doc.text(pageTitle || 'Untitled', 10, 15);
-      doc.setFontSize(10);
-      const lines = doc.splitTextToSize(md, 180);
-      let y = 25;
-      for (const line of lines) {
-        if (operationCancelledRef.current) return;
-        if (y > 280) { doc.addPage(); y = 15; }
-        doc.text(line, 10, y);
-        y += 5;
-      }
+      markdownToPdf(doc, pageTitle, md);
       if (!operationCancelledRef.current) {
         doc.save(`${pageTitle || 'untitled'}.pdf`);
       }
@@ -502,7 +544,7 @@ export default function PageView() {
             {saving ? (
               <span className="text-xs text-mid-gray whitespace-nowrap">Saving...</span>
             ) : dirty ? (
-              <span className="text-xs text-amber-600 whitespace-nowrap">Unsaved</span>
+              <span className="text-xs text-amber-600 whitespace-nowrap">Unsaved — auto-saving…</span>
             ) : lastSaved ? (
               <span className="text-xs text-sage whitespace-nowrap inline-flex items-center gap-1">
                 <Check className="w-3 h-3" />
@@ -510,7 +552,7 @@ export default function PageView() {
               </span>
             ) : null}
 
-            <Tooltip text="Save page (Ctrl+S) — saves title and content">
+            <Tooltip text="Save now (also auto-saves 1.5s after you stop typing)">
               <button
                 onClick={saveNow}
                 disabled={saving}
@@ -579,6 +621,17 @@ export default function PageView() {
           <Tooltip text="Create a copy of this page with all its content">
             <button onClick={duplicatePage} className="p-2 rounded-lg hover:bg-linen">
               <Copy className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
+          <Tooltip text="Download this page as a PDF file">
+            <button
+              onClick={exportPdf}
+              disabled={!!operationLabel}
+              className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">PDF</span>
             </button>
           </Tooltip>
 
@@ -689,6 +742,15 @@ export default function PageView() {
             </button>
           </Tooltip>
 
+          <Tooltip text="Export page as PDF">
+            <button
+              onClick={() => { exportPdf(); setShowMobileMore(false); }}
+              className="p-2 rounded-lg hover:bg-linen shrink-0"
+            >
+              <FileText className="w-4 h-4" />
+            </button>
+          </Tooltip>
+
           <div className="relative ml-auto">
             <Tooltip text="More actions">
               <button
@@ -791,7 +853,7 @@ export default function PageView() {
           ) : markdownMode ? (
             <textarea
               value={markdown}
-              onChange={(e) => { setMarkdown(e.target.value); setDirty(true); }}
+              onChange={(e) => { setMarkdown(e.target.value); setDirty(true); setEditGeneration((g) => g + 1); }}
               className="w-full min-h-[400px] font-mono text-sm bg-linen/50 rounded-xl p-4 border-none outline-none resize-none"
               placeholder="Write markdown here..."
             />
@@ -848,7 +910,7 @@ export default function PageView() {
                   <span className="text-xs bg-linen rounded-full px-1.5">{versions.length}</span>
                 )}
               </button>
-              <button onClick={() => setSidePanel(null)} className="px-3 text-mid-gray hover:text-charcoal">
+              <button onClick={() => setSidePanel(null)} className="px-3 text-mid-gray hover:text-charcoal" title="Close panel">
                 <X className="w-4 h-4" />
               </button>
             </div>

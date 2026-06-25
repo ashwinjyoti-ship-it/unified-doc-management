@@ -53,14 +53,16 @@ export default function NewMenuDropdown({
               <Plus className="w-4 h-4" /> New
             </button>
           </Tooltip>
-          <button
-            type="button"
-            onClick={() => setOpen(!open)}
-            className="btn-primary px-2 rounded-l-none border-l border-white/20"
-            aria-label="More create options"
-          >
-            <ChevronDown className="w-4 h-4" />
-          </button>
+          <Tooltip text="Show all create options">
+            <button
+              type="button"
+              onClick={() => setOpen(!open)}
+              className="btn-primary px-2 rounded-l-none border-l border-white/20"
+              aria-label="More create options"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </Tooltip>
         </div>
       )}
 
