@@ -56,7 +56,8 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     item: SlashCommandItem;
     range: { from: number; to: number };
   } | null>(null);
-  const [agentComment, setAgentComment] = useState<{ quote: string; from: number; to: number } | null>(null);
+  const [agentComment, setAgentComment] = useState<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
+  const selectionRef = useRef<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
   const navigate = useNavigate();
@@ -115,6 +116,50 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       onChange(ed.getHTML(), ed.getJSON());
     },
   });
+
+  const captureEditorSelection = useCallback((ed: NonNullable<typeof editor>) => {
+    const { from, to, empty } = ed.state.selection;
+    if (empty || from === to) return null;
+    const quote = ed.state.doc.textBetween(from, to, ' ');
+    if (!quote.trim()) return null;
+    let blockType: string | undefined;
+    const $from = ed.state.selection.$from;
+    for (let depth = $from.depth; depth > 0; depth--) {
+      const node = $from.node(depth);
+      if (node.isBlock) {
+        blockType = node.type.name;
+        break;
+      }
+    }
+    return { quote: quote.trim(), from, to, blockType };
+  }, []);
+
+  useEffect(() => {
+    if (!editor) return;
+    const updateSelection = () => {
+      const captured = captureEditorSelection(editor);
+      if (captured) selectionRef.current = captured;
+    };
+    editor.on('selectionUpdate', updateSelection);
+    return () => {
+      editor.off('selectionUpdate', updateSelection);
+    };
+  }, [editor, captureEditorSelection]);
+
+  const openAgentComment = useCallback((ed: NonNullable<typeof editor>) => {
+    const captured = captureEditorSelection(ed) || selectionRef.current;
+    if (!captured?.quote.trim()) return;
+    selectionRef.current = captured;
+    setAgentComment(captured);
+  }, [captureEditorSelection]);
+
+  const dismissAgentComment = useCallback(() => {
+    setAgentComment(null);
+    if (editor) {
+      const pos = editor.state.selection.from;
+      editor.chain().setTextSelection(pos).blur().run();
+    }
+  }, [editor]);
 
   const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
     if (!editor) return;
@@ -275,6 +320,22 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
     </Tooltip>
   );
 
+  const BubbleButton = ({ onMouseDown, active, title, children }: {
+    onMouseDown: (e: React.MouseEvent) => void;
+    active?: boolean;
+    title: string;
+    children: React.ReactNode;
+  }) => (
+    <button
+      type="button"
+      title={title}
+      onMouseDown={onMouseDown}
+      className={`p-1.5 rounded-md transition-colors ${active ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-tooltip-fg'}`}
+    >
+      {children}
+    </button>
+  );
+
   return (
     <div className="relative">
       <input
@@ -372,31 +433,43 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
         </div>
       )}
 
-      {editable && (
+      {editable && !agentComment && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}>
           <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg items-center">
-            <ToolbarButton tooltip="Make selected text bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
+            <BubbleButton
+              title="Make selected text bold"
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }}
+              active={editor.isActive('bold')}
+            >
               <Bold className="w-4 h-4 text-tooltip-fg" />
-            </ToolbarButton>
-            <ToolbarButton tooltip="Make selected text italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
+            </BubbleButton>
+            <BubbleButton
+              title="Make selected text italic"
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run(); }}
+              active={editor.isActive('italic')}
+            >
               <Italic className="w-4 h-4 text-tooltip-fg" />
-            </ToolbarButton>
-            <ToolbarButton tooltip="Strike through selected text" onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')}>
+            </BubbleButton>
+            <BubbleButton
+              title="Strike through selected text"
+              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run(); }}
+              active={editor.isActive('strike')}
+            >
               <Strikethrough className="w-4 h-4 text-tooltip-fg" />
-            </ToolbarButton>
+            </BubbleButton>
             {pageId && (
               <>
                 <span className="w-px h-5 bg-white/20 mx-0.5" />
-                <ToolbarButton
-                  tooltip="Comment for AI agent"
-                  onClick={() => {
-                    const { from, to } = editor.state.selection;
-                    const quote = editor.state.doc.textBetween(from, to, ' ');
-                    if (quote.trim()) setAgentComment({ quote, from, to });
+                <BubbleButton
+                  title="Comment for AI agent — instruction applies to selected text"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    openAgentComment(editor);
                   }}
                 >
                   <MessageSquarePlus className="w-4 h-4 text-amber-300" />
-                </ToolbarButton>
+                </BubbleButton>
               </>
             )}
           </div>
@@ -406,14 +479,21 @@ export default function BlockEditor({ content, onChange, editable = true, pageId
       {agentComment && pageId && (
         <AgentCommentPopover
           quote={agentComment.quote}
-          onCancel={() => setAgentComment(null)}
-          onSubmit={async (instruction) => {
-            await api.addComment(pageId, instruction, undefined, {
-              commentType: 'agent_instruction',
-              selectionQuote: agentComment.quote,
-              selectionMeta: { from: agentComment.from, to: agentComment.to },
-            });
+          onCancel={dismissAgentComment}
+          onSubmit={(instruction) => {
+            const payload = agentComment;
             setAgentComment(null);
+            if (editor) {
+              editor.chain().setTextSelection(payload.from).blur().run();
+            }
+            void api.addComment(pageId, instruction, undefined, {
+              commentType: 'agent_instruction',
+              selectionQuote: payload.quote,
+              selectionMeta: { from: payload.from, to: payload.to, blockType: payload.blockType },
+            }).catch((err) => {
+              console.error(err);
+              alert(err instanceof Error ? err.message : 'Could not save agent instruction');
+            });
           }}
         />
       )}

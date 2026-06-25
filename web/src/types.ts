@@ -72,7 +72,8 @@ export interface Comment {
   author_name: string;
   comment_type?: 'discussion' | 'agent_instruction';
   selection_quote?: string | null;
-  selection_meta?: string | null;
+  selection_meta?: string | object | null;
+  agent_prompt?: string;
   status?: 'open' | 'resolved';
   created_at: number;
 }
