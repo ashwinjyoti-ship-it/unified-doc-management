@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useBlocker } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
@@ -254,20 +254,6 @@ export default function PageView() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [dirty, editGeneration, pageId, pageType, saveNow]);
-
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      dirty && !saving && currentLocation.pathname !== nextLocation.pathname,
-  );
-
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    const leave = window.confirm(
-      'You have unsaved changes. Leave this page without saving?',
-    );
-    if (leave) blocker.proceed();
-    else blocker.reset();
-  }, [blocker]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
