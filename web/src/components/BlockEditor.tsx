@@ -15,6 +15,7 @@ import { common, createLowlight } from 'lowlight';
 import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bold, Italic, Strikethrough, MessageSquarePlus } from 'lucide-react';
+import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
@@ -131,6 +132,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       Image.configure({ inline: false }),
       Link.configure({ openOnClick: false }),
       CodeBlockLowlight.configure({ lowlight }),
+      DatabaseEmbed,
       SlashCommands.configure({
         onImageUpload: uploadImage,
         onSlashItemSelected: handleSlashItemSelected,
@@ -238,8 +240,17 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       navigate(`/page/${page.id}`);
       return;
     }
-    editor.chain().focus().deleteRange(range).insertContent(`[[${page.title}]] `).run();
-  }, [editor, pageId, createPage, loadPages, navigate]);
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent({
+        type: 'databaseEmbed',
+        attrs: { databaseId: page.id, title: page.title },
+      })
+      .run();
+    emitContent(editor);
+  }, [editor, pageId, createPage, loadPages, navigate, emitContent]);
 
   const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
     if (!editor) return;
@@ -567,6 +578,7 @@ function mapNodeType(type: string): string {
     codeBlock: 'code',
     horizontalRule: 'divider',
     image: 'image',
+    databaseEmbed: 'database_embed',
   };
   return map[type] || type;
 }
@@ -605,6 +617,14 @@ function extractContent(node: Record<string, unknown>): object {
     return {
       url: (node.attrs as { src?: string })?.src || '',
       alt: (node.attrs as { alt?: string })?.alt || '',
+    };
+  }
+
+  if (type === 'databaseEmbed') {
+    const attrs = node.attrs as { databaseId?: string; title?: string };
+    return {
+      databaseId: attrs.databaseId || '',
+      title: attrs.title || 'Database',
     };
   }
 

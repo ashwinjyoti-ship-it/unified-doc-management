@@ -57,8 +57,14 @@ const CATALOG = {
       method: 'POST',
       path: '/api/workspaces/:workspaceId/pages',
       auth: true,
-      body: { title: 'string?', parentId: 'string?', type: 'page|folder|database', icon: 'string?' },
-      description: 'Create page, folder, or database',
+      body: {
+        title: 'string?',
+        parentId: 'string?',
+        type: 'page|folder|database',
+        icon: 'string?',
+        embedInPageId: 'string? (page id — embed database inline on this page; use with type=database)',
+      },
+      description: 'Create page, folder, or database. Use embedInPageId with type=database for inline embed.',
     },
 
     { method: 'GET', path: '/api/pages/:pageId', auth: true, description: 'Get page with blocks and backlinks' },
@@ -183,6 +189,15 @@ const CATALOG = {
         'POST /api/pages/:dbId/database/properties { name: "Done", type: "checkbox" }',
         'POST /api/pages/:dbId/database/rows { title: "My task" }',
         'PATCH /api/pages/:dbId/database/rows/:rowId { properties: { [propId]: true } }',
+      ],
+    },
+    {
+      intent: 'Create an inline database embedded on an existing page',
+      steps: [
+        'POST /api/workspaces/:id/pages { type: "database", title: "Tasks", embedInPageId: "<host-page-id>" }',
+        '→ creates database page and appends database_embed block to host page (no navigation)',
+        'POST /api/pages/:dbId/database/properties ... (optional columns)',
+        'POST /api/pages/:dbId/database/rows { title: "Row 1" }',
       ],
     },
     {

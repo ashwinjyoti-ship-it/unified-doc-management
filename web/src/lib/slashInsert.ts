@@ -126,7 +126,6 @@ export function runInlineFunctional(
       handlers.openImagePicker();
       break;
     case 'database':
-      editor.chain().focus().deleteRange(range).run();
       handlers.onDatabaseLink('New Database');
       break;
     case 'page-link':

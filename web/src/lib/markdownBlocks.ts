@@ -95,6 +95,11 @@ export function blocksToTiptapHtml(blocks: Array<{ type: string; content: string
       case 'image':
         parts.push(`<img src="${content.url || ''}" alt="${content.alt || ''}" />`);
         break;
+      case 'database_embed':
+        parts.push(
+          `<div data-type="database-embed" data-database-id="${escapeAttr(content.databaseId || '')}" data-title="${escapeAttr(content.title || 'Database')}"></div>`,
+        );
+        break;
       default:
         parts.push(`<p>${escapeHtml(content.text || '')}</p>`);
     }
@@ -105,6 +110,10 @@ export function blocksToTiptapHtml(blocks: Array<{ type: string; content: string
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(text: string): string {
+  return escapeHtml(text).replace(/"/g, '&quot;');
 }
 
 export function markdownToTiptapHtml(markdown: string): string {

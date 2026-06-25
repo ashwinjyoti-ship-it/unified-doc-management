@@ -18,6 +18,41 @@ async function updatePageFts(db: D1Database, pageId: string, title: string, cont
     .bind(pageId, title, content).run();
 }
 
+async function appendDatabaseEmbedBlock(
+  db: D1Database,
+  hostPageId: string,
+  databaseId: string,
+  title: string,
+  workspaceId: string,
+): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const maxRow = await db.prepare(
+    'SELECT MAX(order_index) as maxIdx FROM blocks WHERE page_id = ?',
+  ).bind(hostPageId).first<{ maxIdx: number | null }>();
+  const orderIndex = (maxRow?.maxIdx ?? -1) + 1;
+
+  await db.prepare(
+    'INSERT INTO blocks (id, page_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+  ).bind(
+    generateId(),
+    hostPageId,
+    'database_embed',
+    JSON.stringify({ databaseId, title }),
+    orderIndex,
+    now,
+    now,
+  ).run();
+
+  const blocks = await db.prepare(
+    'SELECT type, content FROM blocks WHERE page_id = ? ORDER BY order_index ASC',
+  ).bind(hostPageId).all<{ type: string; content: string }>();
+
+  const md = blocksToMarkdown(blocks.results || []);
+  await db.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(md, now, hostPageId).run();
+  await updatePageFts(db, hostPageId, (await db.prepare('SELECT title FROM pages WHERE id = ?').bind(hostPageId).first<{ title: string }>())?.title || '', md);
+  await syncBacklinks(db, hostPageId, workspaceId, md);
+}
+
 pages.get('/workspaces', async (c) => {
   const auth = c.get('auth');
   const workspaces = await c.env.DB.prepare(`
@@ -69,7 +104,7 @@ pages.get('/workspaces/:workspaceId/pages', async (c) => {
 pages.post('/workspaces/:workspaceId/pages', async (c) => {
   const auth = c.get('auth');
   const workspaceId = c.req.param('workspaceId');
-  const body = await c.req.json<{ title?: string; parentId?: string; type?: string; icon?: string }>();
+  const body = await c.req.json<{ title?: string; parentId?: string; type?: string; icon?: string; embedInPageId?: string }>();
 
   if (!(await checkWorkspaceAccess(c.env.DB, workspaceId, auth.user.id))) {
     return c.json({ error: 'Access denied' }, 403);
@@ -106,8 +141,20 @@ pages.post('/workspaces/:workspaceId/pages', async (c) => {
 
   await updatePageFts(c.env.DB, pageId, title, '');
 
+  if (type === 'database' && body.embedInPageId) {
+    const host = await c.env.DB.prepare('SELECT id, type, workspace_id FROM pages WHERE id = ?')
+      .bind(body.embedInPageId).first<{ id: string; type: string; workspace_id: string }>();
+    if (!host || host.workspace_id !== workspaceId) {
+      return c.json({ error: 'embedInPageId must be a page in this workspace' }, 400);
+    }
+    if (host.type !== 'page') {
+      return c.json({ error: 'embedInPageId must reference a page (not folder or database)' }, 400);
+    }
+    await appendDatabaseEmbedBlock(c.env.DB, body.embedInPageId, pageId, title, workspaceId);
+  }
+
   const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first<Page>();
-  return c.json({ page }, 201);
+  return c.json({ page, embeddedInPageId: body.embedInPageId || null }, 201);
 });
 
 pages.get('/pages/:pageId', async (c) => {

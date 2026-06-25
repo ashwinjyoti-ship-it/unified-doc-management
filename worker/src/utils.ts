@@ -111,6 +111,8 @@ export function blocksToMarkdown(blocks: Array<{ type: string; content: string }
           return `${header}\n${sep}\n${body}`;
         case 'image':
           return `![${content.alt || ''}](${content.url || ''})`;
+        case 'database_embed':
+          return `{{database:${content.databaseId || ''}|${content.title || 'Database'}}}`;
         case 'embed':
           return `[${content.title || 'Embed'}](${content.url || ''})`;
         default:
@@ -166,6 +168,11 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       blocks.push({ type: 'quote', content: { text: line.slice(2) } });
     } else if (line === '---') {
       blocks.push({ type: 'divider', content: {} });
+    } else if (/^\{\{database:([^|]+)\|([^}]*)\}\}$/.test(line.trim())) {
+      const match = line.trim().match(/^\{\{database:([^|]+)\|([^}]*)\}\}$/);
+      if (match) {
+        blocks.push({ type: 'database_embed', content: { databaseId: match[1], title: match[2] || 'Database' } });
+      }
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }
