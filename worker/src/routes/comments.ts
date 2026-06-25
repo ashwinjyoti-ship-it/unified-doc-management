@@ -2,6 +2,32 @@ import { Hono } from 'hono';
 import type { Env, AuthContext } from '../types';
 import { generateId } from '../utils';
 
+function buildAgentPrompt(selectionQuote: string | null | undefined, instruction: string): string {
+  const quote = (selectionQuote || '').trim();
+  const text = instruction.trim();
+  if (!quote) return text;
+  if (!text) return `Selected text: "${quote}"`;
+  return `Selected text: "${quote}"\n\nInstruction: ${text}`;
+}
+
+function enrichAgentComment(row: Record<string, unknown>) {
+  const selectionQuote = (row.selection_quote as string | null) || '';
+  const instruction = (row.content as string) || '';
+  let selectionMeta: unknown = null;
+  if (row.selection_meta && typeof row.selection_meta === 'string') {
+    try {
+      selectionMeta = JSON.parse(row.selection_meta);
+    } catch {
+      selectionMeta = null;
+    }
+  }
+  return {
+    ...row,
+    selection_meta: selectionMeta,
+    agent_prompt: buildAgentPrompt(selectionQuote, instruction),
+  };
+}
+
 const comments = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
 comments.get('/pages/:pageId/comments', async (c) => {
@@ -38,7 +64,9 @@ comments.get('/pages/:pageId/agent-comments', async (c) => {
     WHERE c.page_id = ? AND c.comment_type = 'agent_instruction' AND c.status = ?
     ORDER BY c.created_at ASC
   `).bind(pageId, status).all();
-  return c.json({ comments: result.results });
+  return c.json({
+    comments: (result.results || []).map((row) => enrichAgentComment(row as Record<string, unknown>)),
+  });
 });
 
 comments.patch('/comments/:id', async (c) => {

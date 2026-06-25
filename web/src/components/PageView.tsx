@@ -12,6 +12,7 @@ import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { folderToMarkdown, databaseToMarkdown, markdownToPdf } from '../lib/pageExport';
+import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
 import { jsPDF } from 'jspdf';
 import {
@@ -915,12 +916,29 @@ export default function PageView() {
                             <span className="text-xs font-normal text-amber-700">AI instruction</span>
                           )}
                         </div>
-                        {c.selection_quote && (
+                        {c.comment_type === 'agent_instruction' && c.selection_quote ? (
+                          <>
+                            <div className="text-xs font-medium text-amber-800 mt-1">Selected text</div>
+                            <blockquote className="text-xs text-charcoal border-l-2 border-amber-400 pl-2 my-1 whitespace-pre-wrap">
+                              &ldquo;{c.selection_quote}&rdquo;
+                            </blockquote>
+                            <div className="text-xs font-medium text-amber-800 mt-1">Instruction</div>
+                            <div className="text-warm-gray">{c.content}</div>
+                          </>
+                        ) : (
+                          <div className="text-warm-gray mt-1">{c.content}</div>
+                        )}
+                        {c.comment_type === 'agent_instruction' && c.selection_quote && (
+                          <div className="text-xs text-mid-gray mt-2 pt-2 border-t border-amber-200/50 whitespace-pre-wrap">
+                            <span className="font-medium">Agent prompt: </span>
+                            {buildAgentPrompt(c.selection_quote, c.content)}
+                          </div>
+                        )}
+                        {c.comment_type !== 'agent_instruction' && c.selection_quote && (
                           <blockquote className="text-xs text-mid-gray italic border-l-2 border-sage pl-2 my-1">
                             &ldquo;{c.selection_quote}&rdquo;
                           </blockquote>
                         )}
-                        <div className="text-warm-gray mt-1">{c.content}</div>
                         <div className="text-xs text-mid-gray mt-1">
                           {new Date(c.created_at * 1000).toLocaleString()}
                         </div>

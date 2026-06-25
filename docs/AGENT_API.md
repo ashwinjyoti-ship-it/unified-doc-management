@@ -273,6 +273,18 @@ Users can select text and add `agent_instruction` comments. Fetch open items:
 GET /api/pages/{pageId}/agent-comments?status=open
 ```
 
+Each item includes:
+- `content` — the user's instruction (e.g. "Add a hyphen between these two words")
+- `selection_quote` — the exact text selected in the editor (e.g. "hello world")
+- `selection_meta` — `{ from, to, blockType }` character offsets in the page
+- `agent_prompt` — combined string ready for LLM use:
+
+```
+Selected text: "hello world"
+
+Instruction: Add a hyphen between these two words
+```
+
 Mark resolved after editing:
 
 ```http
