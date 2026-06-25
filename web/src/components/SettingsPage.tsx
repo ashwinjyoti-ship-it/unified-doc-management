@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
+import { API_ENDPOINT_GROUPS } from '../lib/apiEndpoints';
 import Tooltip from './Tooltip';
 import MobileStandaloneHeader from './MobileStandaloneHeader';
 import type { Theme, Workspace } from '../types';
@@ -196,11 +197,24 @@ export default function SettingsPage() {
         )}
 
         <div className="mt-4 p-3 bg-linen rounded-lg text-xs text-warm-gray">
-          <p className="font-medium text-charcoal mb-1">API Endpoints</p>
-          <p>GET /api/workspaces — List workspaces</p>
-          <p>GET /api/pages/:id — Get page with blocks</p>
-          <p>PUT /api/pages/:id/blocks — Update blocks</p>
-          <p>GET /api/search?q=query — Full-text search</p>
+          <p className="font-medium text-charcoal mb-2">API Endpoints</p>
+          <p className="mb-3">
+            Authenticate with <code className="bg-warm-white px-1 rounded">Authorization: Bearer &lt;token&gt;</code> or{' '}
+            <code className="bg-warm-white px-1 rounded">X-API-Key: &lt;key&gt;</code>. See{' '}
+            <code className="bg-warm-white px-1 rounded">docs/AGENT_API.md</code> for examples.
+          </p>
+          <div className="space-y-3">
+            {API_ENDPOINT_GROUPS.map((group) => (
+              <div key={group.title}>
+                <p className="font-medium text-charcoal mb-1">{group.title}</p>
+                <ul className="space-y-0.5 font-mono">
+                  {group.endpoints.map((endpoint) => (
+                    <li key={endpoint}>{endpoint}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

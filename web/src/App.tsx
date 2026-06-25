@@ -13,6 +13,8 @@ import SettingsPage from './components/SettingsPage';
 import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
 
+const LAST_PATH_KEY = 'unifieddocs:lastPath';
+
 function HomePage() {
   const navigate = useNavigate();
   const { workspace, createPage, recent, loadPages } = useStore();
@@ -88,6 +90,13 @@ function HomePage() {
 function AppLayout() {
   const location = useLocation();
   const showMobileTopBar = !isStandalonePage(location.pathname);
+
+  useEffect(() => {
+    const path = location.pathname + location.search + location.hash;
+    if (path !== '/' && path !== '/login') {
+      sessionStorage.setItem(LAST_PATH_KEY, path);
+    }
+  }, [location.pathname, location.search, location.hash]);
 
   return (
     <div className="h-full flex overflow-hidden">

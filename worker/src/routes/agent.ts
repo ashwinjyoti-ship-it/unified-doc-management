@@ -27,6 +27,7 @@ const CATALOG = {
   },
   databasePropertyTypes: [
     { type: 'text', valueShape: 'string' },
+    { type: 'long_text', valueShape: 'string (multiline)' },
     { type: 'number', valueShape: 'number' },
     { type: 'date', valueShape: 'string (YYYY-MM-DD)' },
     { type: 'select', valueShape: 'string', options: 'string[]' },

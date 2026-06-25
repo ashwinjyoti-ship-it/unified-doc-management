@@ -42,6 +42,7 @@ export default function PageView() {
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
   const [versions, setVersions] = useState<Array<{ id: string; title: string; created_at: number; author_name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -84,6 +85,7 @@ export default function PageView() {
   const loadPage = useCallback(async () => {
     if (!pageId) return;
     setLoading(true);
+    setLoadError(null);
     try {
       if (online) {
         const data = await api.getPage(pageId);
@@ -104,20 +106,28 @@ export default function PageView() {
           setVisibility(cached.page.visibility);
           setBlocks(cached.blocks);
           setEditorContent(blocksToTiptapHtml(cached.blocks));
+        } else {
+          setLoadError('Page not available offline');
         }
       }
     } catch (err) {
       console.error(err);
-      const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
-      if (remaining.length > 0) {
-        navigate(`/page/${remaining[0].id}`, { replace: true });
+      const status = (err as Error & { status?: number }).status;
+      const message = err instanceof Error ? err.message : 'Failed to load page';
+      if (status === 404) {
+        const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
+        if (remaining.length > 0) {
+          navigate(`/page/${remaining[0].id}`, { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
       } else {
-        navigate('/', { replace: true });
+        setLoadError(message);
       }
     } finally {
       setLoading(false);
     }
-  }, [pageId, online]);
+  }, [pageId, online, navigate]);
 
   const loadComments = async () => {
     if (!pageId) return;
@@ -542,6 +552,17 @@ export default function PageView() {
 
   if (loading) {
     return <div className="flex-1 flex items-center justify-center text-mid-gray">Loading...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-mid-gray">{loadError}</p>
+        <button type="button" onClick={() => void loadPage()} className="btn-secondary text-sm">
+          Retry
+        </button>
+      </div>
+    );
   }
 
   return (
