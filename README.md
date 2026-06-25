@@ -93,7 +93,7 @@ See `Design/deep_forest_ Design System.pdf` for full specifications.
 
 All API endpoints require authentication via `Authorization: Bearer <token>` or `X-API-Key: <key>`.
 
-**AI agents & skills:** see [`docs/AGENT_API.md`](docs/AGENT_API.md) for the full reference. Discover endpoints programmatically:
+**AI agents & skills:** start with [`docs/CODING_AGENTS.md`](docs/CODING_AGENTS.md) (setup + agent comment loop). Full reference: [`docs/AGENT_API.md`](docs/AGENT_API.md).
 
 ```http
 GET /api/agent/catalog

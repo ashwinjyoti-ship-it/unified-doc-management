@@ -236,6 +236,7 @@ POST /api/import-url
 | GET/POST | `/api/pages/:id/comments` | Comments |
 | GET | `/api/pages/:id/agent-comments?status=open` | AI agent instructions |
 | PATCH | `/api/comments/:id` | Resolve/update comment |
+| DELETE | `/api/comments/:id` | Delete comment |
 | GET | `/api/search?q=` | Search |
 | GET | `/api/notifications` | Notifications |
 | GET | `/api/favorites` | Favorites |
