@@ -608,18 +608,27 @@ export default function PageView() {
       pageId,
     );
 
-    if (idsToDelete.length === 1) {
-      await api.deletePage(pageId);
-    } else {
-      await api.bulkPages('delete', idsToDelete);
-    }
-    await loadPages();
-    await loadFavorites();
-    await loadRecent();
     if (nextPageId) {
       navigate(`/page/${nextPageId}`, { replace: true });
     } else {
       navigate('/', { replace: true });
+    }
+
+    try {
+      if (idsToDelete.length === 1) {
+        await api.deletePage(pageId);
+      } else {
+        await api.bulkPages('delete', idsToDelete);
+      }
+      useStore.getState().removePagesFromStore(idsToDelete);
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+    } catch (err) {
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+      alert(err instanceof Error ? err.message : 'Failed to delete page');
     }
   };
 

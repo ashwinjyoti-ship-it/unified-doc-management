@@ -34,8 +34,12 @@ function HomePage() {
     }
 
     if (recent.length > 0) {
-      handled.current = true;
-      navigate(`/page/${recent[0].id}`, { replace: true });
+      const { pages } = useStore.getState();
+      const target = recent.find((p) => pages.some((page) => page.id === p.id));
+      if (target) {
+        handled.current = true;
+        navigate(`/page/${target.id}`, { replace: true });
+      }
     }
   }, [workspace, createPage, navigate, opening, recent]);
 
