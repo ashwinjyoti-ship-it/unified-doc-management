@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { api } from '../lib/api';
@@ -13,10 +14,9 @@ import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
-import { folderToMarkdown, databaseToMarkdown, markdownToPdf } from '../lib/pageExport';
+import { folderToMarkdown, databaseToMarkdown, markdownToPdfHtml, stripDuplicateTitleFromHtml, downloadHtmlAsPdf } from '../lib/pageExport';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
-import { jsPDF } from 'jspdf';
 import {
   History, MessageSquare, FileCode, Link2, Send, RotateCcw, CheckCircle2,
   Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal, ChevronDown,
@@ -82,6 +82,7 @@ export default function PageView() {
   const [favorited, setFavorited] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportMenuRect, setExportMenuRect] = useState<DOMRect | null>(null);
   const [folderChildModal, setFolderChildModal] = useState<'page' | 'folder' | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const editorJsonRef = useRef<object | null>(null);
@@ -441,7 +442,7 @@ export default function PageView() {
 
   const exportPage = async () => {
     if (!pageId) return;
-    setShowExportMenu(false);
+    closeExportMenu();
     setExporting(true);
     startOperation('Exporting Markdown...');
     try {
@@ -464,17 +465,36 @@ export default function PageView() {
 
   const exportPdf = async () => {
     if (!pageId) return;
-    setShowExportMenu(false);
+    closeExportMenu();
     setExporting(true);
     startOperation('Generating PDF...');
     try {
       if (dirty) await saveNow();
-      const { markdown: md, title: pageTitle } = await getExportContent();
       if (operationCancelledRef.current) return;
-      const doc = new jsPDF();
-      markdownToPdf(doc, pageTitle, md);
+
+      const pageTitle = title || 'Untitled';
+      let bodyHtml: string;
+
+      if (pageType === 'page') {
+        if (markdownMode) {
+          bodyHtml = markdownToPdfHtml(markdown, pageTitle);
+        } else {
+          const snapshot = editorRef.current?.getSnapshot();
+          const rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks);
+          bodyHtml = stripDuplicateTitleFromHtml(rawHtml, pageTitle);
+        }
+      } else {
+        const { markdown: md } = await getExportContent();
+        if (operationCancelledRef.current) return;
+        bodyHtml = markdownToPdfHtml(md, pageTitle);
+      }
+
       if (!operationCancelledRef.current) {
-        doc.save(`${pageTitle || 'untitled'}.pdf`);
+        await downloadHtmlAsPdf(pageTitle, bodyHtml, `${pageTitle || 'untitled'}.pdf`);
+      }
+    } catch (err) {
+      if (!operationCancelledRef.current) {
+        alert(err instanceof Error ? err.message : 'PDF export failed');
       }
     } finally {
       setExporting(false);
@@ -484,6 +504,49 @@ export default function PageView() {
   };
 
   const canImport = pageType === 'page';
+
+  const closeExportMenu = () => {
+    setShowExportMenu(false);
+    setExportMenuRect(null);
+  };
+
+  const toggleExportMenu = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (showExportMenu) {
+      closeExportMenu();
+      return;
+    }
+    setExportMenuRect(e.currentTarget.getBoundingClientRect());
+    setShowExportMenu(true);
+  };
+
+  useLayoutEffect(() => {
+    if (!showExportMenu) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeExportMenu();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showExportMenu]);
+
+  const exportMenuPortal = showExportMenu && exportMenuRect ? createPortal(
+    <>
+      <div className="fixed inset-0 z-40" aria-hidden onClick={closeExportMenu} />
+      <div
+        className="fixed z-50 bg-warm-white border border-green-mist rounded-xl shadow-lg py-1 min-w-[160px]"
+        style={{ top: exportMenuRect.bottom + 4, right: Math.max(8, window.innerWidth - exportMenuRect.right) }}
+        role="menu"
+      >
+        <button onClick={exportPage} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+          <FileCode className="w-4 h-4" /> Markdown (.md)
+        </button>
+        <button onClick={exportPdf} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+          <FileText className="w-4 h-4" /> PDF (.pdf)
+        </button>
+      </div>
+    </>,
+    document.body,
+  ) : null;
 
   const duplicatePage = async () => {
     if (!pageId) return;
@@ -772,10 +835,10 @@ export default function PageView() {
             </button>
           </Tooltip>
 
-          <div className="relative">
+          <div className="relative shrink-0">
             <Tooltip text="Download this page as Markdown or PDF">
               <button
-                onClick={() => setShowExportMenu(!showExportMenu)}
+                onClick={toggleExportMenu}
                 disabled={!!operationLabel}
                 aria-expanded={showExportMenu}
                 aria-haspopup="menu"
@@ -786,19 +849,6 @@ export default function PageView() {
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
             </Tooltip>
-            {showExportMenu && (
-              <>
-                <div className="fixed inset-0 z-10" aria-hidden onClick={() => setShowExportMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-warm-white border border-green-mist rounded-xl shadow-lg z-20 py-1 min-w-[160px]" role="menu">
-                  <button onClick={exportPage} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
-                    <FileCode className="w-4 h-4" /> Markdown (.md)
-                  </button>
-                  <button onClick={exportPdf} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
-                    <FileText className="w-4 h-4" /> PDF (.pdf)
-                  </button>
-                </div>
-              </>
-            )}
           </div>
 
           <Tooltip text={canImport ? 'Import a file or URL — choose to append, overwrite, or create new page' : 'Import is only available on regular pages'}>
@@ -888,7 +938,7 @@ export default function PageView() {
           <div className="relative shrink-0">
             <Tooltip text="Download as Markdown or PDF">
               <button
-                onClick={() => setShowExportMenu((v) => !v)}
+                onClick={toggleExportMenu}
                 disabled={!!operationLabel}
                 aria-expanded={showExportMenu}
                 aria-haspopup="menu"
@@ -897,19 +947,6 @@ export default function PageView() {
                 <Download className="w-4 h-4" />
               </button>
             </Tooltip>
-            {showExportMenu && (
-              <>
-                <div className="fixed inset-0 z-20" aria-hidden onClick={() => setShowExportMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-30 bg-warm-white border border-green-mist rounded-xl shadow-lg py-1 min-w-[160px]" role="menu">
-                  <button onClick={() => { void exportPage(); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
-                    <FileCode className="w-4 h-4" /> Markdown (.md)
-                  </button>
-                  <button onClick={() => { void exportPdf(); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
-                    <FileText className="w-4 h-4" /> PDF (.pdf)
-                  </button>
-                </div>
-              </>
-            )}
           </div>
 
           <div className="relative ml-auto">
@@ -939,7 +976,15 @@ export default function PageView() {
                   <button onClick={() => { duplicatePage(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
                     <Copy className="w-4 h-4" /> Duplicate
                   </button>
-                  <button onClick={() => { setShowExportMenu(true); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                  <button
+                    onClick={(e) => {
+                      setShowMobileMore(false);
+                      setExportMenuRect(e.currentTarget.getBoundingClientRect());
+                      setShowExportMenu(true);
+                    }}
+                    disabled={!!operationLabel}
+                    className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50"
+                  >
                     <Download className="w-4 h-4" /> Export page
                   </button>
                   <button onClick={() => { importInputRef.current?.click(); setShowMobileMore(false); }} disabled={!!operationLabel || !canImport} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
@@ -1295,6 +1340,7 @@ export default function PageView() {
           }}
         />
       )}
+      {exportMenuPortal}
     </div>
   );
 }
