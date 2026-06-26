@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import { api } from '../lib/api';
+import { createPageIdResolver } from '../lib/pageLinks';
+import { useStore } from '../lib/store';
 import BlockEditor, { blocksToTiptapHtml, tiptapJsonToBlocks } from './BlockEditor';
 import DatabaseTextCell from './DatabaseTextCell';
 import RelationPicker from './RelationPicker';
@@ -40,6 +42,7 @@ export default function DatabaseRowPanel({
   onRowUpdated,
   onPropertiesChange,
 }: DatabaseRowPanelProps) {
+  const pages = useStore((s) => s.pages);
   const [editorContent, setEditorContent] = useState('');
   const [notesLoading, setNotesLoading] = useState(false);
   const [showAddProp, setShowAddProp] = useState(false);
@@ -50,10 +53,10 @@ export default function DatabaseRowPanel({
     if (!row.page_id) return;
     setNotesLoading(true);
     api.getPage(row.page_id)
-      .then((data) => setEditorContent(blocksToTiptapHtml(data.blocks)))
+      .then((data) => setEditorContent(blocksToTiptapHtml(data.blocks, createPageIdResolver(pages))))
       .catch(() => setEditorContent(''))
       .finally(() => setNotesLoading(false));
-  }, [row.page_id]);
+  }, [row.page_id, pages]);
 
   const saveNotes = useCallback(async (_html: string, json: object) => {
     if (!row.page_id) return;

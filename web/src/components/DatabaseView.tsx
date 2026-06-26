@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
+import { useDatabaseColumnResize } from '../hooks/useDatabaseColumnResize';
 import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
 import {
   applyFilters,
@@ -282,6 +283,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const dateProp = properties.find((p) => p.type === 'date');
   const nameProp = properties.find((p) => p.name.toLowerCase() === 'name') || properties[0];
   const relationProperties = properties.filter((p) => p.type === 'relation');
+  const { getWidth, startResize, tableWidth } = useDatabaseColumnResize(pageId, properties);
 
   const rollupTargetProperties = useMemo(() => {
     if (!newRollupRelationPropId) return [];
@@ -660,24 +662,47 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
       </div>
 
       {view === 'table' && (
-        <div className="overflow-x-auto card-surface">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-green-mist/30 bg-warm-white/40">
+          <table
+            className="text-sm border-collapse"
+            style={{ tableLayout: 'fixed', width: Math.max(tableWidth, 480) }}
+          >
+            <colgroup>
+              {properties.map((prop) => (
+                <col key={prop.id} style={{ width: getWidth(prop.id, prop.name) }} />
+              ))}
+              <col style={{ width: 40 }} />
+              <col style={{ width: 40 }} />
+            </colgroup>
             <thead>
-              <tr className="border-b border-green-mist">
+              <tr>
                 {properties.map((prop) => (
-                  <th key={prop.id} className="text-left p-3 font-medium text-charcoal relative group">
-                    <div className="flex items-center gap-1">
-                      <span title={prop.type === 'rollup' ? rollupHeaderHint(prop) : undefined}>{prop.name}</span>
+                  <th
+                    key={prop.id}
+                    className="text-left px-3 py-2.5 font-medium text-charcoal relative group border-b border-r border-green-mist/25"
+                  >
+                    <div className="flex items-center gap-1 min-w-0 pr-2">
+                      <span className="truncate" title={prop.type === 'rollup' ? rollupHeaderHint(prop) : prop.name}>{prop.name}</span>
                       <button
                         type="button"
                         onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
-                        className="p-0.5 rounded opacity-30 group-hover:opacity-100 hover:bg-linen focus-visible:opacity-100"
+                        className="p-0.5 rounded shrink-0 opacity-30 group-hover:opacity-100 hover:bg-linen focus-visible:opacity-100"
                         aria-label="Column options"
                         title="Column options — rename, change type, or delete"
                       >
                         <MoreHorizontal className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      aria-label={`Resize ${prop.name} column`}
+                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none opacity-0 group-hover:opacity-100 hover:bg-forest/10 focus-visible:opacity-100"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startResize(prop.id, prop.name, e.clientX);
+                      }}
+                    />
                     {columnMenuId === prop.id && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setColumnMenuId(null)} />
@@ -697,7 +722,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     )}
                   </th>
                 ))}
-                <th className="p-2 w-10">
+                <th className="p-2 border-b border-r border-green-mist/25">
                   <button
                     type="button"
                     onClick={() => {
@@ -714,17 +739,19 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     <Plus className="w-4 h-4" />
                   </button>
                 </th>
-                <th className="w-10" />
+                <th className="border-b border-green-mist/25" />
               </tr>
             </thead>
             <tbody>
               {displayRows.map((row) => (
-                <tr key={row.id} className="border-b border-green-mist/50 hover:bg-linen/50">
+                <tr key={row.id} className="hover:bg-linen/30">
                   {properties.map((prop) => (
-                    <td key={prop.id} className="p-2">{renderCell(row, prop)}</td>
+                    <td key={prop.id} className="px-2 py-1.5 align-top border-b border-r border-green-mist/20 overflow-hidden">
+                      {renderCell(row, prop)}
+                    </td>
                   ))}
-                  <td className="p-2" />
-                  <td className="p-2">
+                  <td className="border-b border-r border-green-mist/20" />
+                  <td className="px-2 py-1.5 border-b border-green-mist/20">
                     <button
                       type="button"
                       onClick={() => void deleteRow(row.id)}

@@ -105,6 +105,19 @@ input, textarea {
   height: 0;
 }
 
+.ProseMirror a.page-link {
+  color: var(--color-forest);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ProseMirror .page-link-unresolved {
+  color: var(--color-mid-gray);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
 .ProseMirror h1 { font-size: 2rem; font-weight: 700; margin: 1rem 0 0.5rem; color: var(--color-charcoal); }
 .ProseMirror h2 { font-size: 1.5rem; font-weight: 600; margin: 0.875rem 0 0.5rem; }
 .ProseMirror h3 { font-size: 1.25rem; font-weight: 600; margin: 0.75rem 0 0.375rem; }

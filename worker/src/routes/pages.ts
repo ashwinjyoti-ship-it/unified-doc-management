@@ -128,16 +128,9 @@ pages.post('/workspaces/:workspaceId/pages', async (c) => {
   }
 
   if (type === 'database') {
-    const props = [
-      { name: 'Name', type: 'text' },
-      { name: 'Status', type: 'select', options: ['To Do', 'In Progress', 'Done'] },
-      { name: 'Due Date', type: 'date' },
-    ];
-    for (let i = 0; i < props.length; i++) {
-      await c.env.DB.prepare(
-        'INSERT INTO database_properties (id, database_id, name, type, options, order_index) VALUES (?, ?, ?, ?, ?, ?)'
-      ).bind(generateId(), pageId, props[i].name, props[i].type, JSON.stringify(props[i].options || []), i).run();
-    }
+    await c.env.DB.prepare(
+      'INSERT INTO database_properties (id, database_id, name, type, options, order_index) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(generateId(), pageId, 'Name', 'text', JSON.stringify([]), 0).run();
   }
 
   await updatePageFts(c.env.DB, pageId, title, '');
