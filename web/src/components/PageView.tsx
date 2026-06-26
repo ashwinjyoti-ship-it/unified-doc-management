@@ -12,13 +12,14 @@ import Tooltip from './Tooltip';
 import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
+import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
 import { folderToMarkdown, databaseToMarkdown, markdownToPdf } from '../lib/pageExport';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
 import { jsPDF } from 'jspdf';
 import {
   History, MessageSquare, FileCode, Link2, Send, RotateCcw, CheckCircle2,
-  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal,
+  Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal, ChevronDown,
 } from 'lucide-react';
 import { buildDeleteConfirmMessage, getDeleteOrder } from '../lib/pageDelete';
 import { getSidebarPageOrder, resolvePageAfterDelete } from '../lib/pageDeleteNavigation';
@@ -199,6 +200,21 @@ export default function PageView() {
     loadPage();
     loadFavoriteStatus();
   }, [loadPage]);
+
+  useEffect(() => {
+    const onPageImported = (e: Event) => {
+      const { pageId: importedPageId } = (e as CustomEvent<{ pageId: string }>).detail;
+      if (importedPageId === pageId) {
+        void loadPage();
+        loadVersionHistory();
+        if (markdownMode && pageId) {
+          void api.getMarkdown(pageId).then(({ markdown: md }) => setMarkdown(md));
+        }
+      }
+    };
+    window.addEventListener(PAGE_IMPORTED_EVENT, onPageImported);
+    return () => window.removeEventListener(PAGE_IMPORTED_EVENT, onPageImported);
+  }, [pageId, loadPage, markdownMode]);
 
   useEffect(() => {
     if (!pageId || !online) return;
@@ -429,6 +445,7 @@ export default function PageView() {
     setExporting(true);
     startOperation('Exporting Markdown...');
     try {
+      if (dirty) await saveNow();
       const { markdown: md, title: pageTitle } = await getExportContent();
       if (operationCancelledRef.current) return;
       const blob = new Blob([md], { type: 'text/markdown' });
@@ -451,6 +468,7 @@ export default function PageView() {
     setExporting(true);
     startOperation('Generating PDF...');
     try {
+      if (dirty) await saveNow();
       const { markdown: md, title: pageTitle } = await getExportContent();
       if (operationCancelledRef.current) return;
       const doc = new jsPDF();
@@ -464,6 +482,8 @@ export default function PageView() {
       abortRef.current = null;
     }
   };
+
+  const canImport = pageType === 'page';
 
   const duplicatePage = async () => {
     if (!pageId) return;
@@ -752,44 +772,39 @@ export default function PageView() {
             </button>
           </Tooltip>
 
-          <Tooltip text="Download this page as a PDF file">
-            <button
-              onClick={exportPdf}
-              disabled={!!operationLabel}
-              className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
-            >
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">PDF</span>
-            </button>
-          </Tooltip>
-
           <div className="relative">
             <Tooltip text="Download this page as Markdown or PDF">
               <button
                 onClick={() => setShowExportMenu(!showExportMenu)}
                 disabled={!!operationLabel}
+                aria-expanded={showExportMenu}
+                aria-haspopup="menu"
                 className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Export</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
               </button>
             </Tooltip>
             {showExportMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-warm-white border border-green-mist rounded-xl shadow-lg z-20 py-1 min-w-[140px]">
-                <button onClick={exportPage} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2">
-                  <FileCode className="w-4 h-4" /> Markdown (.md)
-                </button>
-                <button onClick={exportPdf} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> PDF (.pdf)
-                </button>
-              </div>
+              <>
+                <div className="fixed inset-0 z-10" aria-hidden onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 bg-warm-white border border-green-mist rounded-xl shadow-lg z-20 py-1 min-w-[160px]" role="menu">
+                  <button onClick={exportPage} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+                    <FileCode className="w-4 h-4" /> Markdown (.md)
+                  </button>
+                  <button onClick={exportPdf} className="w-full px-4 py-2 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+                    <FileText className="w-4 h-4" /> PDF (.pdf)
+                  </button>
+                </div>
+              </>
             )}
           </div>
 
-          <Tooltip text="Import a file or URL — choose to append, overwrite, or create new page">
+          <Tooltip text={canImport ? 'Import a file or URL — choose to append, overwrite, or create new page' : 'Import is only available on regular pages'}>
             <button
               onClick={() => importInputRef.current?.click()}
-              disabled={!!operationLabel}
+              disabled={!!operationLabel || !canImport}
               className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
             >
               <Upload className="w-4 h-4" />
@@ -797,8 +812,8 @@ export default function PageView() {
             </button>
           </Tooltip>
 
-          <Tooltip text="Fetch a web page URL — choose to append, overwrite, or create new page">
-            <button onClick={importFromUrl} disabled={!!operationLabel} className="p-2 rounded-lg hover:bg-linen disabled:opacity-50">
+          <Tooltip text={canImport ? 'Fetch a web page URL — choose to append, overwrite, or create new page' : 'Import is only available on regular pages'}>
+            <button onClick={importFromUrl} disabled={!!operationLabel || !canImport} className="p-2 rounded-lg hover:bg-linen disabled:opacity-50">
               <Link2 className="w-4 h-4" />
             </button>
           </Tooltip>
@@ -870,14 +885,32 @@ export default function PageView() {
             </button>
           </Tooltip>
 
-          <Tooltip text="Export page as PDF">
-            <button
-              onClick={() => { exportPdf(); setShowMobileMore(false); }}
-              className="p-2 rounded-lg hover:bg-linen shrink-0"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
-          </Tooltip>
+          <div className="relative shrink-0">
+            <Tooltip text="Download as Markdown or PDF">
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                disabled={!!operationLabel}
+                aria-expanded={showExportMenu}
+                aria-haspopup="menu"
+                className="p-2 rounded-lg hover:bg-linen disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </Tooltip>
+            {showExportMenu && (
+              <>
+                <div className="fixed inset-0 z-20" aria-hidden onClick={() => setShowExportMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-30 bg-warm-white border border-green-mist rounded-xl shadow-lg py-1 min-w-[160px]" role="menu">
+                  <button onClick={() => { void exportPage(); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+                    <FileCode className="w-4 h-4" /> Markdown (.md)
+                  </button>
+                  <button onClick={() => { void exportPdf(); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2" role="menuitem">
+                    <FileText className="w-4 h-4" /> PDF (.pdf)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
 
           <div className="relative ml-auto">
             <Tooltip text="More actions">
@@ -906,16 +939,13 @@ export default function PageView() {
                   <button onClick={() => { duplicatePage(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
                     <Copy className="w-4 h-4" /> Duplicate
                   </button>
-                  <button onClick={() => { exportPage(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
-                    <FileCode className="w-4 h-4" /> Export Markdown
+                  <button onClick={() => { setShowExportMenu(true); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                    <Download className="w-4 h-4" /> Export page
                   </button>
-                  <button onClick={() => { exportPdf(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> Export PDF
-                  </button>
-                  <button onClick={() => { importInputRef.current?.click(); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                  <button onClick={() => { importInputRef.current?.click(); setShowMobileMore(false); }} disabled={!!operationLabel || !canImport} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
                     <Upload className="w-4 h-4" /> Import file
                   </button>
-                  <button onClick={() => { importFromUrl(); setShowMobileMore(false); }} disabled={!!operationLabel} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
+                  <button onClick={() => { importFromUrl(); setShowMobileMore(false); }} disabled={!!operationLabel || !canImport} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50">
                     <Link2 className="w-4 h-4" /> Import URL
                   </button>
                   <button onClick={() => { toggleMarkdown(); setShowMobileMore(false); }} className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2">

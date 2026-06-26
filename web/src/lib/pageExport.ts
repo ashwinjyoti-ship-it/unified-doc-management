@@ -53,11 +53,24 @@ export function databaseToMarkdown(
   return lines.join('\n');
 }
 
+/** Strip a leading markdown H1 when it matches the page title (avoids duplicate title in PDF). */
+export function stripDuplicateTitle(markdown: string, title: string): string {
+  const trimmed = markdown.trimStart();
+  const match = trimmed.match(/^#\s+(.+?)(?:\n|$)/);
+  if (!match) return markdown;
+  const heading = match[1].trim();
+  const pageTitle = (title || 'Untitled').trim();
+  if (heading.toLowerCase() !== pageTitle.toLowerCase()) return markdown;
+  return trimmed.slice(match[0].length).trimStart();
+}
+
 export function markdownToPdf(doc: { setFontSize: (n: number) => void; text: (t: string, x: number, y: number) => void; splitTextToSize: (t: string, w: number) => string[]; addPage: () => void }, title: string, markdown: string) {
+  const pageTitle = title || 'Untitled';
+  const body = stripDuplicateTitle(markdown, pageTitle);
   doc.setFontSize(16);
-  doc.text(title || 'Untitled', 10, 15);
+  doc.text(pageTitle, 10, 15);
   doc.setFontSize(10);
-  const lines = doc.splitTextToSize(markdown, 180);
+  const lines = doc.splitTextToSize(body, 180);
   let y = 25;
   for (const line of lines) {
     if (y > 280) {

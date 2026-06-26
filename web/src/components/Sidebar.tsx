@@ -12,6 +12,7 @@ import PageTree from './PageTree';
 import CollapsibleSidebarSection from './CollapsibleSidebarSection';
 import NewMenuDropdown from './NewMenuDropdown';
 import { applyImportContent } from '../lib/importContent';
+import { notifyPageImported } from '../lib/pageEvents';
 import { collectDescendantIds } from '../lib/pageTree';
 import { buildDeleteConfirmMessage, getDeleteOrder } from '../lib/pageDelete';
 import { getSidebarPageOrder, resolvePageAfterDelete } from '../lib/pageDeleteNavigation';
@@ -285,6 +286,8 @@ export default function Sidebar() {
       await loadRecent();
       if (mode === 'new' || targetId !== activePageId) {
         navigateToPage(targetId);
+      } else if (activePageId) {
+        notifyPageImported(activePageId);
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
