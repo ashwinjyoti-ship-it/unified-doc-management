@@ -111,23 +111,27 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   };
 
   const addRow = async () => {
-    const { row } = await api.createDatabaseRow(pageId);
-    setRows((prev) => [...prev, row]);
-    if (row.page_id) {
-      addPageToStore({
-        id: row.page_id,
-        workspace_id: '',
-        parent_id: pageId,
-        title: row.page_title || 'Untitled',
-        icon: '📄',
-        type: 'page',
-        visibility: 'private',
-        content_md: '',
-        is_row_page: 1,
-        created_by: '',
-        created_at: 0,
-        updated_at: 0,
-      });
+    try {
+      const { row } = await api.createDatabaseRow(pageId);
+      setRows((prev) => [...prev, row]);
+      if (row.page_id) {
+        addPageToStore({
+          id: row.page_id,
+          workspace_id: '',
+          parent_id: pageId,
+          title: row.page_title || 'Untitled',
+          icon: '📄',
+          type: 'page',
+          visibility: 'private',
+          content_md: '',
+          is_row_page: 1,
+          created_by: '',
+          created_at: 0,
+          updated_at: 0,
+        });
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not add row');
     }
   };
 
@@ -187,36 +191,53 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const openRowPanel = (row: DatabaseRow) => setSelectedRow(row);
 
   const addProperty = async () => {
-    if (!newPropName.trim()) return;
-    let options: string[] | { relatedDatabaseId?: string } | undefined;
+    if (!newPropName.trim()) {
+      alert('Enter a property name');
+      return;
+    }
+    let options: string[] | { relatedDatabaseId?: string; relationPropertyId?: string; targetPropertyId?: string; aggregation?: string } | undefined;
     if (newPropType === 'select' || newPropType === 'multi_select') {
       options = newPropOptions.split(',').map((s) => s.trim()).filter(Boolean);
+      if (options.length === 0) {
+        alert('Enter at least one option (comma-separated)');
+        return;
+      }
     } else if (newPropType === 'relation') {
-      if (!newRelationDbId) return;
+      if (!newRelationDbId) {
+        alert('Select a database to link to');
+        return;
+      }
       options = { relatedDatabaseId: newRelationDbId };
     } else if (newPropType === 'rollup') {
-      if (!newRollupRelationPropId || !newRollupTargetPropId) return;
+      if (!newRollupRelationPropId || !newRollupTargetPropId) {
+        alert('Select a relation property and target property for the rollup');
+        return;
+      }
       options = {
         relationPropertyId: newRollupRelationPropId,
         targetPropertyId: newRollupTargetPropId,
         aggregation: newRollupAggregation,
       };
     }
-    const { property } = await api.createDatabaseProperty(pageId, {
-      name: newPropName.trim(),
-      type: newPropType,
-      options,
-    });
-    setProperties([...properties, property]);
-    setNewPropName('');
-    setNewPropOptions('');
-    setNewRelationDbId('');
-    setNewRollupRelationPropId('');
-    setNewRollupTargetPropId('');
-    setNewRollupAggregation('count');
-    setAddingColumn(false);
-    setEditingColumnId(null);
-    await loadDatabase();
+    try {
+      const { property } = await api.createDatabaseProperty(pageId, {
+        name: newPropName.trim(),
+        type: newPropType,
+        options,
+      });
+      setProperties([...properties, property]);
+      setNewPropName('');
+      setNewPropOptions('');
+      setNewRelationDbId('');
+      setNewRollupRelationPropId('');
+      setNewRollupTargetPropId('');
+      setNewRollupAggregation('count');
+      setAddingColumn(false);
+      setEditingColumnId(null);
+      await loadDatabase();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not add property');
+    }
   };
 
   const updateProperty = async (propId: string, data: {
@@ -507,7 +528,15 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   if (loading) return <div className={`${embedded ? 'p-4' : 'p-8'} text-mid-gray`}>Loading database...</div>;
 
   return (
-    <div className={embedded ? 'space-y-3' : 'space-y-4'}>
+    <div
+      className={embedded ? 'space-y-3' : 'space-y-4'}
+      {...(embedded ? {
+        contentEditable: false,
+        suppressContentEditableWarning: true,
+        onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+        onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+      } : {})}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 bg-linen rounded-xl p-1 flex-wrap">
           {viewTabs.map(({ id, icon: Icon, label }) => (
@@ -526,7 +555,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
         </div>
         <div className="flex gap-2 flex-wrap">
           <Tooltip text="Add a new row to this database">
-            <button type="button" onClick={addRow} className="btn-primary text-sm flex items-center gap-1">
+            <button type="button" onClick={() => void addRow()} className="btn-primary text-sm flex items-center gap-1">
               <Plus className="w-4 h-4" /> New Row
             </button>
           </Tooltip>
@@ -725,6 +754,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                 <th className="p-2 border-b border-r border-green-mist/25">
                   <button
                     type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setEditingColumnId(null);
                       setNewPropName('');

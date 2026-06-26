@@ -70,12 +70,19 @@ export default function DatabaseRowPanel({
   const debouncedSaveNotes = useDebouncedCallback(saveNotes, 500);
 
   const addProperty = async () => {
-    if (!newPropName.trim()) return;
-    await api.createDatabaseProperty(pageId, { name: newPropName.trim(), type: newPropType });
-    setNewPropName('');
-    setNewPropType('text');
-    setShowAddProp(false);
-    onPropertiesChange();
+    if (!newPropName.trim()) {
+      alert('Enter a property name');
+      return;
+    }
+    try {
+      await api.createDatabaseProperty(pageId, { name: newPropName.trim(), type: newPropType });
+      setNewPropName('');
+      setNewPropType('text');
+      setShowAddProp(false);
+      onPropertiesChange();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not add property');
+    }
   };
 
   const renderField = (prop: DatabaseProperty) => {
