@@ -31,7 +31,7 @@ export default function SidebarItemMenu({ label, onRename, onDelete, disabled, l
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-          className={`p-1 rounded-md opacity-100 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 transition-opacity ${
+          className={`p-1 rounded-md opacity-80 md:opacity-50 md:group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 transition-opacity ${
             light
               ? 'text-white/70 hover:text-white hover:bg-white/15'
               : 'text-mid-gray hover:text-charcoal hover:bg-linen'

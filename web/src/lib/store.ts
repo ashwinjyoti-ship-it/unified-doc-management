@@ -46,6 +46,7 @@ interface AppState {
   addPageToStore: (page: Page) => void;
   patchPageInStore: (pageId: string, patch: Partial<Page>) => void;
   removePageFromStore: (pageId: string) => void;
+  removePagesFromStore: (pageIds: string[]) => void;
   loadFavorites: () => Promise<void>;
   loadRecent: () => Promise<void>;
   loadTags: () => Promise<void>;
@@ -184,7 +185,16 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   removePageFromStore: (pageId) => {
-    set({ pages: get().pages.filter((p) => p.id !== pageId) });
+    get().removePagesFromStore([pageId]);
+  },
+
+  removePagesFromStore: (pageIds) => {
+    const idSet = new Set(pageIds);
+    set({
+      pages: get().pages.filter((p) => !idSet.has(p.id)),
+      favorites: get().favorites.filter((p) => !idSet.has(p.id)),
+      recent: get().recent.filter((p) => !idSet.has(p.id)),
+    });
   },
 
   loadFavorites: async () => {

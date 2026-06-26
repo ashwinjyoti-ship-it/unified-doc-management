@@ -142,30 +142,41 @@ export default function Sidebar() {
     if (!window.confirm(message)) return;
 
     const idsToDelete = getDeleteOrder(pages, page.id);
-    if (idsToDelete.length === 1) {
-      await api.deletePage(page.id);
-    } else {
-      await api.bulkPages('delete', idsToDelete);
-    }
-
-    const deletedCurrent = Boolean(activePageId && idsToDelete.includes(activePageId));
+    const deletedIds = new Set(idsToDelete);
+    const deletedCurrent = Boolean(activePageId && deletedIds.has(activePageId));
     const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
-    await loadPages();
-    await loadFavorites();
-    await loadRecent();
+    const nextPageId = deletedCurrent
+      ? resolvePageAfterDelete(sidebarOrder, deletedIds, activePageId)
+      : null;
 
+    // Leave the deleted page immediately so its content does not linger in the editor
     if (deletedCurrent) {
-      const nextPageId = resolvePageAfterDelete(
-        sidebarOrder,
-        new Set(idsToDelete),
-        activePageId,
-      );
       if (nextPageId) {
         navigate(`/page/${nextPageId}`, { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     }
+
+    try {
+      if (idsToDelete.length === 1) {
+        await api.deletePage(page.id);
+      } else {
+        await api.bulkPages('delete', idsToDelete);
+      }
+
+      useStore.getState().removePagesFromStore(idsToDelete);
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+    } catch (err) {
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+      alert(err instanceof Error ? err.message : 'Failed to delete page');
+      return;
+    }
+
     closeSidebarOnMobile(setSidebarOpen);
   };
 
@@ -194,27 +205,39 @@ export default function Sidebar() {
     if (selected.size === 0) return;
     if (!window.confirm(`Delete ${selected.size} page(s)? This cannot be undone.`)) return;
     const idsToDelete = [...selected];
-    const deletedCurrent = Boolean(activePageId && idsToDelete.includes(activePageId));
+    const deletedIds = new Set(idsToDelete);
+    const deletedCurrent = Boolean(activePageId && deletedIds.has(activePageId));
     const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
-    await api.bulkPages('delete', idsToDelete);
+    const nextPageId = deletedCurrent
+      ? resolvePageAfterDelete(sidebarOrder, deletedIds, activePageId)
+      : null;
+
     setSelected(new Set());
     setBulkMode(false);
-    await loadPages();
-    await loadFavorites();
-    await loadRecent();
-    closeSidebarOnMobile(setSidebarOpen);
+
     if (deletedCurrent) {
-      const nextPageId = resolvePageAfterDelete(
-        sidebarOrder,
-        new Set(idsToDelete),
-        activePageId,
-      );
       if (nextPageId) {
         navigate(`/page/${nextPageId}`, { replace: true });
       } else {
         navigate('/', { replace: true });
       }
     }
+
+    try {
+      await api.bulkPages('delete', idsToDelete);
+      useStore.getState().removePagesFromStore(idsToDelete);
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+    } catch (err) {
+      await loadPages();
+      await loadFavorites();
+      await loadRecent();
+      alert(err instanceof Error ? err.message : 'Failed to delete pages');
+      return;
+    }
+
+    closeSidebarOnMobile(setSidebarOpen);
   };
 
   const handleBulkMoveConfirm = async (parentId: string | null) => {
