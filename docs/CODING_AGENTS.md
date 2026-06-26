@@ -93,16 +93,35 @@ Response includes per comment:
 | `open_count` | How many open instructions remain on the page |
 
 ```http
-# 4. Read page content
-GET /api/pages/{pageId}/markdown
+# 4. Apply surgical edit (PREFERRED — do not rewrite full page)
+POST /api/comments/{commentId}/apply
+{ "new_text": "hello-world" }
+```
 
-# 5. Write changes
-PUT /api/pages/{pageId}/markdown
-{ "markdown": "..." }
+Uses `selection_quote` as `old_text`, replaces exactly, resolves the comment.  
+Alternative if you already have old/new strings:
 
-# 6. Mark instruction addressed (REQUIRED)
+```http
+POST /api/pages/{pageId}/edit-section
+{
+  "old_text": "hello world",
+  "new_text": "hello-world",
+  "comment_id": "{commentId}"
+}
+```
+
+```http
+# 5. Resolve without editing (optional)
 PATCH /api/comments/{commentId}
 { "status": "resolved" }
+```
+
+### Full page rewrite (only for large restructures — NOT for comment fixes)
+
+```http
+GET /api/pages/{pageId}/markdown
+PUT /api/pages/{pageId}/markdown
+{ "markdown": "..." }
 ```
 
 ### Example `agent_prompt`
@@ -150,9 +169,9 @@ Connect via REST. Do not use the browser UI.
 
 ### AI instruction loop (every session)
 1. GET /pages/{pageId}/agent-comments?status=open
-2. For each comment, read `agent_prompt` (selected text + instruction)
-3. GET /pages/{pageId}/markdown → edit → PUT /pages/{pageId}/markdown
-4. PATCH /comments/{commentId} { "status": "resolved" } after each fix
+2. For each comment, read `agent_prompt` and compute `new_text` for the selection only
+3. POST /comments/{commentId}/apply { "new_text": "..." } — surgical replace + resolve
+4. Never PUT full /markdown for selection-scoped instructions
 
 ### Rules
 - Database property values use property UUIDs — GET /pages/{dbId}/database first
@@ -179,7 +198,19 @@ curl -s -H "X-API-Key: $UDM_API_KEY" "$UDM_API_URL/workspaces"
 curl -s -H "X-API-Key: $UDM_API_KEY" \
   "$UDM_API_URL/pages/PAGE_ID/agent-comments?status=open"
 
-# Mark addressed
+# Apply surgical edit from agent comment (preferred)
+curl -s -X POST -H "X-API-Key: $UDM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"new_text":"hello-world"}' \
+  "$UDM_API_URL/comments/COMMENT_ID/apply"
+
+# Or edit-section with explicit old/new text
+curl -s -X POST -H "X-API-Key: $UDM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"old_text":"hello world","new_text":"hello-world","comment_id":"COMMENT_ID"}' \
+  "$UDM_API_URL/pages/PAGE_ID/edit-section"
+
+# Mark addressed without editing
 curl -s -X PATCH -H "X-API-Key: $UDM_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"status":"resolved"}' \
@@ -219,6 +250,8 @@ Authorization: Bearer <jwt>
 | Full database | GET | `/pages/{dbId}/database` |
 | Update row | PATCH | `/pages/{dbId}/database/rows/{rowId}` |
 | Open AI tasks | GET | `/pages/{id}/agent-comments?status=open` |
+| Apply instruction | POST | `/comments/{id}/apply` `{ "new_text": "..." }` |
+| Surgical edit | POST | `/pages/{id}/edit-section` `{ old_text, new_text, comment_id? }` |
 | Mark addressed | PATCH | `/comments/{id}` `{ "status": "resolved" }` |
 | Delete comment | DELETE | `/comments/{id}` |
 | API catalog | GET | `/agent/catalog` |

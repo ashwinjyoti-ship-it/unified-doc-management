@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
 import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks } from '../utils';
+import { editPageSection, EditSectionError } from '../edit-section';
 import { syncRowPageTitle } from '../database-helpers';
 
 const pages = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
@@ -369,6 +370,83 @@ pages.post('/pages/:pageId/restore/:versionId', async (c) => {
 
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all();
   return c.json({ blocks: blocks.results });
+});
+
+pages.post('/pages/:pageId/edit-section', async (c) => {
+  const auth = c.get('auth');
+  const pageId = c.req.param('pageId');
+  const body = await c.req.json<{
+    old_text: string;
+    new_text: string;
+    comment_id?: string;
+    occurrence?: 'first' | 'all' | number;
+    require_unique?: boolean;
+  }>();
+
+  const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first<Page>();
+  if (!page) return c.json({ error: 'Page not found' }, 404);
+  if (!(await checkWorkspaceAccess(c.env.DB, page.workspace_id, auth.user.id))) {
+    return c.json({ error: 'Access denied' }, 403);
+  }
+  if (page.type === 'database' || page.type === 'folder') {
+    return c.json({ error: 'edit-section applies to document pages only' }, 400);
+  }
+  if (!body.old_text) {
+    return c.json({ error: 'old_text is required' }, 400);
+  }
+  if (body.new_text === undefined) {
+    return c.json({ error: 'new_text is required' }, 400);
+  }
+
+  try {
+    const result = await editPageSection(
+      c.env.DB,
+      c.env,
+      pageId,
+      page.title,
+      page.workspace_id,
+      auth.user.id,
+      body.old_text,
+      body.new_text,
+      body.occurrence ?? 'first',
+      body.require_unique ?? false,
+    );
+
+    let commentResolved = false;
+    if (body.comment_id) {
+      const comment = await c.env.DB.prepare(
+        'SELECT id, page_id FROM comments WHERE id = ? AND comment_type = ?',
+      ).bind(body.comment_id, 'agent_instruction').first<{ id: string; page_id: string }>();
+      if (comment && comment.page_id === pageId) {
+        const now = Math.floor(Date.now() / 1000);
+        await c.env.DB.prepare('UPDATE comments SET status = ?, updated_at = ? WHERE id = ?')
+          .bind('resolved', now, body.comment_id).run();
+        commentResolved = true;
+      }
+    }
+
+    const openCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM comments
+      WHERE page_id = ? AND comment_type = 'agent_instruction' AND status = 'open'
+    `).bind(pageId).first<{ count: number }>();
+
+    return c.json({
+      ok: true,
+      page_id: pageId,
+      replaced: result.replaced,
+      match_count: result.match_count,
+      via: result.via,
+      comment_id: body.comment_id ?? null,
+      comment_resolved: commentResolved,
+      open_count: openCount?.count ?? 0,
+    });
+  } catch (err) {
+    if (err instanceof EditSectionError) {
+      const status = err.code === 'ambiguous' ? 409 : err.code === 'not_found' ? 404 : 400;
+      return c.json({ error: err.message, code: err.code }, status);
+    }
+    throw err;
+  }
 });
 
 export default pages;

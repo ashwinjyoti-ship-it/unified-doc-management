@@ -84,6 +84,19 @@ const CATALOG = {
     },
     { method: 'GET', path: '/api/pages/:pageId/markdown', auth: true },
     { method: 'PUT', path: '/api/pages/:pageId/markdown', auth: true, body: { markdown: 'string' } },
+    {
+      method: 'POST',
+      path: '/api/pages/:pageId/edit-section',
+      auth: true,
+      body: {
+        old_text: 'string (exact substring to replace)',
+        new_text: 'string',
+        comment_id: 'string? (resolve comment on success)',
+        occurrence: 'first|all|number? (default first)',
+        require_unique: 'boolean? (409 if old_text matches more than once)',
+      },
+      description: 'Surgical text replacement — prefer over PUT markdown for agent comment edits',
+    },
     { method: 'GET', path: '/api/pages/:pageId/versions', auth: true },
     { method: 'POST', path: '/api/pages/:pageId/restore/:versionId', auth: true },
 
@@ -175,6 +188,19 @@ const CATALOG = {
     { method: 'POST', path: '/api/seed/migrate-knowledge-base', auth: true },
 
     { method: 'GET', path: '/api/pages/:pageId/agent-comments', auth: true, description: 'Open AI agent instructions' },
+    {
+      method: 'POST',
+      path: '/api/comments/:id/apply',
+      auth: true,
+      body: {
+        new_text: 'string (replacement for selection_quote)',
+        old_text: 'string? (defaults to comment selection_quote)',
+        occurrence: 'first|all|number?',
+        require_unique: 'boolean?',
+        resolve: 'boolean? (default true — mark comment resolved)',
+      },
+      description: 'Apply agent instruction surgically; uses selection_quote as old_text',
+    },
     { method: 'PATCH', path: '/api/comments/:id', auth: true, description: 'Update/resolve comment (status: open|resolved)' },
     { method: 'DELETE', path: '/api/comments/:id', auth: true, description: 'Delete a comment' },
 
@@ -198,6 +224,16 @@ const CATALOG = {
         '→ creates database page and appends database_embed block to host page (no navigation)',
         'POST /api/pages/:dbId/database/properties ... (optional columns)',
         'POST /api/pages/:dbId/database/rows { title: "Row 1" }',
+      ],
+    },
+    {
+      intent: 'Apply open AI instructions (surgical edit — preferred)',
+      steps: [
+        'GET /api/pages/:pageId/agent-comments?status=open',
+        'For each comment: POST /api/comments/:commentId/apply { "new_text": "<edited selection>" }',
+        '→ uses selection_quote as old_text, replaces exactly once, resolves comment',
+        'Or: POST /api/pages/:pageId/edit-section { old_text, new_text, comment_id }',
+        'Do NOT PUT full markdown for selection-scoped instructions',
       ],
     },
     {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext } from '../types';
 import { generateId } from '../utils';
+import { editPageSection, EditSectionError } from '../edit-section';
 
 function buildAgentPrompt(selectionQuote: string | null | undefined, instruction: string): string {
   const quote = (selectionQuote || '').trim();
@@ -99,6 +100,105 @@ comments.patch('/comments/:id', async (c) => {
     JOIN users u ON c.user_id = u.id WHERE c.id = ?
   `).bind(id).first();
   return c.json({ comment });
+});
+
+comments.post('/comments/:id/apply', async (c) => {
+  const auth = c.get('auth');
+  const id = c.req.param('id');
+  const body = await c.req.json<{
+    new_text: string;
+    old_text?: string;
+    occurrence?: 'first' | 'all' | number;
+    require_unique?: boolean;
+    resolve?: boolean;
+  }>();
+
+  const comment = await c.env.DB.prepare(`
+    SELECT c.*, p.title as page_title, p.workspace_id, p.type as page_type
+    FROM comments c
+    JOIN pages p ON c.page_id = p.id
+    WHERE c.id = ?
+  `).bind(id).first<{
+    id: string;
+    page_id: string;
+    comment_type: string;
+    selection_quote: string | null;
+    page_title: string;
+    workspace_id: string;
+    page_type: string;
+  }>();
+
+  if (!comment) return c.json({ error: 'Comment not found' }, 404);
+  if (comment.comment_type !== 'agent_instruction') {
+    return c.json({ error: 'apply is only for agent_instruction comments' }, 400);
+  }
+  if (comment.page_type === 'database' || comment.page_type === 'folder') {
+    return c.json({ error: 'Cannot apply edits to folder or database pages' }, 400);
+  }
+  if (body.new_text === undefined) {
+    return c.json({ error: 'new_text is required' }, 400);
+  }
+
+  const oldText = (body.old_text ?? comment.selection_quote ?? '').trim();
+  if (!oldText) {
+    return c.json({ error: 'old_text is required (or comment must have selection_quote)' }, 400);
+  }
+
+  const member = await c.env.DB.prepare(
+    'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?',
+  ).bind(comment.workspace_id, auth.user.id).first();
+  if (!member) return c.json({ error: 'Access denied' }, 403);
+
+  try {
+    const result = await editPageSection(
+      c.env.DB,
+      c.env,
+      comment.page_id,
+      comment.page_title,
+      comment.workspace_id,
+      auth.user.id,
+      oldText,
+      body.new_text,
+      body.occurrence ?? 'first',
+      body.require_unique ?? false,
+    );
+
+    const shouldResolve = body.resolve !== false;
+    if (shouldResolve) {
+      const now = Math.floor(Date.now() / 1000);
+      await c.env.DB.prepare('UPDATE comments SET status = ?, updated_at = ? WHERE id = ?')
+        .bind('resolved', now, id).run();
+    }
+
+    const openCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM comments
+      WHERE page_id = ? AND comment_type = 'agent_instruction' AND status = 'open'
+    `).bind(comment.page_id).first<{ count: number }>();
+
+    const updated = await c.env.DB.prepare(`
+      SELECT c.*, u.name as author_name FROM comments c
+      JOIN users u ON c.user_id = u.id WHERE c.id = ?
+    `).bind(id).first();
+
+    return c.json({
+      ok: true,
+      page_id: comment.page_id,
+      comment_id: id,
+      old_text: oldText,
+      replaced: result.replaced,
+      match_count: result.match_count,
+      via: result.via,
+      comment_resolved: shouldResolve,
+      open_count: openCount?.count ?? 0,
+      comment: enrichAgentComment(updated as Record<string, unknown>),
+    });
+  } catch (err) {
+    if (err instanceof EditSectionError) {
+      const status = err.code === 'ambiguous' ? 409 : err.code === 'not_found' ? 404 : 400;
+      return c.json({ error: err.message, code: err.code }, status);
+    }
+    throw err;
+  }
 });
 
 comments.delete('/comments/:id', async (c) => {
