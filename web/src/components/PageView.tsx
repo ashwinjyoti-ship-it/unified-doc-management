@@ -141,7 +141,8 @@ export default function PageView() {
       const status = (err as Error & { status?: number }).status;
       const message = err instanceof Error ? err.message : 'Failed to load page';
       if (status === 404) {
-        const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+        const { pages: storePages, favorites: storeFavorites, recent: storeRecent } = useStore.getState();
+        const sidebarOrder = getSidebarPageOrder(storePages, storeFavorites, storeRecent);
         const nextPageId = resolvePageAfterDelete(
           sidebarOrder,
           new Set([pageId]),
@@ -158,7 +159,7 @@ export default function PageView() {
     } finally {
       setLoading(false);
     }
-  }, [pageId, online, navigate, pages, favorites, recent]);
+  }, [pageId, online, navigate]);
 
   const loadComments = async () => {
     if (!pageId) return;
@@ -197,10 +198,12 @@ export default function PageView() {
   useEffect(() => {
     loadPage();
     loadFavoriteStatus();
-    if (pageId && online) {
-      api.recordPageView(pageId).then(() => loadRecent()).catch(() => {});
-    }
   }, [loadPage]);
+
+  useEffect(() => {
+    if (!pageId || !online) return;
+    api.recordPageView(pageId).then(() => loadRecent()).catch(() => {});
+  }, [pageId, online, loadRecent]);
 
   useEffect(() => {
     if (!pageId || pageType === 'folder' || pageType === 'database') return;
