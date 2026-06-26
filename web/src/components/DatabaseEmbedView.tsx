@@ -21,7 +21,13 @@ export default function DatabaseEmbedView({ node }: NodeViewProps) {
 
   return (
     <NodeViewWrapper className="database-embed my-6" data-drag-handle>
-      <div className="rounded-xl border border-green-mist overflow-hidden bg-warm-white shadow-sm">
+      <div
+        className="rounded-xl border border-green-mist overflow-hidden bg-warm-white shadow-sm"
+        contentEditable={false}
+        suppressContentEditableWarning
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-green-mist bg-linen/40">
           <span className="text-sm font-medium text-charcoal truncate">🗃️ {title}</span>
           <button
