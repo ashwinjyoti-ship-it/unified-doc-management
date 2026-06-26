@@ -241,7 +241,9 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
   const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
     if (!editor) return;
     const pages = useStore.getState().pages;
-    const parentId = resolveInsertParentId(pageId, pages);
+    const parentId = navigateToDb
+      ? resolveInsertParentId(pageId, pages)
+      : (pageId ?? resolveInsertParentId(pageId, pages));
     const title = defaultTitleFor('database');
     const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
     await loadPages();

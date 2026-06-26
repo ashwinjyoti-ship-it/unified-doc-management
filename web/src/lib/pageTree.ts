@@ -1,14 +1,22 @@
 import type { Page } from '../types';
 
+/** Row backing pages and inline embedded databases stay out of the sidebar tree. */
+export function isSidebarHiddenPage(page: Page, pages: Page[]): boolean {
+  if (page.is_row_page) return true;
+  if (page.type !== 'database' || !page.parent_id) return false;
+  const parent = pages.find((p) => p.id === page.parent_id);
+  return parent?.type === 'page';
+}
+
 /** Children for sidebar tree — excludes hidden database row backing pages */
 export function getChildren(pages: Page[], parentId: string | null): Page[] {
-  return pages.filter((p) => p.parent_id === parentId && !p.is_row_page);
+  return pages.filter((p) => p.parent_id === parentId && !isSidebarHiddenPage(p, pages));
 }
 
 export function buildChildrenIndex(pages: Page[]): Map<string | null, Page[]> {
   const index = new Map<string | null, Page[]>();
   for (const page of pages) {
-    if (page.is_row_page) continue;
+    if (isSidebarHiddenPage(page, pages)) continue;
     const key = page.parent_id;
     const list = index.get(key) ?? [];
     list.push(page);
