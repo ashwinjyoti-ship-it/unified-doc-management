@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useStore } from '../lib/store';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import Tooltip from './Tooltip';
 import { pageItemClass } from '../lib/pageSelection';
@@ -14,6 +14,8 @@ import NewMenuDropdown from './NewMenuDropdown';
 import { applyImportContent } from '../lib/importContent';
 import { collectDescendantIds } from '../lib/pageTree';
 import { buildDeleteConfirmMessage, getDeleteOrder } from '../lib/pageDelete';
+import { getSidebarPageOrder, resolvePageAfterDelete } from '../lib/pageDeleteNavigation';
+import { getActivePageIdFromPath } from '../lib/pageRoute';
 import { closeSidebarOnMobile } from '../lib/device';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import SidebarItemMenu from './SidebarItemMenu';
@@ -37,6 +39,7 @@ function PageListSection({
   onRename,
   onDelete,
   bulkMode,
+  activePageId,
 }: {
   sectionId: string;
   title: string;
@@ -47,8 +50,8 @@ function PageListSection({
   onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
   bulkMode?: boolean;
+  activePageId: string | null;
 }) {
-  const { pageId } = useParams();
 
   return (
     <CollapsibleSidebarSection
@@ -61,12 +64,13 @@ function PageListSection({
     >
       <div className="space-y-0.5">
         {pages.map((p) => {
-          const active = pageId === p.id;
+          const active = activePageId === p.id;
           return (
             <div key={p.id} className="group flex items-center min-w-0 pr-1">
               <button
                 type="button"
                 onClick={() => onNavigate(p.id)}
+                aria-current={active ? 'page' : undefined}
                 className={`${pageItemClass(active, 'py-1.5 flex-1 min-w-0')}`}
               >
                 <span>{p.icon || '📄'}</span>
@@ -94,7 +98,8 @@ export default function Sidebar() {
     loadPages, loadFavorites, loadRecent, patchPageInStore,
   } = useStore();
   const navigate = useNavigate();
-  const { pageId } = useParams();
+  const location = useLocation();
+  const activePageId = getActivePageIdFromPath(location.pathname);
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const {
@@ -143,15 +148,20 @@ export default function Sidebar() {
       await api.bulkPages('delete', idsToDelete);
     }
 
-    const deletedCurrent = Boolean(pageId && idsToDelete.includes(pageId));
+    const deletedCurrent = Boolean(activePageId && idsToDelete.includes(activePageId));
+    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
     await loadPages();
     await loadFavorites();
     await loadRecent();
 
     if (deletedCurrent) {
-      const remaining = useStore.getState().pages;
-      if (remaining.length > 0) {
-        navigate(`/page/${remaining[0].id}`, { replace: true });
+      const nextPageId = resolvePageAfterDelete(
+        sidebarOrder,
+        new Set(idsToDelete),
+        activePageId,
+      );
+      if (nextPageId) {
+        navigate(`/page/${nextPageId}`, { replace: true });
       } else {
         navigate('/', { replace: true });
       }
@@ -183,14 +193,28 @@ export default function Sidebar() {
   const handleBulkDelete = async () => {
     if (selected.size === 0) return;
     if (!window.confirm(`Delete ${selected.size} page(s)? This cannot be undone.`)) return;
-    await api.bulkPages('delete', [...selected]);
+    const idsToDelete = [...selected];
+    const deletedCurrent = Boolean(activePageId && idsToDelete.includes(activePageId));
+    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+    await api.bulkPages('delete', idsToDelete);
     setSelected(new Set());
     setBulkMode(false);
     await loadPages();
     await loadFavorites();
     await loadRecent();
     closeSidebarOnMobile(setSidebarOpen);
-    navigate('/');
+    if (deletedCurrent) {
+      const nextPageId = resolvePageAfterDelete(
+        sidebarOrder,
+        new Set(idsToDelete),
+        activePageId,
+      );
+      if (nextPageId) {
+        navigate(`/page/${nextPageId}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    }
   };
 
   const handleBulkMoveConfirm = async (parentId: string | null) => {
@@ -229,14 +253,14 @@ export default function Sidebar() {
       const targetId = await applyImportContent({
         content: modal.content,
         mode,
-        pageId: pageId,
+        pageId: activePageId,
         workspaceId: workspace.id,
         suggestedTitle: modal.suggestedTitle,
         signal: controller.signal,
       });
       await loadPages();
       await loadRecent();
-      if (mode === 'new' || targetId !== pageId) {
+      if (mode === 'new' || targetId !== activePageId) {
         navigateToPage(targetId);
       }
     } catch (err) {
@@ -357,6 +381,7 @@ export default function Sidebar() {
             onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
             bulkMode={bulkMode}
+            activePageId={activePageId}
           />
           <PageListSection
             sectionId="recent"
@@ -368,6 +393,7 @@ export default function Sidebar() {
             onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
             bulkMode={bulkMode}
+            activePageId={activePageId}
           />
 
           <PageTree
@@ -379,6 +405,7 @@ export default function Sidebar() {
             onNavigate={navigateToPage}
             onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
+            activePageId={activePageId}
           />
         </div>
 

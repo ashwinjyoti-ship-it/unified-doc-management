@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
-import { useParams } from 'react-router-dom';
 import {
   DndContext,
   DragOverlay,
@@ -34,6 +33,7 @@ interface PageTreeProps {
   onNavigate: (pageId: string) => void;
   onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
+  activePageId: string | null;
 }
 
 function TreeRow({
@@ -49,6 +49,7 @@ function TreeRow({
   onRename,
   onDelete,
   isProjectRoot = false,
+  activePageId,
 }: {
   page: Page;
   childrenIndex: Map<string | null, Page[]>;
@@ -62,11 +63,11 @@ function TreeRow({
   onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
   isProjectRoot?: boolean;
+  activePageId: string | null;
 }) {
   const [expanded, setExpanded] = useState(true);
-  const { pageId } = useParams();
   const children = childrenIndex.get(page.id) ?? [];
-  const isActive = pageId === page.id;
+  const isActive = activePageId === page.id;
   const isSelected = selected?.has(page.id);
   const dropId = `nest-${page.id}`;
   const isDropTarget = overDropId === dropId && activeDragId !== page.id;
@@ -121,6 +122,7 @@ function TreeRow({
         <button
           type="button"
           onClick={() => onNavigate(page.id)}
+          aria-current={isActive ? 'page' : undefined}
           className="flex-1 flex items-center gap-2 px-1 py-1.5 min-w-0"
         >
           {children.length > 0 ? (
@@ -160,6 +162,7 @@ function TreeRow({
           onNavigate={onNavigate}
           onRename={onRename}
           onDelete={onDelete}
+          activePageId={activePageId}
         />
       ))}
     </div>
@@ -214,6 +217,7 @@ export default function PageTree({
   onNavigate,
   onRename,
   onDelete,
+  activePageId,
 }: PageTreeProps) {
   const patchPageInStore = useStore((s) => s.patchPageInStore);
   const childrenIndex = useMemo(() => buildChildrenIndex(pages), [pages]);
@@ -320,6 +324,7 @@ export default function PageTree({
             onRename={onRename}
             onDelete={onDelete}
             isProjectRoot
+            activePageId={activePageId}
           />
         ))}
       </CollapsibleSidebarSection>
@@ -356,6 +361,7 @@ export default function PageTree({
             onNavigate={onNavigate}
             onRename={onRename}
             onDelete={onDelete}
+            activePageId={activePageId}
           />
         ))}
       </CollapsibleSidebarSection>

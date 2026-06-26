@@ -1,15 +1,17 @@
 import { Menu, Search as SearchIcon, Bell } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { useShallow } from 'zustand/react/shallow';
 import { pageIcon } from '../lib/pageTree';
 import NewMenuDropdown from './NewMenuDropdown';
 import NamePromptModal from './NamePromptModal';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
+import { getActivePageIdFromPath } from '../lib/pageRoute';
 import Tooltip from './Tooltip';
 
 export default function MobileTopBar() {
-  const { pageId } = useParams<{ pageId: string }>();
+  const location = useLocation();
+  const activePageId = getActivePageIdFromPath(location.pathname);
   const navigate = useNavigate();
   const { workspace, pages, notifications, setSidebarOpen, setSearchOpen } = useStore(
     useShallow((s) => ({
@@ -29,7 +31,7 @@ export default function MobileTopBar() {
     confirmNewFolder,
   } = useDocumentCreate();
 
-  const currentPage = pageId ? pages.find((p) => p.id === pageId) : null;
+  const currentPage = activePageId ? pages.find((p) => p.id === activePageId) : null;
   const unreadCount = notifications.filter((n) => !n.read).length;
   const barTitle = currentPage
     ? `${pageIcon(currentPage)} ${currentPage.title}`

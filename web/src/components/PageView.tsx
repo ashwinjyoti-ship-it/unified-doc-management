@@ -20,6 +20,8 @@ import {
   History, MessageSquare, FileCode, Link2, Send, RotateCcw, CheckCircle2,
   Download, Upload, X, Trash2, Star, Copy, FileText, Tag as TagIcon, Plus, Save, Check, MoreHorizontal,
 } from 'lucide-react';
+import { buildDeleteConfirmMessage, getDeleteOrder } from '../lib/pageDelete';
+import { getSidebarPageOrder, resolvePageAfterDelete } from '../lib/pageDeleteNavigation';
 import { cachePage, getCachedPage, queueOperation } from '../lib/offline';
 
 type SidePanel = 'comments' | 'history' | null;
@@ -28,7 +30,7 @@ type CommentFilter = 'all' | 'open' | 'addressed';
 export default function PageView() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
-  const { user, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, createPage } = useStore(
+  const { user, markdownMode, setMarkdownMode, online, loadPages, loadFavorites, loadRecent, loadTags, workspace, pages, favorites, recent, createPage } = useStore(
     useShallow((s) => ({
       user: s.user,
       markdownMode: s.markdownMode,
@@ -40,6 +42,8 @@ export default function PageView() {
       loadTags: s.loadTags,
       workspace: s.workspace,
       pages: s.pages,
+      favorites: s.favorites,
+      recent: s.recent,
       createPage: s.createPage,
     })),
   );
@@ -137,9 +141,14 @@ export default function PageView() {
       const status = (err as Error & { status?: number }).status;
       const message = err instanceof Error ? err.message : 'Failed to load page';
       if (status === 404) {
-        const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
-        if (remaining.length > 0) {
-          navigate(`/page/${remaining[0].id}`, { replace: true });
+        const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+        const nextPageId = resolvePageAfterDelete(
+          sidebarOrder,
+          new Set([pageId]),
+          pageId,
+        );
+        if (nextPageId) {
+          navigate(`/page/${nextPageId}`, { replace: true });
         } else {
           navigate('/', { replace: true });
         }
@@ -149,7 +158,7 @@ export default function PageView() {
     } finally {
       setLoading(false);
     }
-  }, [pageId, online, navigate]);
+  }, [pageId, online, navigate, pages, favorites, recent]);
 
   const loadComments = async () => {
     if (!pageId) return;
@@ -582,15 +591,30 @@ export default function PageView() {
 
   const deletePage = async () => {
     if (!pageId) return;
-    const confirmed = window.confirm(`Delete "${title || 'Untitled'}"? This cannot be undone.`);
-    if (!confirmed) return;
-    const remaining = useStore.getState().pages.filter((p) => p.id !== pageId);
-    await api.deletePage(pageId);
+    const page = pages.find((p) => p.id === pageId);
+    const message = page
+      ? buildDeleteConfirmMessage(pages, page)
+      : `Delete "${title || 'Untitled'}"? This cannot be undone.`;
+    if (!window.confirm(message)) return;
+
+    const idsToDelete = page ? getDeleteOrder(pages, page.id) : [pageId];
+    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+    const nextPageId = resolvePageAfterDelete(
+      sidebarOrder,
+      new Set(idsToDelete),
+      pageId,
+    );
+
+    if (idsToDelete.length === 1) {
+      await api.deletePage(pageId);
+    } else {
+      await api.bulkPages('delete', idsToDelete);
+    }
     await loadPages();
     await loadFavorites();
     await loadRecent();
-    if (remaining.length > 0) {
-      navigate(`/page/${remaining[0].id}`, { replace: true });
+    if (nextPageId) {
+      navigate(`/page/${nextPageId}`, { replace: true });
     } else {
       navigate('/', { replace: true });
     }

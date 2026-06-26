@@ -4,13 +4,13 @@ export function pageItemClass(active: boolean, extra = '') {
     'w-full flex items-center gap-2 rounded-lg text-sm transition-all duration-150',
     active
       ? [
-          'bg-forest text-white font-bold',
-          'border-l-4 border-sage',
-          'shadow-[0_2px_8px_rgba(0,66,40,0.35)]',
-          'ring-2 ring-forest/40 ring-inset',
-          'pl-[calc(0.75rem-4px)]',
+          'bg-forest text-white font-semibold',
+          'border-l-[5px] border-sage',
+          'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12),0_2px_10px_rgba(0,66,40,0.4)]',
+          'ring-2 ring-forest/50',
+          'pl-[calc(0.75rem-5px)]',
         ].join(' ')
-      : 'hover:bg-linen text-charcoal border-l-4 border-transparent pl-3',
+      : 'hover:bg-linen text-charcoal border-l-[5px] border-transparent pl-3',
     extra,
   ].join(' ');
 }
@@ -20,11 +20,11 @@ export function pageTreeRowClass(active: boolean) {
     'w-full flex items-center gap-1 rounded-lg text-sm transition-all duration-150',
     active
       ? [
-          'bg-forest text-white font-bold',
-          'border-l-4 border-sage',
-          'shadow-[0_2px_8px_rgba(0,66,40,0.35)]',
-          'ring-2 ring-forest/40 ring-inset',
+          'bg-forest text-white font-semibold',
+          'border-l-[5px] border-sage',
+          'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12),0_2px_10px_rgba(0,66,40,0.4)]',
+          'ring-2 ring-forest/50',
         ].join(' ')
-      : 'hover:bg-linen text-charcoal border-l-4 border-transparent',
+      : 'hover:bg-linen text-charcoal border-l-[5px] border-transparent',
   ].join(' ');
 }
