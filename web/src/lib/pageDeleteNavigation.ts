@@ -3,6 +3,7 @@ import {
   buildChildrenIndex,
   getInboxPages,
   getRootProjects,
+  isSidebarHiddenPage,
 } from './pageTree';
 
 /** Flat sidebar display order: favorites → recent → project tree → inbox. */
@@ -15,7 +16,7 @@ export function getSidebarPageOrder(
   const ordered: Page[] = [];
 
   const add = (page: Page) => {
-    if (page.is_row_page || seen.has(page.id)) return;
+    if (isSidebarHiddenPage(page, pages) || seen.has(page.id)) return;
     seen.add(page.id);
     ordered.push(page);
   };
