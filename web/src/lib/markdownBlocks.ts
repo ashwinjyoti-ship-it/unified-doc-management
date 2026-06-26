@@ -1,5 +1,7 @@
 /** Client-side markdown → block conversion (mirrors worker/src/utils.ts markdownToBlocks). */
 
+import { wikiLinksToHtml } from './pageLinks';
+
 export function markdownToBlocks(md: string): Array<{ type: string; content: object }> {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   const blocks: Array<{ type: string; content: object }> = [];
@@ -59,35 +61,39 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
   return blocks;
 }
 
-export function blocksToTiptapHtml(blocks: Array<{ type: string; content: string }>): string {
+export function blocksToTiptapHtml(
+  blocks: Array<{ type: string; content: string }>,
+  resolvePageId?: (title: string) => string | undefined,
+): string {
+  const inline = (text: string) => wikiLinksToHtml(text || '', resolvePageId);
   const parts: string[] = [];
 
   for (const block of blocks) {
     const content = JSON.parse(block.content || '{}');
     switch (block.type) {
       case 'heading1':
-        parts.push(`<h1>${escapeHtml(content.text || '')}</h1>`);
+        parts.push(`<h1>${inline(content.text)}</h1>`);
         break;
       case 'heading2':
-        parts.push(`<h2>${escapeHtml(content.text || '')}</h2>`);
+        parts.push(`<h2>${inline(content.text)}</h2>`);
         break;
       case 'heading3':
-        parts.push(`<h3>${escapeHtml(content.text || '')}</h3>`);
+        parts.push(`<h3>${inline(content.text)}</h3>`);
         break;
       case 'bulletList':
-        parts.push(`<ul>${(content.items || []).map((item: string) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`);
+        parts.push(`<ul>${(content.items || []).map((item: string) => `<li>${inline(item)}</li>`).join('')}</ul>`);
         break;
       case 'numberedList':
-        parts.push(`<ol>${(content.items || []).map((item: string) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`);
+        parts.push(`<ol>${(content.items || []).map((item: string) => `<li>${inline(item)}</li>`).join('')}</ol>`);
         break;
       case 'todo':
-        parts.push(`<ul data-type="taskList"><li data-type="taskItem" data-checked="${content.checked}">${escapeHtml(content.text || '')}</li></ul>`);
+        parts.push(`<ul data-type="taskList"><li data-type="taskItem" data-checked="${content.checked}">${inline(content.text)}</li></ul>`);
         break;
       case 'code':
         parts.push(`<pre><code>${escapeHtml(content.code || '')}</code></pre>`);
         break;
       case 'quote':
-        parts.push(`<blockquote><p>${escapeHtml(content.text || '')}</p></blockquote>`);
+        parts.push(`<blockquote><p>${inline(content.text)}</p></blockquote>`);
         break;
       case 'divider':
         parts.push('<hr>');
@@ -101,7 +107,7 @@ export function blocksToTiptapHtml(blocks: Array<{ type: string; content: string
         );
         break;
       default:
-        parts.push(`<p>${escapeHtml(content.text || '')}</p>`);
+        parts.push(`<p>${inline(content.text)}</p>`);
     }
   }
 

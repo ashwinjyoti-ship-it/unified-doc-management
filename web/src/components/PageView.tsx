@@ -15,6 +15,7 @@ import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
 import { folderToMarkdown, databaseToMarkdown, markdownToPdfHtml, stripDuplicateTitleFromHtml, downloadHtmlAsPdf } from '../lib/pageExport';
+import { createPageIdResolver } from '../lib/pageLinks';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
 import {
@@ -120,7 +121,7 @@ export default function PageView() {
         setVisibility(data.page.visibility);
         setBlocks(data.blocks);
         setBacklinks(data.backlinks);
-        setEditorContent(blocksToTiptapHtml(data.blocks));
+        setEditorContent(blocksToTiptapHtml(data.blocks, createPageIdResolver(useStore.getState().pages)));
         setEditorContentEpoch((n) => n + 1);
         await cachePage(pageId, data);
         setDirty(false);
@@ -132,7 +133,7 @@ export default function PageView() {
           setPageType(cached.page.type);
           setVisibility(cached.page.visibility);
           setBlocks(cached.blocks);
-          setEditorContent(blocksToTiptapHtml(cached.blocks));
+          setEditorContent(blocksToTiptapHtml(cached.blocks, createPageIdResolver(useStore.getState().pages)));
           setEditorContentEpoch((n) => n + 1);
         } else {
           setLoadError('Page not available offline');
@@ -480,7 +481,7 @@ export default function PageView() {
           bodyHtml = markdownToPdfHtml(markdown, pageTitle);
         } else {
           const snapshot = editorRef.current?.getSnapshot();
-          const rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks);
+          const rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks, createPageIdResolver(useStore.getState().pages));
           bodyHtml = stripDuplicateTitleFromHtml(rawHtml, pageTitle);
         }
       } else {
@@ -627,7 +628,7 @@ export default function PageView() {
     if (!pageId) return;
     const { blocks: restored } = await api.restoreVersion(pageId, versionId);
     setBlocks(restored);
-    setEditorContent(blocksToTiptapHtml(restored));
+    setEditorContent(blocksToTiptapHtml(restored, createPageIdResolver(useStore.getState().pages)));
     loadVersionHistory();
   };
 

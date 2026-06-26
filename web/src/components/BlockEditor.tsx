@@ -8,7 +8,6 @@ import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
-import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { common, createLowlight } from 'lowlight';
@@ -16,6 +15,7 @@ import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperati
 import { useNavigate } from 'react-router-dom';
 import { Bold, Italic, Strikethrough, MessageSquarePlus } from 'lucide-react';
 import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
+import { PageLink } from '../extensions/PageLink';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
@@ -42,6 +42,7 @@ import {
   sanitizePastedHtml,
   shouldPreferPlainTextPaste,
 } from '../lib/pasteMarkdown';
+import { serializeInlineNodes } from '../lib/pageLinks';
 
 export { blocksToTiptapHtml } from '../lib/markdownBlocks';
 
@@ -130,7 +131,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       TableHeader,
       TableCell,
       Image.configure({ inline: false }),
-      Link.configure({ openOnClick: false }),
+      PageLink.configure({ openOnClick: false, autolink: false }),
       CodeBlockLowlight.configure({ lowlight }),
       DatabaseEmbed,
       SlashCommands.configure({
@@ -142,6 +143,15 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     editable,
     immediatelyRender: false,
     editorProps: {
+      handleClick(_view, _pos, event) {
+        const target = event.target as HTMLElement | null;
+        const anchor = target?.closest('a[href^="/page/"]');
+        if (!anchor) return false;
+        event.preventDefault();
+        const href = anchor.getAttribute('href');
+        if (href) navigate(href);
+        return true;
+      },
       handlePaste(view, event) {
         const clipboard = event.clipboardData;
         if (!clipboard) return false;
@@ -172,7 +182,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       onDirtyRef.current?.();
       debouncedEmitContent(ed);
     },
-  }, [debouncedEmitContent, handleSlashItemSelected, uploadImage]);
+  }, [debouncedEmitContent, handleSlashItemSelected, uploadImage, navigate]);
 
   useImperativeHandle(ref, () => ({
     getSnapshot: () => {
@@ -295,7 +305,23 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
   const insertPageLink = useCallback((page: Page) => {
     if (!editor || !pageLinkRangeRef.current) return;
     const { from, to } = pageLinkRangeRef.current;
-    editor.chain().focus().deleteRange({ from, to }).insertContent(`[[${page.title}]] `).run();
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from, to })
+      .insertContent({
+        type: 'text',
+        text: `${page.title} `,
+        marks: [{
+          type: 'link',
+          attrs: {
+            href: `/page/${page.id}`,
+            target: null,
+            'data-page-link': 'true',
+          },
+        }],
+      })
+      .run();
     pageLinkRangeRef.current = null;
     setPageLinkOpen(false);
   }, [editor]);
@@ -636,11 +662,9 @@ function extractContent(node: Record<string, unknown>): object {
 }
 
 function getTextContent(node: Record<string, unknown>): string {
+  if (node.type === 'text') {
+    return serializeInlineNodes([node]);
+  }
   if (!node.content) return '';
-  return (node.content as Array<Record<string, unknown>>)
-    .map((n) => {
-      if (n.type === 'text') return (n.text as string) || '';
-      return getTextContent(n);
-    })
-    .join('');
+  return (node.content as Array<Record<string, unknown>>).map((child) => getTextContent(child)).join('');
 }
