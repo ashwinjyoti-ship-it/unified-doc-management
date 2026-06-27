@@ -139,19 +139,23 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElement {
   const container = document.createElement('div');
   container.setAttribute('data-pdf-export-root', 'true');
-  // Rendered off-canvas (behind everything, non-interactive) at a fixed A4-ish
-  // pixel width so jsPDF.html can rasterize and paginate it. Page margins are
-  // applied by jsPDF below, so the container itself carries no padding.
+  // Rendered off-screen (non-interactive) at a fixed A4-ish pixel width so
+  // jsPDF.html can rasterize and paginate it. Page margins are applied by jsPDF
+  // below, so the container itself carries no padding.
+  //
+  // It is hidden by positioning it far off-screen — NOT with `opacity: 0` or
+  // `visibility: hidden`. jsPDF renders via html2canvas, which honors opacity
+  // and visibility, so hiding it that way rasterizes a fully transparent
+  // (blank) capture. Off-screen positioning keeps it fully opaque for capture
+  // while invisible to the user.
   container.style.cssText = [
     'position: fixed',
-    'left: 0',
+    'left: -10000px',
     'top: 0',
     `width: ${PDF_PAGE_WIDTH_PX}px`,
     'background: #ffffff',
     'box-sizing: border-box',
     'color: #1D3325',
-    'z-index: -1',
-    'opacity: 0',
     'pointer-events: none',
     'overflow: visible',
   ].join(';');
