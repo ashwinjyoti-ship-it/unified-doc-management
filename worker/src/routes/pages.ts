@@ -224,6 +224,15 @@ pages.delete('/pages/:pageId', async (c) => {
     return c.json({ error: 'Access denied' }, 403);
   }
 
+  if (page.type === 'database') {
+    const rowPages = await c.env.DB.prepare(
+      'SELECT page_id FROM database_rows WHERE database_id = ? AND page_id IS NOT NULL',
+    ).bind(pageId).all<{ page_id: string }>();
+    for (const row of rowPages.results || []) {
+      await c.env.DB.prepare('DELETE FROM pages WHERE id = ?').bind(row.page_id).run();
+    }
+  }
+
   await c.env.DB.prepare('DELETE FROM pages WHERE id = ?').bind(pageId).run();
   await c.env.DB.prepare('DELETE FROM pages_fts WHERE page_id = ?').bind(pageId).run();
   return c.json({ ok: true });
