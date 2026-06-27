@@ -53,13 +53,7 @@ CREATE TABLE IF NOT EXISTS canvas_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_canvas_tokens_page ON canvas_tokens(page_id);
 
--- ── 4. Add comment anchor columns (skip silently if already present) ─────────
--- These are added by migration 009; listed here only for databases where 009
--- was partially applied.  Each ALTER TABLE is harmless if the column exists
--- because D1 tracks this migration by name and runs it exactly once.
-ALTER TABLE comments ADD COLUMN anchor_kind TEXT NOT NULL DEFAULT 'text';
-ALTER TABLE comments ADD COLUMN anchor_id TEXT;
-ALTER TABLE comments ADD COLUMN anchor_path TEXT;
-ALTER TABLE comments ADD COLUMN tags TEXT NOT NULL DEFAULT '[]';
-ALTER TABLE comments ADD COLUMN snapshot_before TEXT;
-ALTER TABLE page_versions ADD COLUMN canvas_snapshot TEXT;
+-- ── 4. Comment anchor columns ────────────────────────────────────────────────
+-- Migration 009 (fixed) adds these columns when it runs cleanly.
+-- This section intentionally left empty: including ALTER TABLE here would
+-- conflict if 009 already ran (SQLite has no ADD COLUMN IF NOT EXISTS).
