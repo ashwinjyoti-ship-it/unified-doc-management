@@ -14,7 +14,13 @@ import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
-import { databaseToMarkdown, markdownToPdfHtml, downloadHtmlAsPdf } from '../lib/pageExport';
+import {
+  databaseToMarkdown,
+  downloadHtmlAsPdf,
+  downloadTextFile,
+  folderToMarkdown,
+  markdownToPdfHtml,
+} from '../lib/pageExport';
 import { createPageIdResolver } from '../lib/pageLinks';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
@@ -90,6 +96,7 @@ export default function PageView() {
   const editorHtmlRef = useRef<string>('');
   const editorRef = useRef<BlockEditorHandle>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const savingRef = useRef(false);
   const dirtyRef = useRef(false);
   const [editorContentEpoch, setEditorContentEpoch] = useState(0);
   const sidePanelRef = useRef<SidePanel>(null);
@@ -205,6 +212,14 @@ export default function PageView() {
 
   useEffect(() => {
     if (!pageId) return;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    operationCancelledRef.current = false;
+    setOperationLabel(null);
+    setExporting(false);
+    setImporting(false);
+    setShowExportMenu(false);
+    setExportMenuRect(null);
     loadedPageIdRef.current = null;
     dirtyRef.current = false;
     setDirty(false);
@@ -214,6 +229,10 @@ export default function PageView() {
     loadPage();
     loadFavoriteStatus();
   }, [pageId, loadPage]);
+
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
 
   useEffect(() => {
     const onPageImported = (e: Event) => {
@@ -382,8 +401,59 @@ export default function PageView() {
         title,
       };
     }
+    if (pageType === 'folder') {
+      return {
+        markdown: folderToMarkdown(title, pages, pageId),
+        title,
+      };
+    }
     return api.getMarkdown(pageId);
-  }, [pageId, pageType, title]);
+  }, [pageId, pageType, title, pages]);
+
+  const waitForSaveIdle = useCallback(async (timeoutMs = 15000) => {
+    const start = Date.now();
+    while (savingRef.current) {
+      if (Date.now() - start > timeoutMs) {
+        throw new Error('Timed out waiting for save to finish');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }, []);
+
+  const flushEditsForExport = useCallback(async () => {
+    if (!pageId) return;
+    await waitForSaveIdle();
+    if (!dirtyRef.current) return;
+
+    const snapshot = editorRef.current?.getSnapshot();
+    if (snapshot) {
+      editorHtmlRef.current = snapshot.html;
+      editorJsonRef.current = snapshot.json;
+    }
+
+    if (loadedPageIdRef.current === pageId && title.trim()) {
+      await saveTitle(title, pageId);
+    }
+
+    if (markdownMode) {
+      savingRef.current = true;
+      setSaving(true);
+      try {
+        await api.saveMarkdown(pageId, markdown);
+        dirtyRef.current = false;
+        setDirty(false);
+        setLastSaved(new Date());
+      } finally {
+        savingRef.current = false;
+        setSaving(false);
+      }
+      return;
+    }
+
+    if (editorJsonRef.current) {
+      await persistBlocks(editorHtmlRef.current, editorJsonRef.current);
+    }
+  }, [pageId, title, markdownMode, markdown, saveTitle, persistBlocks, waitForSaveIdle]);
 
   const toggleMarkdown = async () => {
     if (!pageId) return;
@@ -453,35 +523,27 @@ export default function PageView() {
   };
 
   const exportPage = async () => {
-    if (!pageId) return;
+    if (!pageId || exporting) return;
     closeExportMenu();
     setExporting(true);
-    startOperation('Exporting Markdown...');
     try {
-      if (dirty) await saveNow();
+      await flushEditsForExport();
       const { markdown: md, title: pageTitle } = await getExportContent();
-      if (operationCancelledRef.current) return;
-      const blob = new Blob([md], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${pageTitle || 'untitled'}.md`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadTextFile(`${pageTitle || 'untitled'}.md`, md, 'text/markdown;charset=utf-8');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setExporting(false);
-      setOperationLabel(null);
-      abortRef.current = null;
     }
   };
 
   const exportPdf = async () => {
-    if (!pageId) return;
+    if (!pageId || exporting) return;
     closeExportMenu();
     setExporting(true);
     startOperation('Generating PDF...');
     try {
-      if (dirty) await saveNow();
+      await flushEditsForExport();
       if (operationCancelledRef.current) return;
 
       const pageTitle = title || 'Untitled';
@@ -851,7 +913,7 @@ export default function PageView() {
             <Tooltip text="Download this page as Markdown or PDF">
               <button
                 onClick={toggleExportMenu}
-                disabled={!!operationLabel}
+                disabled={exporting}
                 aria-expanded={showExportMenu}
                 aria-haspopup="menu"
                 className="p-2 rounded-lg hover:bg-linen flex items-center gap-1.5 text-sm disabled:opacity-50"
@@ -951,7 +1013,7 @@ export default function PageView() {
             <Tooltip text="Download as Markdown or PDF">
               <button
                 onClick={toggleExportMenu}
-                disabled={!!operationLabel}
+                disabled={exporting}
                 aria-expanded={showExportMenu}
                 aria-haspopup="menu"
                 className="p-2 rounded-lg hover:bg-linen disabled:opacity-50"
@@ -994,7 +1056,7 @@ export default function PageView() {
                       setExportMenuRect(e.currentTarget.getBoundingClientRect());
                       setShowExportMenu(true);
                     }}
-                    disabled={!!operationLabel}
+                    disabled={exporting}
                     className="w-full px-4 py-2.5 text-sm text-left hover:bg-linen flex items-center gap-2 disabled:opacity-50"
                   >
                     <Download className="w-4 h-4" /> Export page
