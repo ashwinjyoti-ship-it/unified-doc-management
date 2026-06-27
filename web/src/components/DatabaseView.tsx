@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
+import { useCollab } from '../hooks/useCollab';
 import { useDatabaseColumnResize } from '../hooks/useDatabaseColumnResize';
 import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
 import {
@@ -49,6 +50,10 @@ interface DatabaseViewProps {
 export default function DatabaseView({ pageId, embedded = false }: DatabaseViewProps) {
   const addPageToStore = useStore((s) => s.addPageToStore);
   const removePageFromStore = useStore((s) => s.removePageFromStore);
+  const user = useStore((s) => s.user);
+  // Timestamp of the most recent local mutation. Used to ignore the realtime
+  // echo of our own writes so a live-reload never clobbers in-progress typing.
+  const lastLocalEditRef = useRef(0);
   const [properties, setProperties] = useState<DatabaseProperty[]>([]);
   const [rows, setRows] = useState<DatabaseRow[]>([]);
   const [savedViews, setSavedViews] = useState<SavedDatabaseView[]>([]);
@@ -82,9 +87,19 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
     setAlertMessage(message);
   }, []);
 
+  const { lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
+
   useEffect(() => {
     void loadDatabase();
   }, [pageId]);
+
+  // Live-reload when another client (e.g. an AI agent) changes this database,
+  // unless we just made a local edit — that echo would clobber current typing.
+  useEffect(() => {
+    if (lastUpdate?.type !== 'database_updated') return;
+    if (Date.now() - lastLocalEditRef.current < 2500) return;
+    void loadDatabase();
+  }, [lastUpdate]);
 
   const loadDatabase = async () => {
     setLoading(true);
@@ -126,6 +141,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   };
 
   const addRow = async () => {
+    lastLocalEditRef.current = Date.now();
     try {
       const { row } = await api.createDatabaseRow(pageId);
       setRows((prev) => [...prev, row]);
@@ -157,6 +173,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   }, [pageId]);
 
   const patchRowLocal = useCallback((rowId: string, propId: string, value: unknown) => {
+    lastLocalEditRef.current = Date.now();
     setRows((prev) =>
       prev.map((r) => {
         if (r.id !== rowId) return r;
@@ -196,6 +213,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   }, [patchRowLocal, flushSave]);
 
   const deleteRow = async (rowId: string) => {
+    lastLocalEditRef.current = Date.now();
     const row = rows.find((r) => r.id === rowId);
     await api.deleteDatabaseRow(pageId, rowId);
     setRows((prev) => prev.filter((r) => r.id !== rowId));

@@ -450,7 +450,7 @@ export default function PageView() {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      alert(err instanceof Error ? err.message : 'Import failed');
+      setAlertMessage(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setImporting(false);
       setOperationLabel(null);
@@ -508,7 +508,7 @@ export default function PageView() {
       }
     } catch (err) {
       if (!operationCancelledRef.current) {
-        alert(err instanceof Error ? err.message : 'PDF export failed');
+        setAlertMessage(err instanceof Error ? err.message : 'PDF export failed');
       }
     } finally {
       setExporting(false);
@@ -612,7 +612,7 @@ export default function PageView() {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      alert(err instanceof Error ? err.message : 'Import failed');
+      setAlertMessage(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setImporting(false);
       setOperationLabel(null);
@@ -633,7 +633,7 @@ export default function PageView() {
         suggestedTitle: file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported',
       });
     } catch {
-      alert('Could not read file');
+      setAlertMessage('Could not read file');
     }
   };
 
