@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import type { Page } from '../types';
 import { api } from '../lib/api';
-import { canNestUnder, buildChildrenIndex, getInboxPages, getRootProjects, pageIcon } from '../lib/pageTree';
+import { canNestUnder, buildChildrenIndex, getRootProjects, getStandalonePages, pageIcon } from '../lib/pageTree';
 import { useStore } from '../lib/store';
 import { pageTreeRowClass } from '../lib/pageSelection';
 import CollapsibleSidebarSection from './CollapsibleSidebarSection';
@@ -34,6 +34,88 @@ interface PageTreeProps {
   onRename: (page: Page) => void;
   onDelete: (page: Page) => void;
   activePageId: string | null;
+}
+
+function FlatPageRow({
+  page,
+  bulkMode,
+  selected,
+  onToggleSelect,
+  onNavigate,
+  onRename,
+  onDelete,
+  activePageId,
+}: {
+  page: Page;
+  bulkMode?: boolean;
+  selected?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onNavigate: (pageId: string) => void;
+  onRename: (page: Page) => void;
+  onDelete: (page: Page) => void;
+  activePageId: string | null;
+}) {
+  const isActive = activePageId === page.id;
+  const isSelected = selected?.has(page.id);
+
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: page.id,
+    disabled: bulkMode,
+  });
+
+  return (
+    <div className={isDragging ? 'opacity-40' : ''}>
+      <div
+        ref={setNodeRef}
+        className={`group ${pageTreeRowClass(isActive)}`}
+        style={{ paddingLeft: '12px' }}
+      >
+        {!bulkMode && (
+          <Tooltip text="Drag to move this page">
+            <button
+              type="button"
+              className="p-0.5 shrink-0 cursor-grab active:cursor-grabbing text-mid-gray hover:text-charcoal touch-none"
+              {...listeners}
+              {...attributes}
+              aria-label="Drag to reorder"
+            >
+              <GripVertical className="w-3.5 h-3.5" />
+            </button>
+          </Tooltip>
+        )}
+        {bulkMode && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleSelect?.(page.id); }}
+            className="p-1 shrink-0"
+          >
+            {isSelected ? (
+              <CheckSquare className="w-3.5 h-3.5 text-forest" />
+            ) : (
+              <Square className="w-3.5 h-3.5 text-mid-gray" />
+            )}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onNavigate(page.id)}
+          aria-current={isActive ? 'page' : undefined}
+          className="flex-1 flex items-center gap-2 px-1 py-1.5 min-w-0"
+        >
+          <span className="w-3 shrink-0" />
+          <span className="shrink-0">{pageIcon(page)}</span>
+          <span className="truncate flex-1 text-left">{page.title}</span>
+        </button>
+        <SidebarItemMenu
+          label={page.title}
+          onRename={() => onRename(page)}
+          onDelete={() => onDelete(page)}
+          disabled={bulkMode}
+          light={isActive}
+        />
+      </div>
+    </div>
+  );
 }
 
 function TreeRow({
@@ -94,7 +176,7 @@ function TreeRow({
         style={{ paddingLeft: `${12 + depth * 16}px` }}
       >
         {!bulkMode && (
-          <Tooltip text="Drag to move this page into a folder or inbox">
+          <Tooltip text="Drag to move this page into a folder or pages">
             <button
               type="button"
               className="p-0.5 shrink-0 cursor-grab active:cursor-grabbing text-mid-gray hover:text-charcoal touch-none"
@@ -203,7 +285,7 @@ function RootDropZone({
 
 function canDropOnRootZone(zoneId: string, page: Page): boolean {
   if (zoneId === 'nest-project-root') return page.type === 'folder';
-  if (zoneId === 'nest-inbox-root') return page.type !== 'folder';
+  if (zoneId === 'nest-pages-root') return page.type !== 'folder';
   if (zoneId === 'nest-root') return true;
   return false;
 }
@@ -222,7 +304,7 @@ export default function PageTree({
   const patchPageInStore = useStore((s) => s.patchPageInStore);
   const childrenIndex = useMemo(() => buildChildrenIndex(pages), [pages]);
   const projects = getRootProjects(pages);
-  const inboxPages = getInboxPages(pages);
+  const standalonePages = getStandalonePages(pages);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [overDropId, setOverDropId] = useState<string | null>(null);
   const overDropRaf = useRef<number | null>(null);
@@ -260,7 +342,7 @@ export default function PageTree({
     let newParentId: string | null = null;
 
     const overId = String(over.id);
-    if (overId === 'nest-root' || overId === 'nest-project-root' || overId === 'nest-inbox-root') {
+    if (overId === 'nest-root' || overId === 'nest-project-root' || overId === 'nest-pages-root') {
       if (!canDropOnRootZone(overId, dragged)) return;
       newParentId = null;
     } else if (overId.startsWith('nest-')) {
@@ -330,34 +412,30 @@ export default function PageTree({
       </CollapsibleSidebarSection>
 
       <CollapsibleSidebarSection
-        id="inbox"
-        title="Inbox"
-        tooltip="Daily notes and unfiled pages — click to collapse"
-        count={inboxPages.length}
+        id="pages"
+        title="Pages"
+        tooltip="Standalone pages not inside a project — click to collapse"
+        count={standalonePages.length}
         showWhenEmpty
-        isEmpty={inboxPages.length === 0}
+        isEmpty={standalonePages.length === 0}
       >
         <RootDropZone
-          id="nest-inbox-root"
-          label="Drop here for inbox (daily notes, quick pages)"
+          id="nest-pages-root"
+          label="Drop here for a standalone page"
           activeDragId={activeDragId}
           overDropId={overDropId}
           draggedPage={draggedPage}
         />
-        {inboxPages.length === 0 && !activeDragId && (
-          <p className="px-3 py-2 text-xs text-mid-gray">Unfiled pages and daily notes appear here</p>
+        {standalonePages.length === 0 && !activeDragId && (
+          <p className="px-3 py-2 text-xs text-mid-gray">Standalone pages appear here — use New → New Page</p>
         )}
-        {inboxPages.map((page) => (
-          <TreeRow
+        {standalonePages.map((page) => (
+          <FlatPageRow
             key={page.id}
             page={page}
-            childrenIndex={childrenIndex}
-            depth={0}
             bulkMode={bulkMode}
             selected={selected}
             onToggleSelect={onToggleSelect}
-            activeDragId={activeDragId}
-            overDropId={overDropId}
             onNavigate={onNavigate}
             onRename={onRename}
             onDelete={onDelete}

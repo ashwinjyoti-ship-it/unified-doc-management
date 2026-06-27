@@ -1,16 +1,15 @@
 import type { Page } from '../types';
 import {
   buildChildrenIndex,
-  getInboxPages,
+  getStandalonePages,
   getRootProjects,
   isSidebarHiddenPage,
 } from './pageTree';
 
-/** Flat sidebar display order: favorites → recent → project tree → inbox. */
+/** Flat sidebar display order: favorites → project tree → standalone pages. */
 export function getSidebarPageOrder(
   pages: Page[],
   favorites: Page[],
-  recent: Page[],
 ): Page[] {
   const seen = new Set<string>();
   const ordered: Page[] = [];
@@ -22,11 +21,6 @@ export function getSidebarPageOrder(
   };
 
   for (const page of favorites) add(page);
-
-  const favoriteIds = new Set(favorites.map((p) => p.id));
-  for (const page of recent) {
-    if (!favoriteIds.has(page.id)) add(page);
-  }
 
   const childrenIndex = buildChildrenIndex(pages);
 
@@ -40,7 +34,7 @@ export function getSidebarPageOrder(
   for (const project of getRootProjects(pages)) {
     walkTree(project);
   }
-  for (const page of getInboxPages(pages)) {
+  for (const page of getStandalonePages(pages)) {
     add(page);
   }
 

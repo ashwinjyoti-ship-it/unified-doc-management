@@ -23,7 +23,7 @@ import SidebarItemMenu from './SidebarItemMenu';
 import type { Page } from '../types';
 import {
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
-  Star, Clock, CheckSquare, Trash2, FolderInput, Link2, CalendarDays,
+  Star, CheckSquare, Trash2, FolderInput, Link2, CalendarDays,
 } from 'lucide-react';
 
 function todayNoteTitle() {
@@ -62,6 +62,7 @@ function PageListSection({
       tooltip={tooltip}
       count={pages.length}
       isEmpty={pages.length === 0}
+      showWhenEmpty={sectionId === 'favorites'}
     >
       <div className="space-y-0.5">
         {pages.map((p) => {
@@ -94,7 +95,7 @@ function PageListSection({
 
 export default function Sidebar() {
   const {
-    pages, favorites, recent, workspace, sidebarOpen, setSidebarOpen,
+    pages, favorites, workspace, sidebarOpen, setSidebarOpen,
     createPage, logout, online, notifications, setSearchOpen,
     loadPages, loadFavorites, loadRecent, patchPageInStore,
   } = useStore();
@@ -145,7 +146,7 @@ export default function Sidebar() {
     const idsToDelete = getDeleteOrder(pages, page.id);
     const deletedIds = new Set(idsToDelete);
     const deletedCurrent = Boolean(activePageId && deletedIds.has(activePageId));
-    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+    const sidebarOrder = getSidebarPageOrder(pages, favorites);
     const nextPageId = deletedCurrent
       ? resolvePageAfterDelete(sidebarOrder, deletedIds, activePageId)
       : null;
@@ -208,7 +209,7 @@ export default function Sidebar() {
     const idsToDelete = [...selected];
     const deletedIds = new Set(idsToDelete);
     const deletedCurrent = Boolean(activePageId && deletedIds.has(activePageId));
-    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+    const sidebarOrder = getSidebarPageOrder(pages, favorites);
     const nextPageId = deletedCurrent
       ? resolvePageAfterDelete(sidebarOrder, deletedIds, activePageId)
       : null;
@@ -403,18 +404,6 @@ export default function Sidebar() {
             icon={<Star className="w-3 h-3" />}
             pages={favorites}
             tooltip="Pages you've pinned for quick access — click to collapse"
-            onNavigate={navigateToPage}
-            onRename={(p) => setRenameModal(p)}
-            onDelete={(p) => void handleDeletePage(p)}
-            bulkMode={bulkMode}
-            activePageId={activePageId}
-          />
-          <PageListSection
-            sectionId="recent"
-            title="Recent"
-            icon={<Clock className="w-3 h-3" />}
-            pages={recent.filter((r) => !favorites.some((f) => f.id === r.id))}
-            tooltip="Pages you've opened recently — click to collapse"
             onNavigate={navigateToPage}
             onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}

@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bold, Italic, Strikethrough, MessageSquarePlus } from 'lucide-react';
 import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
 import { PageLink } from '../extensions/PageLink';
+import { Callout } from '../extensions/Callout';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
@@ -136,6 +137,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       PageLink.configure({ openOnClick: false, autolink: false }),
       CodeBlockLowlight.configure({ lowlight }),
       DatabaseEmbed,
+      Callout,
       SlashCommands.configure({
         onImageUpload: uploadImage,
         onSlashItemSelected: handleSlashItemSelected,
@@ -613,6 +615,7 @@ function mapNodeType(type: string): string {
     orderedList: 'numberedList',
     taskList: 'todo',
     blockquote: 'quote',
+    callout: 'callout',
     codeBlock: 'code',
     horizontalRule: 'divider',
     image: 'image',
@@ -668,6 +671,18 @@ function extractContent(node: Record<string, unknown>): object {
 
   if (type === 'blockquote') {
     return { text: getTextContent(node) };
+  }
+
+  if (type === 'callout') {
+    const icon = (node.attrs as { icon?: string })?.icon || '💡';
+    const innerNodes = (node.content as Array<Record<string, unknown>>) || [];
+    return {
+      icon,
+      blocks: innerNodes.map((child) => ({
+        type: mapNodeType(child.type as string),
+        content: extractContent(child),
+      })),
+    };
   }
 
   return { text: getTextContent(node) };

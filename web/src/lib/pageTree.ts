@@ -33,9 +33,14 @@ export function getRootProjects(pages: Page[]): Page[] {
   return getChildren(pages, null).filter((p) => p.type === 'folder');
 }
 
-/** Root pages and databases kept outside projects (daily notes, quick captures, etc.) */
-export function getInboxPages(pages: Page[]): Page[] {
+/** Root-level standalone pages and databases — not inside any folder/project */
+export function getStandalonePages(pages: Page[]): Page[] {
   return getChildren(pages, null).filter((p) => p.type !== 'folder');
+}
+
+/** @deprecated Use getStandalonePages */
+export function getInboxPages(pages: Page[]): Page[] {
+  return getStandalonePages(pages);
 }
 
 export function isProject(page: Page): boolean {

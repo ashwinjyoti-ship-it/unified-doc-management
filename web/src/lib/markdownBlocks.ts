@@ -95,6 +95,14 @@ export function blocksToTiptapHtml(
       case 'quote':
         parts.push(`<blockquote><p>${inline(content.text)}</p></blockquote>`);
         break;
+      case 'callout': {
+        const icon = escapeAttr(content.icon || '💡');
+        const inner = (content.blocks as Array<{ type: string; content: Record<string, unknown> }> || [])
+          .map((b) => nestedBlockToHtml(b, inline))
+          .join('');
+        parts.push(`<div data-type="callout" data-icon="${icon}" class="callout-box">${inner || '<p></p>'}</div>`);
+        break;
+      }
       case 'divider':
         parts.push('<hr>');
         break;
@@ -112,6 +120,35 @@ export function blocksToTiptapHtml(
   }
 
   return parts.join('') || '<p></p>';
+}
+
+function nestedBlockToHtml(
+  block: { type: string; content: Record<string, unknown> },
+  inline: (text: string) => string,
+): string {
+  const content = block.content;
+  switch (block.type) {
+    case 'heading1':
+      return `<h1>${inline(String(content.text || ''))}</h1>`;
+    case 'heading2':
+      return `<h2>${inline(String(content.text || ''))}</h2>`;
+    case 'heading3':
+      return `<h3>${inline(String(content.text || ''))}</h3>`;
+    case 'bulletList':
+      return `<ul>${((content.items as string[]) || []).map((item) => `<li>${inline(item)}</li>`).join('')}</ul>`;
+    case 'numberedList':
+      return `<ol>${((content.items as string[]) || []).map((item) => `<li>${inline(item)}</li>`).join('')}</ol>`;
+    case 'todo':
+      return `<ul data-type="taskList"><li data-type="taskItem" data-checked="${content.checked}">${inline(String(content.text || ''))}</li></ul>`;
+    case 'code':
+      return `<pre><code>${escapeHtml(String(content.code || ''))}</code></pre>`;
+    case 'quote':
+      return `<blockquote><p>${inline(String(content.text || ''))}</p></blockquote>`;
+    case 'divider':
+      return '<hr>';
+    default:
+      return `<p>${inline(String(content.text || ''))}</p>`;
+  }
 }
 
 function escapeHtml(text: string): string {

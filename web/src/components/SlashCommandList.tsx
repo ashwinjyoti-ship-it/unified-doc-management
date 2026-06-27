@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
   Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
-  Quote, Minus, Code, ImageIcon, FileText, Table2, Database, MessageSquare, Square,
+  Quote, Minus, Code, ImageIcon, FileText, Table2, Database, MessageSquare, Square, Info,
 } from 'lucide-react';
 import type { FunctionalSlashKey } from '../lib/slashInsert';
 
@@ -76,6 +76,23 @@ export const slashCommands: SlashCommandItem[] = [
     icon: <Table2 className="w-4 h-4" />,
     placement: 'functional',
     key: 'table',
+  },
+  {
+    title: 'Callout Box',
+    description: 'Highlighted box for nested content',
+    icon: <Info className="w-4 h-4" />,
+    placement: 'format',
+    command: ({ editor, range }) =>
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: 'callout',
+          attrs: { icon: '💡' },
+          content: [{ type: 'paragraph' }],
+        })
+        .run(),
   },
   {
     title: 'Message',
