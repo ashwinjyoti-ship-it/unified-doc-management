@@ -1,5 +1,12 @@
 -- Recreate pages table to add 'canvas' to type CHECK constraint
 -- SQLite does not support ALTER TABLE ... DROP CONSTRAINT
+--
+-- IMPORTANT: Disable FK enforcement before DROP TABLE pages.
+-- Cloudflare D1 has PRAGMA foreign_keys = ON by default; without this,
+-- DROP TABLE pages would cascade-delete all blocks, comments, and
+-- database_rows via their ON DELETE CASCADE foreign keys.
+PRAGMA foreign_keys = OFF;
+
 CREATE TABLE pages_new (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -24,6 +31,9 @@ ALTER TABLE pages_new RENAME TO pages;
 
 CREATE INDEX idx_pages_workspace ON pages(workspace_id);
 CREATE INDEX idx_pages_parent ON pages(parent_id);
+
+-- Re-enable FK enforcement now that DDL is complete
+PRAGMA foreign_keys = ON;
 
 -- Canvas component tree
 CREATE TABLE IF NOT EXISTS canvas_components (

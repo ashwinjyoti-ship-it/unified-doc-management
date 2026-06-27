@@ -76,8 +76,13 @@ app.post('/api/sync', async (c) => {
   for (const op of operations) {
     try {
       if (op.operation === 'update_blocks') {
-        const payload = op.payload as { pageId: string; blocks: unknown[] };
+        const payload = op.payload as { pageId: string; blocks: Array<{ id: string; parent_id?: string | null; type: string; content: unknown; order_index: number }> };
         await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(payload.pageId).run();
+        for (const block of payload.blocks ?? []) {
+          await c.env.DB.prepare(
+            'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index) VALUES (?, ?, ?, ?, ?, ?)'
+          ).bind(block.id, payload.pageId, block.parent_id ?? null, block.type, JSON.stringify(block.content), block.order_index).run();
+        }
         results.push({ id: op.id, status: 'synced' });
       } else {
         results.push({ id: op.id, status: 'synced' });
