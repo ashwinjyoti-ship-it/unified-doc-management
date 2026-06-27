@@ -13,6 +13,8 @@ import SettingsPage from './components/SettingsPage';
 import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
 import AppAvatar from './components/AppAvatar';
+import OnboardingOverlay from './components/OnboardingOverlay';
+import { isOnboardingComplete } from './lib/onboarding';
 
 const LAST_PATH_KEY = 'unifieddocs:lastPath';
 
@@ -95,6 +97,7 @@ function HomePage() {
 function AppLayout() {
   const location = useLocation();
   const showMobileTopBar = !isStandalonePage(location.pathname);
+  const [showOnboarding, setShowOnboarding] = useState(() => !isOnboardingComplete());
 
   useEffect(() => {
     const path = location.pathname + location.search + location.hash;
@@ -119,6 +122,7 @@ function AppLayout() {
       </div>
       <SearchModal />
       <QuickCapture />
+      {showOnboarding && <OnboardingOverlay onComplete={() => setShowOnboarding(false)} />}
     </div>
   );
 }
@@ -146,8 +150,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-forest font-medium animate-pulse">Loading...</div>
+      <div className="h-full flex flex-col items-center justify-center gap-3 p-8">
+        <AppAvatar size="lg" variant="loading" className="rounded-2xl shadow-md shadow-forest/10" />
+        <p className="text-forest font-semibold">UnifiedDocs</p>
+        <p className="text-warm-gray text-sm animate-pulse">Loading workspace...</p>
       </div>
     );
   }
