@@ -14,7 +14,7 @@ import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
-import { folderToMarkdown, databaseToMarkdown, markdownToPdfHtml, stripDuplicateTitleFromHtml, downloadHtmlAsPdf } from '../lib/pageExport';
+import { databaseToMarkdown, markdownToPdfHtml, stripDuplicateTitleFromHtml, downloadHtmlAsPdf } from '../lib/pageExport';
 import { createPageIdResolver } from '../lib/pageLinks';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
@@ -145,7 +145,7 @@ export default function PageView() {
       const message = err instanceof Error ? err.message : 'Failed to load page';
       if (status === 404) {
         const { pages: storePages, favorites: storeFavorites, recent: storeRecent } = useStore.getState();
-        const sidebarOrder = getSidebarPageOrder(storePages, storeFavorites, storeRecent);
+        const sidebarOrder = getSidebarPageOrder(storePages, storeFavorites);
         const nextPageId = resolvePageAfterDelete(
           sidebarOrder,
           new Set([pageId]),
@@ -224,7 +224,7 @@ export default function PageView() {
   }, [pageId, online, loadRecent]);
 
   useEffect(() => {
-    if (!pageId || pageType === 'folder' || pageType === 'database') return;
+    if (!pageId || pageType === 'database') return;
     loadComments();
     loadVersionHistory();
     loadPageTags();
@@ -360,9 +360,6 @@ export default function PageView() {
 
   const getExportContent = useCallback(async () => {
     if (!pageId) throw new Error('No page');
-    if (pageType === 'folder') {
-      return { markdown: folderToMarkdown(title, pages, pageId), title };
-    }
     if (pageType === 'database') {
       const data = await api.getDatabase(pageId);
       const nameProp = data.properties.find((p) => p.name === 'Name' && p.type === 'text') as DatabaseProperty | undefined;
@@ -372,7 +369,7 @@ export default function PageView() {
       };
     }
     return api.getMarkdown(pageId);
-  }, [pageId, pageType, title, pages]);
+  }, [pageId, pageType, title]);
 
   const toggleMarkdown = async () => {
     if (!pageId) return;
@@ -511,7 +508,7 @@ export default function PageView() {
     }
   };
 
-  const canImport = pageType === 'page';
+  const canImport = pageType === 'page' || pageType === 'folder';
 
   const closeExportMenu = () => {
     setShowExportMenu(false);
@@ -692,7 +689,7 @@ export default function PageView() {
     if (!window.confirm(message)) return;
 
     const idsToDelete = page ? getDeleteOrder(pages, page.id) : [pageId];
-    const sidebarOrder = getSidebarPageOrder(pages, favorites, recent);
+    const sidebarOrder = getSidebarPageOrder(pages, favorites);
     const nextPageId = resolvePageAfterDelete(
       sidebarOrder,
       new Set(idsToDelete),
@@ -1049,18 +1046,42 @@ export default function PageView() {
           {pageType === 'database' ? (
             <DatabaseView pageId={pageId!} />
           ) : pageType === 'folder' ? (
-            <FolderView
-              folderId={pageId!}
-              folderTitle={title}
-              pages={pages}
-              onNewPage={async () => {
-                if (!pageId) return;
-                const page = await createPage({ parentId: pageId, type: 'page' });
-                await loadPages();
-                navigate(`/page/${page.id}`);
-              }}
-              onNewFolder={() => setFolderChildModal('folder')}
-            />
+            <>
+              <FolderView
+                folderTitle={title}
+                onNewPage={async () => {
+                  if (!pageId) return;
+                  const page = await createPage({ parentId: pageId, type: 'page' });
+                  await loadPages();
+                  navigate(`/page/${page.id}`);
+                }}
+                onNewFolder={() => setFolderChildModal('folder')}
+              />
+              {markdownMode ? (
+                <textarea
+                  value={markdown}
+                  onChange={(e) => {
+                    setMarkdown(e.target.value);
+                    if (!dirtyRef.current) {
+                      dirtyRef.current = true;
+                      setDirty(true);
+                    }
+                    scheduleAutosave();
+                  }}
+                  className="w-full min-h-[200px] font-mono text-sm bg-linen/50 rounded-xl p-4 border-none outline-none resize-none mt-4"
+                  placeholder="Customize this folder page with markdown..."
+                />
+              ) : (
+                <BlockEditor
+                  key={`${pageId}-${editorContentEpoch}`}
+                  ref={editorRef}
+                  initialContent={editorContent}
+                  onChange={handleEditorChange}
+                  onDirty={handleEditorDirty}
+                  pageId={pageId}
+                />
+              )}
+            </>
           ) : markdownMode ? (
             <textarea
               value={markdown}

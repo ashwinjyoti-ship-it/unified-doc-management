@@ -70,6 +70,9 @@ export default function CollapsibleSidebarSection({
         header
       )}
       {open && <div className="mt-0.5">{children}</div>}
+      {open && isEmpty && showWhenEmpty && (
+        <p className="px-3 py-2 text-xs text-mid-gray">Star a page from its header to pin it here</p>
+      )}
     </div>
   );
 }
