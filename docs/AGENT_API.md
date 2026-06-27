@@ -41,9 +41,12 @@ Returns machine-readable list of all endpoints, property types, and example work
 | Page | `type: "page"` — rich document with blocks |
 | Folder | `type: "folder"` — container in sidebar tree |
 | Database | `type: "database"` — table with columns (properties) and rows |
+| Canvas | `type: "canvas"` — infinite design canvas with components and tokens |
 | Row | Database row; each row has a linked **page** with full editor content |
 | Property / Column | `database_properties` — typed columns on a database |
 | Block | Structured content unit inside a page |
+| Canvas component | A UI element (frame, text, button, etc.) with position, size, styles, and props |
+| Design token | Named reusable value (color, spacing, radius, fontSize, fontWeight) |
 
 ## Database property types
 
@@ -253,6 +256,129 @@ POST /api/import-url
 | GET/POST/DELETE | `/api/pages/:id/tags` | Page tags |
 | POST | `/api/uploads` | File upload |
 | GET | `/api/agent/catalog` | Machine-readable catalog |
+| GET | `/api/pages/:id/canvas` | Get canvas components + tokens |
+| POST | `/api/pages/:id/canvas/components` | Add component |
+| PATCH | `/api/pages/:id/canvas/components/:compId` | Update component (position/size/styles/props) |
+| DELETE | `/api/pages/:id/canvas/components/:compId` | Delete component |
+| GET | `/api/pages/:id/canvas/tokens` | Get design tokens |
+| PUT | `/api/pages/:id/canvas/tokens` | Replace all design tokens |
+| POST | `/api/pages/:id/canvas/reset` | Delete all components (tokens preserved) |
+
+## Canvas / Design workflow
+
+### 12. Read a canvas and generate UI code
+
+```http
+# Get the full component tree and design tokens
+GET /api/pages/{canvasPageId}/canvas
+```
+
+Response shape:
+
+```json
+{
+  "components": [
+    {
+      "id": "uuid",
+      "type": "frame|group|rect|text|button|input|image",
+      "name": "Hero",
+      "parent_id": null,
+      "position": { "x": 0, "y": 0 },
+      "size": { "w": 1440, "h": 900 },
+      "styles": { "background": "#fff" },
+      "props": { "text": "Get started" },
+      "variants": {},
+      "viewport": null,
+      "order_index": 0
+    }
+  ],
+  "tokens": [
+    { "id": "uuid", "name": "primary", "type": "color", "value": "#004228" }
+  ]
+}
+```
+
+Use this JSON to generate React / HTML / any framework. Tips:
+- `frame` → layout wrapper (`<section>`, `<div>`, etc.)
+- `text` → heading or paragraph using `props.text`
+- `button` → `<button>` with styles mapped to CSS or Tailwind classes
+- `input` → `<input>` with `props.placeholder`
+- Design tokens → CSS variables or Tailwind config values
+
+### 13. Apply an agent instruction to a canvas component
+
+```http
+# Fetch open design instructions
+GET /api/pages/{canvasPageId}/agent-comments?status=open
+```
+
+Each item has `anchor_kind: "component"` and an enriched `agent_prompt`:
+
+```
+Component: "Button / Primary"
+
+Instruction: Make the border radius 0
+```
+
+```http
+# Patch the component and resolve the comment in one call
+POST /api/comments/{commentId}/apply
+Content-Type: application/json
+
+{
+  "component_patch": {
+    "styles": { "borderRadius": "0px" },
+    "props": {}
+  }
+}
+```
+
+`component_patch` deep-merges `styles` and `props`; `position` and `size` are replaced if present.  
+The backend saves a `snapshot_before` for diff display, resolves the comment, and broadcasts the update via WebSocket.
+
+### 14. Manage canvas components
+
+```http
+# Add a component
+POST /api/pages/{canvasPageId}/canvas/components
+{
+  "type": "button",
+  "name": "CTA Button",
+  "position": { "x": 100, "y": 200 },
+  "size": { "w": 160, "h": 44 },
+  "styles": { "background": "#004228", "color": "#fff" },
+  "props": { "text": "Get started" }
+}
+
+# Move or resize
+PATCH /api/pages/{canvasPageId}/canvas/components/{compId}
+{ "position": { "x": 200, "y": 300 } }
+
+# Style update
+PATCH /api/pages/{canvasPageId}/canvas/components/{compId}
+{ "styles": { "borderRadius": "8px" } }
+
+# Delete
+DELETE /api/pages/{canvasPageId}/canvas/components/{compId}
+```
+
+### 15. Design tokens
+
+```http
+GET /api/pages/{canvasPageId}/canvas/tokens
+
+PUT /api/pages/{canvasPageId}/canvas/tokens
+{
+  "tokens": [
+    { "name": "primary", "type": "color", "value": "#004228" },
+    { "name": "radius-md", "type": "radius", "value": "8px" }
+  ]
+}
+```
+
+Token types: `color`, `spacing`, `radius`, `fontSize`, `fontWeight`.
+
+---
 
 ## Concepts for agents
 

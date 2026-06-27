@@ -136,7 +136,99 @@ Expected result in the page: `hello-world`
 
 ---
 
-## 4. Discovery endpoint
+## 4. Canvas / Design-to-code workflow
+
+UDM includes an **Infinite Canvas** for designing UI layouts. Agents can read the final canvas, then generate real frontend code from it.
+
+### Canvas page lifecycle
+
+```http
+# 1. Create a canvas page
+POST /api/workspaces/{workspaceId}/pages
+{ "title": "My Screen", "type": "canvas" }
+
+# 2. Read all components on the canvas
+GET /api/pages/{canvasPageId}/canvas
+
+# 3. Read design tokens (colours, spacing, etc.)
+GET /api/pages/{canvasPageId}/canvas/tokens
+```
+
+### Canvas agent comment loop
+
+Users can right-click a component and leave a design instruction (stored as `comment_type: "agent_instruction"` with `anchor_kind: "component"`). The enriched `agent_prompt` looks like:
+
+```
+Component: "Button / Primary"
+
+Instruction: Make the border radius 0 — sharp corners only
+```
+
+```http
+# Fetch open canvas instructions
+GET /api/pages/{canvasPageId}/agent-comments?status=open
+
+# Apply a style/prop patch to a component and resolve the comment
+POST /api/comments/{commentId}/apply
+{
+  "component_patch": {
+    "styles": { "borderRadius": "0px" }
+  }
+}
+```
+
+`component_patch` takes priority over `new_text`. The backend: snapshots the component before patching, applies the patch (deep-merge for `styles`/`props`, replace for `position`/`size`), resolves the comment, and broadcasts the update via WebSocket.
+
+### Generate real UI code from canvas
+
+After the design is finalised:
+
+```http
+GET /api/pages/{canvasPageId}/canvas
+```
+
+Response includes:
+
+```json
+{
+  "components": [
+    {
+      "id": "...",
+      "type": "frame",
+      "name": "Hero Section",
+      "position": { "x": 0, "y": 0 },
+      "size": { "w": 1440, "h": 900 },
+      "styles": { "background": "#ffffff" },
+      "props": {},
+      "children": ["comp-id-1", "comp-id-2"]
+    }
+  ],
+  "tokens": [
+    { "name": "primary", "type": "color", "value": "#004228" },
+    { "name": "radius-md", "type": "radius", "value": "8px" }
+  ]
+}
+```
+
+Pass this JSON to your LLM and ask it to generate React / HTML / Tailwind / any framework. The component tree is already nested and named, so code generation is straightforward.
+
+**Agent instructions (add to `CLAUDE.md` / `AGENTS.md`):**
+
+```markdown
+### Canvas design-to-code loop
+1. GET /pages/{canvasPageId}/canvas → read component tree + tokens
+2. GET /pages/{canvasPageId}/agent-comments?status=open → fetch pending instructions
+3. For each instruction: POST /comments/{id}/apply { "component_patch": { ... } }
+4. When design is finalised: read canvas JSON → generate React components
+   - Map canvas "frame" → layout wrapper
+   - Map "text" → <p>/<h1>/etc. using props.text
+   - Map "button" → <button> with styles applied as Tailwind or inline
+   - Map design tokens → CSS variables or Tailwind config values
+```
+
+---
+
+## 5. Discovery endpoint
 
 Agents can introspect all endpoints without reading this file:
 
@@ -149,7 +241,7 @@ Returns auth info, property types, endpoint list, and example workflows.
 
 ---
 
-## 5. Copy-paste: Claude Code / Codex instructions
+## 6. Copy-paste: Claude Code / Codex instructions
 
 Add to `CLAUDE.md`, `AGENTS.md`, or a project skill:
 
@@ -185,7 +277,7 @@ Full API: docs/AGENT_API.md in the UDM repo
 
 ---
 
-## 6. Copy-paste: Cursor / shell one-liners
+## 7. Copy-paste: Cursor / shell one-liners
 
 ```bash
 # Health check (no auth)
@@ -219,7 +311,7 @@ curl -s -X PATCH -H "X-API-Key: $UDM_API_KEY" \
 
 ---
 
-## 7. Creating an API key (one-time)
+## 8. Creating an API key (one-time)
 
 While logged into UDM in the browser:
 
@@ -237,7 +329,7 @@ Authorization: Bearer <jwt>
 
 ---
 
-## 8. Common operations quick reference
+## 9. Common operations quick reference
 
 | Goal | Method | Path |
 |------|--------|------|
@@ -258,7 +350,7 @@ Authorization: Bearer <jwt>
 
 ---
 
-## 9. UDM concepts agents must know
+## 10. UDM concepts agents must know
 
 ### Row identity
 - **Stable ID:** `database_rows.id` (UUID)
@@ -277,7 +369,7 @@ Read-only; computed on `GET .../database` → `rollupValues[rowId][propId]`.
 
 ---
 
-## 10. Error handling
+## 11. Error handling
 
 | Code | Meaning |
 |------|---------|
@@ -288,7 +380,7 @@ Read-only; computed on `GET .../database` → `rollupValues[rowId][propId]`.
 
 ---
 
-## 11. Is MCP required?
+## 12. Is MCP required?
 
 **No.** API key + this doc is enough for Claude Code, Codex, and scripts.
 
@@ -296,7 +388,7 @@ Build an MCP server later if you want native Cursor tools (e.g. `list_open_instr
 
 ---
 
-## 12. Related files in this repo
+## 13. Related files in this repo
 
 | File | Purpose |
 |------|---------|
