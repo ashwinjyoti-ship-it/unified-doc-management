@@ -1,8 +1,9 @@
 import type { Page } from '../types';
 
-/** Row backing pages and inline embedded databases stay out of the sidebar tree. */
+/** Row backing pages, design canvases, and inline embedded databases stay out of the sidebar tree. */
 export function isSidebarHiddenPage(page: Page, pages: Page[]): boolean {
   if (page.is_row_page) return true;
+  if (page.type === 'canvas') return true;
   if (page.type !== 'database' || !page.parent_id) return false;
   const parent = pages.find((p) => p.id === page.parent_id);
   // Inline databases parented under a document host (page or folder) are hidden from sidebar
@@ -73,7 +74,12 @@ export function canNestUnder(
 }
 
 export function pageIcon(page: Page): string {
-  return page.icon || (page.type === 'folder' ? '📁' : page.type === 'database' ? '🗃️' : '📄');
+  return page.icon || (
+    page.type === 'folder' ? '📁'
+      : page.type === 'database' ? '🗃️'
+        : page.type === 'canvas' ? '🎨'
+          : '📄'
+  );
 }
 
 export function collectDescendantIds(pages: Page[], rootId: string): Set<string> {

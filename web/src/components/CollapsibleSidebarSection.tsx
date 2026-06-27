@@ -11,6 +11,7 @@ interface CollapsibleSidebarSectionProps {
   defaultOpen?: boolean;
   showWhenEmpty?: boolean;
   isEmpty?: boolean;
+  headerAction?: ReactNode;
   children: ReactNode;
 }
 
@@ -23,6 +24,7 @@ export default function CollapsibleSidebarSection({
   defaultOpen = true,
   showWhenEmpty = false,
   isEmpty = false,
+  headerAction,
   children,
 }: CollapsibleSidebarSectionProps) {
   const storageKey = `sidebar-section-${id}`;
@@ -39,25 +41,28 @@ export default function CollapsibleSidebarSection({
   if (!showWhenEmpty && isEmpty) return null;
 
   const header = (
-    <button
-      type="button"
-      onClick={() => setOpen((v) => !v)}
-      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-mid-gray uppercase tracking-wide hover:bg-linen rounded-lg transition-colors"
-      aria-expanded={open}
-    >
-      {open ? (
-        <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
-      ) : (
-        <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
-      )}
-      {icon}
-      <span className="flex-1 text-left">{title}</span>
-      {!open && count != null && count > 0 && (
-        <span className="text-[10px] font-medium bg-linen text-charcoal px-1.5 py-0.5 rounded-full normal-case tracking-normal">
-          {count}
-        </span>
-      )}
-    </button>
+    <div className="flex items-center gap-0.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex-1 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-mid-gray uppercase tracking-wide hover:bg-linen rounded-lg transition-colors min-w-0"
+        aria-expanded={open}
+      >
+        {open ? (
+          <ChevronDown className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        ) : (
+          <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
+        )}
+        {icon}
+        <span className="flex-1 text-left">{title}</span>
+        {!open && count != null && count > 0 && (
+          <span className="text-[10px] font-medium bg-linen text-charcoal px-1.5 py-0.5 rounded-full normal-case tracking-normal">
+            {count}
+          </span>
+        )}
+      </button>
+      {headerAction}
+    </div>
   );
 
   return (
