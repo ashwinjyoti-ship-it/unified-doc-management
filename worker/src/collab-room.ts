@@ -1,7 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 
-interface Session {
-  ws: WebSocket;
+interface SessionMeta {
   userId: string;
   userName: string;
   color: string;
@@ -14,10 +13,16 @@ interface Session {
 // | { kind: 'canvas:token:update';     payload: CanvasToken[] }
 // | { kind: 'canvas:reset';            payload: { pageId: string } }
 // All these flow through the generic broadcast handler below unchanged.
+//
+// IMPORTANT: this room uses the WebSocket Hibernation API (ctx.acceptWebSocket).
+// When the room is idle it is evicted from memory while sockets stay open, so we
+// must NOT keep connected clients in an in-memory Map — that map is empty after a
+// hibernation wake-up, which silently drops every broadcast (the classic "I have
+// to refresh to see the agent's edits" bug). Instead we enumerate live sockets
+// via ctx.getWebSockets() and stash per-socket identity with serializeAttachment,
+// both of which survive hibernation.
 
 export class CollabRoom extends DurableObject {
-  private sessions: Map<string, Session> = new Map();
-
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -38,8 +43,9 @@ export class CollabRoom extends DurableObject {
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
 
+    // Hibernation-safe accept + identity that survives eviction from memory.
     this.ctx.acceptWebSocket(server);
-    this.sessions.set(server, { ws: server, userId, userName, color });
+    server.serializeAttachment({ userId, userName, color } satisfies SessionMeta);
 
     server.send(JSON.stringify({
       type: 'presence',
@@ -55,47 +61,76 @@ export class CollabRoom extends DurableObject {
   }
 
   webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): void {
-    const session = this.sessions.get(ws);
-    if (!session) return;
+    const meta = this.metaOf(ws);
+    if (!meta) return;
 
     try {
       const data = JSON.parse(message as string);
       this.broadcast(JSON.stringify({
         ...data,
-        userId: session.userId,
-        userName: session.userName,
-      }), session.userId);
+        userId: meta.userId,
+        userName: meta.userName,
+      }), meta.userId);
     } catch {
       // ignore malformed messages
     }
   }
 
   webSocketClose(ws: WebSocket): void {
-    const session = this.sessions.get(ws);
-    if (session) {
+    const meta = this.metaOf(ws);
+    try {
+      ws.close();
+    } catch {
+      // already closing
+    }
+    if (meta) {
       this.broadcast(JSON.stringify({
         type: 'user_left',
-        userId: session.userId,
+        userId: meta.userId,
       }));
-      this.sessions.delete(ws);
     }
   }
 
-  private getPresence() {
-    return Array.from(this.sessions.values()).map((s) => ({
-      userId: s.userId,
-      userName: s.userName,
-      color: s.color,
-    }));
+  webSocketError(ws: WebSocket): void {
+    try {
+      ws.close();
+    } catch {
+      // already gone
+    }
+  }
+
+  private metaOf(ws: WebSocket): SessionMeta | null {
+    try {
+      return (ws.deserializeAttachment() as SessionMeta | null) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private getPresence(): SessionMeta[] {
+    const seen = new Set<string>();
+    const users: SessionMeta[] = [];
+    for (const ws of this.ctx.getWebSockets()) {
+      const meta = this.metaOf(ws);
+      if (!meta || seen.has(meta.userId)) continue;
+      seen.add(meta.userId);
+      users.push(meta);
+    }
+    return users;
   }
 
   private broadcast(message: string, excludeUserId?: string): void {
-    for (const session of this.sessions.values()) {
-      if (excludeUserId && session.userId === excludeUserId) continue;
+    for (const ws of this.ctx.getWebSockets()) {
+      const meta = this.metaOf(ws);
+      if (excludeUserId && meta?.userId === excludeUserId) continue;
       try {
-        session.ws.send(message);
+        ws.send(message);
       } catch {
-        this.sessions.delete(session.ws);
+        try {
+          ws.close();
+        } catch {
+          // ignore
+        }
       }
     }
   }

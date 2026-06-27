@@ -76,7 +76,7 @@ export function canNestUnder(
 export function pageIcon(page: Page): string {
   return page.icon || (
     page.type === 'folder' ? '📁'
-      : page.type === 'database' ? '🗃️'
+      : page.type === 'database' ? '🗄️'
         : page.type === 'canvas' ? '🎨'
           : '📄'
   );

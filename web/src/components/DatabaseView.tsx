@@ -98,11 +98,11 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   useEffect(() => {
     if (lastUpdate?.type !== 'database_updated') return;
     if (Date.now() - lastLocalEditRef.current < 2500) return;
-    void loadDatabase();
+    void loadDatabase({ silent: true });
   }, [lastUpdate]);
 
-  const loadDatabase = async () => {
-    setLoading(true);
+  const loadDatabase = async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setLoadError(null);
     try {
       const data = await api.getDatabase(pageId);
@@ -1040,7 +1040,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                 >
                   <option value="">Select a database…</option>
                   {workspaceDatabases.map((db) => (
-                    <option key={db.id} value={db.id}>{db.icon || '🗃️'} {db.title}</option>
+                    <option key={db.id} value={db.id}>{db.icon || '🗄️'} {db.title}</option>
                   ))}
                 </select>
               </>
