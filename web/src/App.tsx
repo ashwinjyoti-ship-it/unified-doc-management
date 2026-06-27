@@ -12,6 +12,7 @@ import QuickCapture from './components/QuickCapture';
 import SettingsPage from './components/SettingsPage';
 import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
+import AppAvatar from './components/AppAvatar';
 
 const LAST_PATH_KEY = 'unifieddocs:lastPath';
 
@@ -53,7 +54,7 @@ function HomePage() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 pb-24 md:pb-8 text-center">
-      <div className="text-6xl mb-4">📄</div>
+      <AppAvatar size="xl" className="mb-4 rounded-2xl shadow-md shadow-forest/10" />
       <h1 className="text-2xl font-bold text-charcoal mb-2">
         Welcome to <span className="text-forest">Unified Doc Management</span>
       </h1>
