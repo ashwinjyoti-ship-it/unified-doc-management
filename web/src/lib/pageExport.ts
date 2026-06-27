@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas';
 import { marked } from 'marked';
 import { jsPDF } from 'jspdf';
 import type { DatabaseProperty, DatabaseRow, Page } from '../types';
@@ -8,24 +7,24 @@ import { getChildren, pageIcon } from './pageTree';
 marked.setOptions({ gfm: true, breaks: false });
 
 const PDF_STYLES = `
-  .pdf-export { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1D3325; line-height: 1.6; font-size: 14px; }
-  .pdf-title { font-size: 28px; font-weight: 700; margin: 0 0 24px; color: #1D3325; border-bottom: 2px solid #004228; padding-bottom: 12px; }
-  .pdf-body h1 { font-size: 24px; font-weight: 700; margin: 20px 0 10px; color: #1D3325; }
-  .pdf-body h2 { font-size: 20px; font-weight: 600; margin: 16px 0 8px; color: #1D3325; }
-  .pdf-body h3 { font-size: 17px; font-weight: 600; margin: 14px 0 6px; color: #1D3325; }
-  .pdf-body p { margin: 8px 0; color: #1D3325; }
+  .pdf-export { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1D3325; line-height: 1.6; font-size: 14px; overflow-wrap: break-word; word-wrap: break-word; padding-bottom: 8px; }
+  .pdf-title { font-size: 28px; font-weight: 700; margin: 0 0 24px; color: #1D3325; border-bottom: 2px solid #004228; padding-bottom: 12px; page-break-after: avoid; break-after: avoid-page; }
+  .pdf-body h1 { font-size: 24px; font-weight: 700; margin: 20px 0 10px; color: #1D3325; page-break-after: avoid; break-after: avoid-page; }
+  .pdf-body h2 { font-size: 20px; font-weight: 600; margin: 16px 0 8px; color: #1D3325; page-break-after: avoid; break-after: avoid-page; }
+  .pdf-body h3 { font-size: 17px; font-weight: 600; margin: 14px 0 6px; color: #1D3325; page-break-after: avoid; break-after: avoid-page; }
+  .pdf-body p { margin: 8px 0; color: #1D3325; orphans: 3; widows: 3; }
   .pdf-body ul, .pdf-body ol { padding-left: 24px; margin: 8px 0; color: #1D3325; }
   .pdf-body li { margin: 4px 0; color: #1D3325; }
-  .pdf-body blockquote { border-left: 3px solid #97B79E; padding: 8px 16px; margin: 12px 0; background: #F4F1ED; border-radius: 0 8px 8px 0; color: #1D3325; }
-  .pdf-body pre { background: #17281D; color: #e2e8f0; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+  .pdf-body blockquote { border-left: 3px solid #97B79E; padding: 8px 16px; margin: 12px 0; background: #F4F1ED; border-radius: 0 8px 8px 0; color: #1D3325; page-break-inside: avoid; break-inside: avoid-page; }
+  .pdf-body pre { background: #17281D; color: #e2e8f0; padding: 12px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-word; page-break-inside: avoid; break-inside: avoid-page; }
   .pdf-body code { background: #F4F1ED; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: ui-monospace, monospace; color: #1D3325; }
   .pdf-body pre code { background: none; padding: 0; color: inherit; }
-  .pdf-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; display: block; }
-  .pdf-body table { border-collapse: collapse; width: 100%; margin: 12px 0; table-layout: fixed; }
+  .pdf-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0; display: block; page-break-inside: avoid; break-inside: avoid-page; }
+  .pdf-body table { border-collapse: collapse; width: 100%; margin: 12px 0; table-layout: fixed; page-break-inside: avoid; break-inside: avoid-page; }
   .pdf-body th, .pdf-body td { border: 1px solid #DCDED6; padding: 8px 10px; text-align: left; vertical-align: top; word-break: break-word; color: #1D3325; }
   .pdf-body th { background: #F4F1ED; font-weight: 600; }
   .pdf-body a { color: #004228; text-decoration: underline; }
-  .pdf-body hr { border: none; border-top: 1px solid #DCDED6; margin: 16px 0; }
+  .pdf-body hr { border: none; border-top: 1px solid #DCDED6; margin: 16px 0; page-break-after: avoid; break-after: avoid-page; }
   .pdf-body ul[data-type="taskList"] { list-style: none; padding-left: 0; }
   .pdf-body ul[data-type="taskList"] li { display: flex; gap: 8px; align-items: flex-start; }
   .pdf-body strong { font-weight: 600; color: #1D3325; }
@@ -33,6 +32,7 @@ const PDF_STYLES = `
 `;
 
 const PDF_PAGE_WIDTH_PX = 794; // ~A4 at 96dpi
+const PDF_PAGE_BREAK_MARGIN_PT = 44;
 
 /** Trigger a file download in the browser. */
 export function downloadTextFile(filename: string, content: string, mimeType: string): void {
@@ -150,9 +150,19 @@ async function waitForImages(root: HTMLElement): Promise<void> {
   );
 }
 
+function prepareClonedExportRoot(clonedDoc: Document): void {
+  clonedDoc.querySelectorAll('[data-pdf-export-root]').forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    node.style.opacity = '1';
+    node.style.transform = 'none';
+    node.style.visibility = 'visible';
+  });
+}
+
 function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElement {
   const container = document.createElement('div');
   container.setAttribute('data-pdf-export-root', 'true');
+  // Keep fully opaque for html2canvas; hide off-screen until jsPDF clones it.
   container.style.cssText = [
     'position: fixed',
     'left: 0',
@@ -162,7 +172,9 @@ function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElemen
     'background: #ffffff',
     'box-sizing: border-box',
     'color: #1D3325',
-    'z-index: 2147483647',
+    'opacity: 1',
+    'visibility: visible',
+    'transform: translateX(-200vw)',
     'pointer-events: none',
     'overflow: visible',
   ].join(';');
@@ -186,38 +198,27 @@ export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filenam
   try {
     await waitForImages(container);
 
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      width: PDF_PAGE_WIDTH_PX,
+    const doc = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    await doc.html(container, {
+      x: 0,
+      y: 0,
+      width: pageWidth,
       windowWidth: PDF_PAGE_WIDTH_PX,
+      margin: [PDF_PAGE_BREAK_MARGIN_PT, 0, PDF_PAGE_BREAK_MARGIN_PT, 0],
+      autoPaging: 'text',
+      html2canvas: {
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDoc) => prepareClonedExportRoot(clonedDoc),
+      },
     });
 
-    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
-
-    pdf.save(filename);
+    doc.save(filename);
   } finally {
     document.body.removeChild(container);
   }
