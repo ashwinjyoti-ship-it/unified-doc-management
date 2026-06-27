@@ -339,10 +339,19 @@ export default function Sidebar() {
       >
         <div className="p-4 border-b border-green-mist shrink-0">
           <div className="flex items-center justify-between mb-3 gap-2">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <AppAvatar size="sm" className="shrink-0 rounded-lg" />
-              <h2 className="font-semibold text-forest truncate">{workspace?.name || 'Workspace'}</h2>
-            </div>
+            <Tooltip text="Go to home">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl hover:bg-linen/80 pl-1 py-1.5 -ml-1 transition-colors"
+              >
+                <AppAvatar size="md" className="shrink-0 rounded-xl shadow-sm shadow-forest/10" />
+                <span className="min-w-0">
+                  <span className="block font-semibold text-forest text-sm leading-tight">UnifiedDocs</span>
+                  <span className="block text-xs text-warm-gray truncate">{workspace?.name || 'Workspace'}</span>
+                </span>
+              </button>
+            </Tooltip>
             <Tooltip text="Close sidebar">
               <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2 -mr-1 rounded-lg hover:bg-linen">
                 <X className="w-5 h-5" />

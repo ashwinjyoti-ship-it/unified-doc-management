@@ -8,6 +8,7 @@ import NamePromptModal from './NamePromptModal';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import { getActivePageIdFromPath } from '../lib/pageRoute';
 import Tooltip from './Tooltip';
+import AppAvatar from './AppAvatar';
 
 export default function MobileTopBar() {
   const location = useLocation();
@@ -33,6 +34,8 @@ export default function MobileTopBar() {
 
   const currentPage = activePageId ? pages.find((p) => p.id === activePageId) : null;
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const isHome = location.pathname === '/';
+  const showBrand = isHome;
   const barTitle = currentPage
     ? `${pageIcon(currentPage)} ${currentPage.title}`
     : workspace?.name || 'Unified Doc Management';
@@ -51,9 +54,32 @@ export default function MobileTopBar() {
           </button>
         </Tooltip>
 
-        <span className="flex-1 font-semibold text-forest text-sm truncate min-w-0">
-          {barTitle}
-        </span>
+        {showBrand ? (
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2 flex-1 min-w-0 text-left rounded-lg hover:bg-linen/80 px-1 py-1 -mx-1"
+          >
+            <AppAvatar size="xs" className="shrink-0 rounded-lg" />
+            <span className="font-semibold text-forest text-sm truncate">UnifiedDocs</span>
+          </button>
+        ) : (
+          <>
+            <Tooltip text="Go to home">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="p-1 rounded-lg hover:bg-linen shrink-0"
+                aria-label="Go to home"
+              >
+                <AppAvatar size="xs" className="rounded-md" />
+              </button>
+            </Tooltip>
+            <span className="flex-1 font-semibold text-forest text-sm truncate min-w-0">
+              {barTitle}
+            </span>
+          </>
+        )}
 
         <Tooltip text="Notifications">
           <button

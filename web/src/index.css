@@ -359,3 +359,106 @@ html.dark mark {
   color: var(--color-dark-teal);
   text-decoration: underline;
 }
+
+/* App avatar animations */
+@keyframes avatar-doc-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes avatar-line-in {
+  from { opacity: 0; transform: scaleX(0.6); transform-origin: left center; }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+@keyframes avatar-highlight-pulse {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes avatar-link-draw {
+  from { stroke-dashoffset: 24; opacity: 0; }
+  to { stroke-dashoffset: 0; opacity: 0.45; }
+}
+
+@keyframes avatar-agent-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.92; }
+}
+
+@keyframes avatar-spark-spin {
+  from { transform: rotate(0deg); transform-origin: 78px 66px; }
+  to { transform: rotate(360deg); transform-origin: 78px 66px; }
+}
+
+@keyframes avatar-user-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes onboarding-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.app-avatar--loading .avatar-agent,
+.app-avatar--onboarding .avatar-agent {
+  animation: avatar-agent-pulse 2.4s ease-in-out infinite;
+}
+
+.app-avatar--loading .avatar-spark {
+  animation: avatar-spark-spin 6s linear infinite;
+}
+
+.app-avatar--loading .avatar-link {
+  stroke-dasharray: 24;
+  animation: avatar-link-draw 2s ease-in-out infinite alternate;
+}
+
+.app-avatar--onboarding .avatar-doc {
+  animation: avatar-doc-in 0.5s ease-out both;
+}
+
+.app-avatar--onboarding .avatar-line-1 { animation: avatar-line-in 0.4s ease-out 0.15s both; }
+.app-avatar--onboarding .avatar-line-2 { animation: avatar-line-in 0.4s ease-out 0.25s both; }
+.app-avatar--onboarding .avatar-line-3 { animation: avatar-line-in 0.4s ease-out 0.35s both; }
+.app-avatar--onboarding .avatar-line-4 { animation: avatar-line-in 0.4s ease-out 0.45s both; }
+
+.app-avatar--onboarding .avatar-highlight {
+  animation: avatar-highlight-pulse 1.8s ease-in-out 0.6s infinite;
+}
+
+.app-avatar--onboarding .avatar-link {
+  stroke-dasharray: 24;
+  animation: avatar-link-draw 0.8s ease-out 0.5s both;
+}
+
+.app-avatar--onboarding .avatar-spark {
+  animation: avatar-spark-spin 8s linear 0.7s infinite;
+}
+
+.app-avatar--onboarding .avatar-user {
+  animation: avatar-user-in 0.5s ease-out 0.65s both;
+}
+
+.onboarding-step {
+  animation: onboarding-step-in 0.45s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-avatar--loading .avatar-agent,
+  .app-avatar--loading .avatar-spark,
+  .app-avatar--loading .avatar-link,
+  .app-avatar--onboarding .avatar-doc,
+  .app-avatar--onboarding .avatar-line-1,
+  .app-avatar--onboarding .avatar-line-2,
+  .app-avatar--onboarding .avatar-line-3,
+  .app-avatar--onboarding .avatar-line-4,
+  .app-avatar--onboarding .avatar-highlight,
+  .app-avatar--onboarding .avatar-link,
+  .app-avatar--onboarding .avatar-spark,
+  .app-avatar--onboarding .avatar-user,
+  .onboarding-step {
+    animation: none !important;
+  }
+}
