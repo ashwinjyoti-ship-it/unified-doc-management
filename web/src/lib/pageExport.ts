@@ -1,4 +1,3 @@
-import html2canvas from 'html2canvas';
 import { marked } from 'marked';
 import { jsPDF } from 'jspdf';
 import type { DatabaseProperty, DatabaseRow, Page } from '../types';
@@ -33,6 +32,7 @@ const PDF_STYLES = `
 `;
 
 const PDF_PAGE_WIDTH_PX = 794; // ~A4 at 96dpi
+const PDF_MARGIN_PT = 40; // page margin in points (A4 is 595.28 x 841.89 pt)
 
 export function folderToMarkdown(title: string, pages: Page[], folderId: string): string {
   const children = getChildren(pages, folderId);
@@ -139,16 +139,19 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElement {
   const container = document.createElement('div');
   container.setAttribute('data-pdf-export-root', 'true');
+  // Rendered off-canvas (behind everything, non-interactive) at a fixed A4-ish
+  // pixel width so jsPDF.html can rasterize and paginate it. Page margins are
+  // applied by jsPDF below, so the container itself carries no padding.
   container.style.cssText = [
     'position: fixed',
     'left: 0',
     'top: 0',
     `width: ${PDF_PAGE_WIDTH_PX}px`,
-    'padding: 48px 56px',
     'background: #ffffff',
     'box-sizing: border-box',
     'color: #1D3325',
-    'z-index: 2147483647',
+    'z-index: -1',
+    'opacity: 0',
     'pointer-events: none',
     'overflow: visible',
   ].join(';');
@@ -164,7 +167,13 @@ function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElemen
   return container;
 }
 
-/** Render styled HTML content to a downloadable PDF file. */
+/**
+ * Render styled HTML content to a downloadable PDF file.
+ *
+ * Uses jsPDF's `html()` with `autoPaging: 'text'` so the document flows across
+ * pages breaking *between* text lines and table rows — rather than slicing one
+ * tall raster image at fixed page heights, which cut through lines mid-glyph.
+ */
 export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filename: string): Promise<void> {
   const container = buildPdfExportContainer(title, bodyHtml);
   document.body.appendChild(container);
@@ -172,36 +181,24 @@ export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filenam
   try {
     await waitForImages(container);
 
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      scrollX: 0,
-      scrollY: -window.scrollY,
-      width: PDF_PAGE_WIDTH_PX,
-      windowWidth: PDF_PAGE_WIDTH_PX,
-    });
-
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgData = canvas.toDataURL('image/jpeg', 0.92);
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const contentWidthPt = pageWidth - PDF_MARGIN_PT * 2;
 
-    let heightLeft = imgHeight;
-    let position = 0;
-
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-    heightLeft -= pageHeight;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-    }
+    await pdf.html(container, {
+      x: PDF_MARGIN_PT,
+      y: PDF_MARGIN_PT,
+      width: contentWidthPt,
+      windowWidth: PDF_PAGE_WIDTH_PX,
+      margin: [PDF_MARGIN_PT, PDF_MARGIN_PT, PDF_MARGIN_PT, PDF_MARGIN_PT],
+      autoPaging: 'text',
+      html2canvas: {
+        scale: contentWidthPt / PDF_PAGE_WIDTH_PX,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      },
+    });
 
     pdf.save(filename);
   } finally {

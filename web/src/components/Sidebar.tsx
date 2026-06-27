@@ -320,7 +320,7 @@ export default function Sidebar() {
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      alert(err instanceof Error ? err.message : 'Import failed');
+      setErrorMessage(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setOperationLabel(null);
       abortRef.current = null;
@@ -344,7 +344,7 @@ export default function Sidebar() {
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (err instanceof Error && err.name === 'AbortError') return;
-      alert(err instanceof Error ? err.message : 'Import failed');
+      setErrorMessage(err instanceof Error ? err.message : 'Import failed');
     } finally {
       setOperationLabel(null);
       abortRef.current = null;

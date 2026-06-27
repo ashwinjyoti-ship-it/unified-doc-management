@@ -12,6 +12,25 @@ import { resolveEmbeddedDatabase } from '../embedded-database';
 
 const database = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
+/**
+ * Notify any open clients (other browser tabs, or a human watching while an AI
+ * agent edits) that this database changed so they can live-reload instead of
+ * needing a manual refresh. Best-effort: never let a broadcast failure break
+ * the mutation that already succeeded.
+ */
+async function broadcastDatabaseUpdate(env: Env, databaseId: string) {
+  try {
+    const roomId = env.COLLAB_ROOM.idFromName(databaseId);
+    const room = env.COLLAB_ROOM.get(roomId);
+    await room.fetch(new Request('http://internal/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'database_updated', payload: { databaseId } }),
+    }));
+  } catch {
+    // ignore — realtime is a nicety, not a correctness requirement
+  }
+}
+
 async function getDatabasePage(db: D1Database, pageId: string) {
   return db.prepare('SELECT * FROM pages WHERE id = ? AND type = ?').bind(pageId, 'database').first<{
     id: string;
@@ -141,6 +160,7 @@ database.post('/pages/:pageId/database/properties', async (c) => {
   ).bind(propId, pageId, body.name, body.type, optionsJson, (maxOrder?.max ?? -1) + 1).run();
 
   const prop = await c.env.DB.prepare('SELECT * FROM database_properties WHERE id = ?').bind(propId).first();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ property: prop }, 201);
 });
 
@@ -220,6 +240,7 @@ database.patch('/pages/:pageId/database/properties/:propId', async (c) => {
   ).bind(newName, newType, optionsJson, propId).run();
 
   const property = await c.env.DB.prepare('SELECT * FROM database_properties WHERE id = ?').bind(propId).first();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ property });
 });
 
@@ -254,6 +275,7 @@ database.delete('/pages/:pageId/database/properties/:propId', async (c) => {
   }
 
   await c.env.DB.prepare('DELETE FROM database_properties WHERE id = ?').bind(propId).run();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ ok: true });
 });
 
@@ -303,6 +325,7 @@ database.post('/pages/:pageId/database/rows', async (c) => {
     WHERE dr.id = ?
   `).bind(rowId).first();
 
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ row }, 201);
 });
 
@@ -337,6 +360,7 @@ database.patch('/pages/:pageId/database/rows/:rowId', async (c) => {
     WHERE dr.id = ?
   `).bind(rowId).first();
 
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ row });
 });
 
@@ -352,6 +376,7 @@ database.delete('/pages/:pageId/database/rows/:rowId', async (c) => {
     await c.env.DB.prepare('DELETE FROM pages WHERE id = ?').bind(row.page_id).run();
   }
 
+  await broadcastDatabaseUpdate(c.env, c.req.param('pageId'));
   return c.json({ ok: true });
 });
 
@@ -387,6 +412,7 @@ database.post('/pages/:pageId/database/views', async (c) => {
   ).run();
 
   const view = await c.env.DB.prepare('SELECT * FROM database_views WHERE id = ?').bind(viewId).first();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ view }, 201);
 });
 
@@ -417,12 +443,14 @@ database.patch('/pages/:pageId/database/views/:viewId', async (c) => {
   ).run();
 
   const view = await c.env.DB.prepare('SELECT * FROM database_views WHERE id = ?').bind(viewId).first();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ view });
 });
 
 database.delete('/pages/:pageId/database/views/:viewId', async (c) => {
-  const { viewId } = c.req.param();
+  const { pageId, viewId } = c.req.param();
   await c.env.DB.prepare('DELETE FROM database_views WHERE id = ?').bind(viewId).run();
+  await broadcastDatabaseUpdate(c.env, pageId);
   return c.json({ ok: true });
 });
 
