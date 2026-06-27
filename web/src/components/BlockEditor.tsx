@@ -42,7 +42,8 @@ import {
   sanitizePastedHtml,
   shouldPreferPlainTextPaste,
 } from '../lib/pasteMarkdown';
-import { serializeInlineNodes } from '../lib/pageLinks';
+import { serializeInlineNodes, createPageIdResolver } from '../lib/pageLinks';
+import { blocksToTiptapHtml } from '../lib/markdownBlocks';
 
 export { blocksToTiptapHtml } from '../lib/markdownBlocks';
 
@@ -80,6 +81,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
   const navigate = useNavigate();
   const createPage = useStore((s) => s.createPage);
   const loadPages = useStore((s) => s.loadPages);
+  const workspace = useStore((s) => s.workspace);
   const pages = useStore((s) => s.pages);
   const onChangeRef = useRef(onChange);
   const onDirtyRef = useRef(onDirty);
@@ -240,29 +242,37 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
 
   const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
     if (!editor) return;
-    const pages = useStore.getState().pages;
+    const currentPages = useStore.getState().pages;
     const parentId = navigateToDb
-      ? resolveInsertParentId(pageId, pages)
-      : (pageId ?? resolveInsertParentId(pageId, pages));
+      ? resolveInsertParentId(pageId, currentPages)
+      : (pageId ?? resolveInsertParentId(pageId, currentPages));
     const title = defaultTitleFor('database');
-    const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
-    await loadPages();
+
     if (navigateToDb) {
+      const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
+      await loadPages();
       editor.chain().focus().deleteRange(range).run();
       navigate(`/page/${page.id}`);
       return;
     }
-    editor
-      .chain()
-      .focus()
-      .deleteRange(range)
-      .insertContent({
-        type: 'databaseEmbed',
-        attrs: { databaseId: page.id, title: page.title },
-      })
-      .run();
+
+    if (!pageId || !workspace) return;
+
+    editor.chain().focus().deleteRange(range).run();
+    await api.createPage(workspace.id, {
+      type: 'database',
+      title,
+      parentId: pageId,
+      icon: defaultIconFor('database'),
+      embedInPageId: pageId,
+    });
+    await loadPages();
+
+    const { blocks: freshBlocks } = await api.getPage(pageId);
+    const html = blocksToTiptapHtml(freshBlocks, createPageIdResolver(useStore.getState().pages));
+    editor.commands.setContent(html, { emitUpdate: true });
     emitContent(editor);
-  }, [editor, pageId, createPage, loadPages, navigate, emitContent]);
+  }, [editor, pageId, workspace, createPage, loadPages, navigate, emitContent]);
 
   const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
     if (!editor) return;

@@ -25,9 +25,19 @@ database.get('/pages/:pageId/database', async (c) => {
   const dbPage = await getDatabasePage(c.env.DB, pageId);
   if (!dbPage) return c.json({ error: 'Database not found' }, 404);
 
-  const properties = await c.env.DB.prepare(
+  let properties = await c.env.DB.prepare(
     'SELECT * FROM database_properties WHERE database_id = ? ORDER BY order_index'
   ).bind(pageId).all();
+
+  if (!properties.results?.length) {
+    const propId = generateId();
+    await c.env.DB.prepare(
+      'INSERT INTO database_properties (id, database_id, name, type, options, order_index) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(propId, pageId, 'Name', 'text', JSON.stringify([]), 0).run();
+    properties = await c.env.DB.prepare(
+      'SELECT * FROM database_properties WHERE database_id = ? ORDER BY order_index'
+    ).bind(pageId).all();
+  }
 
   const rows = await c.env.DB.prepare(
     'SELECT * FROM database_rows WHERE database_id = ? ORDER BY order_index'

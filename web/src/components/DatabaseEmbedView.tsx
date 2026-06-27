@@ -1,15 +1,37 @@
+import { useEffect, useMemo } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
 import { ExternalLink } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useStore } from '../lib/store';
+import { resolveEmbeddedDatabaseId } from '../lib/embeddedDatabase';
 import DatabaseView from './DatabaseView';
 
-export default function DatabaseEmbedView({ node }: NodeViewProps) {
+export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProps) {
   const navigate = useNavigate();
+  const { pageId: hostPageId } = useParams<{ pageId: string }>();
+  const pages = useStore((s) => s.pages);
   const databaseId = node.attrs.databaseId as string | null;
   const title = (node.attrs.title as string) || 'Database';
 
-  if (!databaseId) {
+  const resolvedDatabaseId = useMemo(
+    () => resolveEmbeddedDatabaseId(databaseId, hostPageId, pages),
+    [databaseId, hostPageId, pages],
+  );
+
+  useEffect(() => {
+    if (!editor || !resolvedDatabaseId || resolvedDatabaseId === databaseId) return;
+    const pos = getPos();
+    if (typeof pos !== 'number') return;
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(pos, undefined, {
+        ...node.attrs,
+        databaseId: resolvedDatabaseId,
+      }),
+    );
+  }, [editor, getPos, node.attrs, databaseId, resolvedDatabaseId]);
+
+  if (!resolvedDatabaseId) {
     return (
       <NodeViewWrapper className="my-4">
         <div className="rounded-xl border border-green-mist bg-linen/50 px-4 py-6 text-sm text-mid-gray text-center">
@@ -32,7 +54,7 @@ export default function DatabaseEmbedView({ node }: NodeViewProps) {
           <span className="text-sm font-medium text-charcoal truncate">🗃️ {title}</span>
           <button
             type="button"
-            onClick={() => navigate(`/page/${databaseId}`)}
+            onClick={() => navigate(`/page/${resolvedDatabaseId}`)}
             className="shrink-0 inline-flex items-center gap-1 text-xs text-forest hover:underline"
           >
             Open full page
@@ -40,7 +62,7 @@ export default function DatabaseEmbedView({ node }: NodeViewProps) {
           </button>
         </div>
         <div className="p-2 md:p-4 max-h-[min(70vh,640px)] overflow-auto">
-          <DatabaseView pageId={databaseId} embedded />
+          <DatabaseView pageId={resolvedDatabaseId} embedded />
         </div>
       </div>
     </NodeViewWrapper>

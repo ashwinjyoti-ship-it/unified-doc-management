@@ -71,6 +71,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const [newRollupRelationPropId, setNewRollupRelationPropId] = useState('');
   const [newRollupTargetPropId, setNewRollupTargetPropId] = useState('');
   const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadDatabase();
@@ -78,6 +79,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
 
   const loadDatabase = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data = await api.getDatabase(pageId);
       setProperties(data.properties);
@@ -87,6 +89,10 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
       setRelatedSchemas(data.relatedSchemas || {});
       setRollupValues(data.rollupValues || {});
       setWorkspaceDatabases(data.databases || []);
+    } catch (err) {
+      setProperties([]);
+      setRows([]);
+      setLoadError(err instanceof Error ? err.message : 'Could not load database');
     } finally {
       setLoading(false);
     }
@@ -526,6 +532,14 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   );
 
   if (loading) return <div className={`${embedded ? 'p-4' : 'p-8'} text-mid-gray`}>Loading database...</div>;
+
+  if (loadError) {
+    return (
+      <div className={`${embedded ? 'p-4' : 'p-8'} text-sm text-red-600`}>
+        {loadError}
+      </div>
+    );
+  }
 
   return (
     <div

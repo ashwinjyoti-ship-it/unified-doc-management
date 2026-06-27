@@ -80,8 +80,14 @@ class ApiClient {
     return this.request<{ pages: Page[] }>(`/workspaces/${workspaceId}/pages`);
   }
 
-  createPage(workspaceId: string, data: { title?: string; parentId?: string; type?: string; icon?: string }) {
-    return this.request<{ page: Page }>(
+  createPage(workspaceId: string, data: {
+    title?: string;
+    parentId?: string;
+    type?: string;
+    icon?: string;
+    embedInPageId?: string;
+  }) {
+    return this.request<{ page: Page; embeddedInPageId?: string | null }>(
       `/workspaces/${workspaceId}/pages`, { method: 'POST', body: JSON.stringify(data) }
     );
   }
