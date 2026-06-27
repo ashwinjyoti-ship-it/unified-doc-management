@@ -73,7 +73,7 @@ export default function SearchModal() {
               className="w-full text-left p-4 hover:bg-linen border-b border-green-mist/30 last:border-0"
             >
               <div className="flex items-center gap-2">
-                <span>{r.icon || (r.type === 'database' ? '🗃️' : '📄')}</span>
+                <span>{r.icon || (r.type === 'database' ? '🗄️' : '📄')}</span>
                 <span className="font-medium text-sm">{r.title}</span>
               </div>
               {r.snippet && (

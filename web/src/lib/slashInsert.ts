@@ -39,7 +39,7 @@ export function defaultIconFor(key: FunctionalSlashKey): string {
     table: '📊',
     message: '💬',
     image: '🖼️',
-    database: '🗃️',
+    database: '🗄️',
     'page-link': '📄',
   };
   return icons[key];

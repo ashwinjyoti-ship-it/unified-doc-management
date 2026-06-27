@@ -103,11 +103,16 @@ export default function PageView() {
   const loadedPageIdRef = useRef<string | null>(null);
   const titleSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
+  const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | null>(null);
+
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
   useEffect(() => {
     if (lastUpdate?.type === 'blocks_updated' && !dirty) {
-      loadPage();
+      // Silent live refresh — patch content in place without the full-page
+      // loading spinner so a watcher sees the agent's edits stream in smoothly.
+      void loadPage({ silent: true });
+      setLiveUpdatedAt(Date.now());
     }
     if (lastUpdate?.type === 'comment_added') {
       loadComments();
@@ -117,9 +122,16 @@ export default function PageView() {
     }
   }, [lastUpdate, dirty]);
 
-  const loadPage = useCallback(async () => {
+  // Auto-dismiss the "updated live" badge a few seconds after the last edit.
+  useEffect(() => {
+    if (liveUpdatedAt === null) return;
+    const t = setTimeout(() => setLiveUpdatedAt(null), 2500);
+    return () => clearTimeout(t);
+  }, [liveUpdatedAt]);
+
+  const loadPage = useCallback(async (opts?: { silent?: boolean }) => {
     if (!pageId) return;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setLoadError(null);
     try {
       if (online) {
@@ -785,6 +797,12 @@ export default function PageView() {
 
           {/* Save + status + delete — always visible, never scrolled away */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {liveUpdatedAt !== null && (
+              <span className="text-xs text-forest bg-sage/20 rounded-full px-2 py-0.5 whitespace-nowrap inline-flex items-center gap-1 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-forest" />
+                <span className="hidden sm:inline">Updated live</span>
+              </span>
+            )}
             {saving ? (
               <span className="text-xs text-mid-gray whitespace-nowrap">Saving...</span>
             ) : dirty ? (

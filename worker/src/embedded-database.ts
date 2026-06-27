@@ -29,7 +29,7 @@ async function createInlineDatabasePage(
   const databaseId = generateId();
   await db.prepare(`
     INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, '🗃️', 'database', 'private', ?, ?, ?)
+    VALUES (?, ?, ?, ?, '🗄️', 'database', 'private', ?, ?, ?)
   `).bind(databaseId, workspaceId, hostPageId, title, userId, now, now).run();
   await ensureNameProperty(db, databaseId);
   return databaseId;
