@@ -1,22 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { NodeViewWrapper } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import DatabaseView from './DatabaseView';
+import ConfirmDialog from './ConfirmDialog';
+import AlertDialog from './AlertDialog';
 
 export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProps) {
   const navigate = useNavigate();
   const { pageId: hostPageId } = useParams<{ pageId: string }>();
   const loadPages = useStore((s) => s.loadPages);
+  const removePageFromStore = useStore((s) => s.removePageFromStore);
   const databaseId = node.attrs.databaseId as string | null;
   const title = (node.attrs.title as string) || 'Database';
 
   const [resolvedDatabaseId, setResolvedDatabaseId] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hostPageId) {
@@ -62,6 +68,33 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
     };
   }, [hostPageId, databaseId, editor, getPos, loadPages, node.attrs, title]);
 
+  const removeEmbedFromEditor = useCallback(() => {
+    if (!editor) return;
+    const pos = getPos();
+    if (typeof pos !== 'number') return;
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: pos, to: pos + node.nodeSize })
+      .run();
+  }, [editor, getPos, node.nodeSize]);
+
+  const deleteInlineDatabase = useCallback(async () => {
+    if (!resolvedDatabaseId || deleting) return;
+    setDeleting(true);
+    try {
+      await api.deletePage(resolvedDatabaseId);
+      removePageFromStore(resolvedDatabaseId);
+      removeEmbedFromEditor();
+      await loadPages();
+      setConfirmDeleteOpen(false);
+    } catch (err) {
+      setAlertMessage(err instanceof Error ? err.message : 'Could not delete database');
+    } finally {
+      setDeleting(false);
+    }
+  }, [resolvedDatabaseId, deleting, removePageFromStore, removeEmbedFromEditor, loadPages]);
+
   if (resolving) {
     return (
       <NodeViewWrapper className="my-4">
@@ -93,19 +126,47 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-green-mist bg-linen/40">
           <span className="text-sm font-medium text-charcoal truncate">🗃️ {title}</span>
-          <button
-            type="button"
-            onClick={() => navigate(`/page/${resolvedDatabaseId}`)}
-            className="shrink-0 inline-flex items-center gap-1 text-xs text-forest hover:underline"
-          >
-            Open full page
-            <ExternalLink className="w-3 h-3" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setConfirmDeleteOpen(true)}
+              className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors"
+              title="Remove database from page"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delete</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/page/${resolvedDatabaseId}`)}
+              className="inline-flex items-center gap-1 text-xs text-forest hover:underline"
+            >
+              Open full page
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          </div>
         </div>
         <div className="p-2 md:p-4 max-h-[min(70vh,640px)] overflow-auto">
           <DatabaseView pageId={resolvedDatabaseId} embedded hostPageId={hostPageId} />
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete database"
+        message={`Remove "${title}" from this page and delete all of its rows and columns?\n\nThis cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        cancelLabel="Cancel"
+        destructive
+        onConfirm={() => { void deleteInlineDatabase(); }}
+        onCancel={() => { if (!deleting) setConfirmDeleteOpen(false); }}
+      />
+
+      <AlertDialog
+        open={alertMessage != null}
+        message={alertMessage ?? ''}
+        onClose={() => setAlertMessage(null)}
+      />
     </NodeViewWrapper>
   );
 }
