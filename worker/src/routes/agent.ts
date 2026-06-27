@@ -9,7 +9,7 @@ const agent = new Hono<{ Bindings: Env }>();
 
 const CATALOG = {
   name: 'UnifiedDocs API',
-  version: '1.0.0',
+  version: '1.1.0',
   baseUrl: '/api',
   authentication: {
     methods: [
@@ -60,7 +60,7 @@ const CATALOG = {
       body: {
         title: 'string?',
         parentId: 'string?',
-        type: 'page|folder|database',
+        type: 'page|folder|database|canvas',
         icon: 'string?',
         embedInPageId: 'string? (page id — embed database inline on this page; use with type=database)',
       },
@@ -205,6 +205,84 @@ const CATALOG = {
     { method: 'DELETE', path: '/api/comments/:id', auth: true, description: 'Delete a comment' },
 
     { method: 'GET', path: '/api/agent/catalog', auth: true, description: 'This catalog' },
+
+    // ── Canvas ────────────────────────────────────────────────────────────
+    {
+      method: 'GET',
+      path: '/api/pages/:pageId/canvas',
+      auth: true,
+      description: 'Get full canvas: { components: CanvasComponent[], tokens: CanvasToken[] }',
+    },
+    {
+      method: 'POST',
+      path: '/api/pages/:pageId/canvas/reset',
+      auth: true,
+      description: 'Delete all components (preserve tokens). Requires ?confirm=true. Returns { deleted: number }',
+    },
+    {
+      method: 'POST',
+      path: '/api/pages/:pageId/canvas/components',
+      auth: true,
+      body: {
+        component: {
+          type: 'frame|group|text|button|input|image|rect',
+          name: 'string',
+          parentId: 'string?',
+          nodePath: 'string?',
+          position: '{ x: number, y: number }?',
+          size: '{ w: number, h: number }?',
+          props: 'Record<string, any>?',
+          styles: 'Record<string, string>?',
+          variants: '[{ name, props, styles }]?',
+          viewport: 'mobile|desktop|null?',
+          orderIndex: 'number?',
+        },
+      },
+      description: 'Create a canvas component. Broadcasts canvas:component:add via WebSocket.',
+    },
+    {
+      method: 'PATCH',
+      path: '/api/pages/:pageId/canvas/components/:cid',
+      auth: true,
+      body: { patch: 'Partial<CanvasComponent> — props/styles are deep-merged; position/size/scalars replaced' },
+      description: 'Update a component. Broadcasts canvas:component:update.',
+    },
+    {
+      method: 'DELETE',
+      path: '/api/pages/:pageId/canvas/components/:cid',
+      auth: true,
+      description: 'Delete component (cascades to children). Broadcasts canvas:component:remove.',
+    },
+    {
+      method: 'POST',
+      path: '/api/pages/:pageId/canvas/components/:cid/duplicate',
+      auth: true,
+      description: 'Duplicate a component (offset +20px). Returns new component.',
+    },
+    {
+      method: 'GET',
+      path: '/api/pages/:pageId/canvas/tokens',
+      auth: true,
+      description: 'List design tokens for the canvas page',
+    },
+    {
+      method: 'POST',
+      path: '/api/pages/:pageId/canvas/tokens',
+      auth: true,
+      body: { token: { name: 'string (e.g. color.primary)', type: 'color|spacing|radius|fontSize|fontWeight', value: 'string' } },
+      description: 'Create a design token',
+    },
+    {
+      method: 'PATCH',
+      path: '/api/pages/:pageId/canvas/tokens/:tid',
+      auth: true,
+      body: { patch: '{ name?, type?, value? }' },
+    },
+    {
+      method: 'DELETE',
+      path: '/api/pages/:pageId/canvas/tokens/:tid',
+      auth: true,
+    },
   ],
   agentWorkflows: [
     {
@@ -242,6 +320,19 @@ const CATALOG = {
         'GET /api/pages/:pageId/markdown',
         'PUT /api/pages/:pageId/markdown { markdown: "..." }',
         'Or PUT /api/pages/:pageId/blocks with block array',
+      ],
+    },
+    {
+      intent: 'Build a UI design on a canvas and apply user feedback',
+      steps: [
+        'POST /api/workspaces/:id/pages { type: "canvas", title: "My Design" }  → get pageId',
+        'POST /api/pages/:pageId/canvas/tokens { token: { name: "color.primary", type: "color", value: "#004228" } }',
+        'POST /api/pages/:pageId/canvas/components { component: { type: "frame", name: "Login Screen", size: { w: 1440, h: 900 } } }',
+        'POST /api/pages/:pageId/canvas/components { component: { type: "button", name: "Sign in", parentId: "<frameId>", styles: { background: "var(--color-primary)" } } }',
+        'GET /api/pages/:pageId/agent-comments?status=open  → get user feedback anchored to components',
+        'For each comment with anchor_kind=component: read anchor_id, POST /api/comments/:id/apply { "component_patch": { "styles": { ... } } }',
+        '→ component updated, snapshot_before recorded, comment resolved, canvas:component:update broadcast',
+        'When user is happy: agent reads GET /api/pages/:pageId/canvas and generates real UI code for the target app',
       ],
     },
     {
