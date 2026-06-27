@@ -20,6 +20,7 @@ import { getActivePageIdFromPath } from '../lib/pageRoute';
 import { closeSidebarOnMobile } from '../lib/device';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import SidebarItemMenu from './SidebarItemMenu';
+import AppAvatar from './AppAvatar';
 import type { Page } from '../types';
 import {
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
@@ -336,8 +337,11 @@ export default function Sidebar() {
         `}
       >
         <div className="p-4 border-b border-green-mist shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-forest truncate">{workspace?.name || 'Workspace'}</h2>
+          <div className="flex items-center justify-between mb-3 gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <AppAvatar size="sm" className="shrink-0 rounded-lg" />
+              <h2 className="font-semibold text-forest truncate">{workspace?.name || 'Workspace'}</h2>
+            </div>
             <Tooltip text="Close sidebar">
               <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2 -mr-1 rounded-lg hover:bg-linen">
                 <X className="w-5 h-5" />
