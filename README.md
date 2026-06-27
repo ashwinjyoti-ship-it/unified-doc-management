@@ -14,6 +14,7 @@ A cross-platform productivity application for creating, organizing, and collabor
 - **Auth & permissions** — Private, shared, and public pages
 - **Notifications** — Mentions, comments, and updates
 - **Version history** — Restore previous page versions
+- **Infinite Canvas** — Visual design editor with frames, shapes, text, buttons, and images; viewport presets (desktop/mobile); design tokens; real-time collaboration; agent design-to-code workflow
 - **API access** — REST API with API key authentication
 - **Mobile** — Touch-optimized editor, quick capture, PWA installable
 
