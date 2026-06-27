@@ -7,6 +7,14 @@ interface Session {
   color: string;
 }
 
+// Canvas real-time message kinds (broadcast via /broadcast endpoint from canvas routes)
+// | { kind: 'canvas:component:add';    payload: CanvasComponent }
+// | { kind: 'canvas:component:update'; payload: { id: string; patch: Partial<CanvasComponent> } }
+// | { kind: 'canvas:component:remove'; payload: { id: string } }
+// | { kind: 'canvas:token:update';     payload: CanvasToken[] }
+// | { kind: 'canvas:reset';            payload: { pageId: string } }
+// All these flow through the generic broadcast handler below unchanged.
+
 export class CollabRoom extends DurableObject {
   private sessions: Map<string, Session> = new Map();
 

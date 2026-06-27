@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { DesignSection } from './sidebar/DesignSection';
 import { useStore } from '../lib/store';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -434,6 +435,12 @@ export default function Sidebar() {
             onRename={(p) => setRenameModal(p)}
             onDelete={(p) => void handleDeletePage(p)}
             activePageId={activePageId}
+          />
+
+          <DesignSection
+            pages={pages}
+            currentPageId={activePageId}
+            onRefresh={loadPages}
           />
         </div>
 

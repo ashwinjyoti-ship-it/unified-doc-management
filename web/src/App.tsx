@@ -14,6 +14,7 @@ import NotificationsPage from './components/NotificationsPage';
 import MobileTopBar from './components/MobileTopBar';
 import AppAvatar from './components/AppAvatar';
 import OnboardingOverlay from './components/OnboardingOverlay';
+import { CanvasPage } from './routes/CanvasPage';
 import { isOnboardingComplete } from './lib/onboarding';
 
 const LAST_PATH_KEY = 'unifieddocs:lastPath';
@@ -115,6 +116,7 @@ function AppLayout() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/page/:pageId" element={<PageView />} />
+            <Route path="/canvas/:pageId" element={<CanvasPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
           </Routes>
