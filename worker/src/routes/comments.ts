@@ -11,21 +11,28 @@ function buildAgentPrompt(selectionQuote: string | null | undefined, instruction
   return `Selected text: "${quote}"\n\nInstruction: ${text}`;
 }
 
+function parseJsonSafe(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'string') return null;
+  try { return JSON.parse(raw); } catch { return null; }
+}
+
 function enrichAgentComment(row: Record<string, unknown>) {
   const selectionQuote = (row.selection_quote as string | null) || '';
   const instruction = (row.content as string) || '';
-  let selectionMeta: unknown = null;
-  if (row.selection_meta && typeof row.selection_meta === 'string') {
-    try {
-      selectionMeta = JSON.parse(row.selection_meta);
-    } catch {
-      selectionMeta = null;
-    }
+  const anchorKind = (row.anchor_kind as string) || 'text';
+  let agentPrompt = buildAgentPrompt(selectionQuote, instruction);
+  if (anchorKind === 'component') {
+    const path = (row.anchor_path as string) || '';
+    agentPrompt = path
+      ? `Component: "${path}"\n\nInstruction: ${instruction}`
+      : `Instruction: ${instruction}`;
   }
   return {
     ...row,
-    selection_meta: selectionMeta,
-    agent_prompt: buildAgentPrompt(selectionQuote, instruction),
+    selection_meta: parseJsonSafe(row.selection_meta),
+    tags: parseJsonSafe(row.tags) ?? [],
+    snapshot_before: parseJsonSafe(row.snapshot_before),
+    agent_prompt: agentPrompt,
   };
 }
 
@@ -106,11 +113,12 @@ comments.post('/comments/:id/apply', async (c) => {
   const auth = c.get('auth');
   const id = c.req.param('id');
   const body = await c.req.json<{
-    new_text: string;
+    new_text?: string;
     old_text?: string;
     occurrence?: 'first' | 'all' | number;
     require_unique?: boolean;
     resolve?: boolean;
+    component_patch?: Record<string, unknown>;
   }>();
 
   const comment = await c.env.DB.prepare(`
@@ -122,6 +130,8 @@ comments.post('/comments/:id/apply', async (c) => {
     id: string;
     page_id: string;
     comment_type: string;
+    anchor_kind: string;
+    anchor_id: string | null;
     selection_quote: string | null;
     page_title: string;
     workspace_id: string;
@@ -132,22 +142,115 @@ comments.post('/comments/:id/apply', async (c) => {
   if (comment.comment_type !== 'agent_instruction') {
     return c.json({ error: 'apply is only for agent_instruction comments' }, 400);
   }
+
+  const member = await c.env.DB.prepare(
+    'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?',
+  ).bind(comment.workspace_id, auth.user.id).first();
+  if (!member) return c.json({ error: 'Access denied' }, 403);
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // ── Component patch path ─────────────────────────────────────────────────
+  if (body.component_patch) {
+    if (!comment.anchor_id) {
+      return c.json({ error: 'Comment has no anchor_id; cannot apply component_patch' }, 400);
+    }
+
+    const existing = await c.env.DB.prepare('SELECT * FROM canvas_components WHERE id = ?')
+      .bind(comment.anchor_id)
+      .first<Record<string, unknown>>();
+    if (!existing) return c.json({ error: 'Anchored component not found' }, 404);
+
+    // Snapshot before edit
+    await c.env.DB.prepare('UPDATE comments SET snapshot_before = ?, updated_at = ? WHERE id = ?')
+      .bind(JSON.stringify(existing), now, id)
+      .run();
+
+    const patch = body.component_patch;
+
+    function parseJsonField<T>(raw: string | null | undefined, fb: T): T {
+      if (!raw) return fb;
+      try { return JSON.parse(raw) as T; } catch { return fb; }
+    }
+
+    const newProps = patch.props
+      ? JSON.stringify({ ...parseJsonField(existing.props as string, {}), ...(patch.props as object) })
+      : (existing.props as string);
+    const newStyles = patch.styles
+      ? JSON.stringify({ ...parseJsonField(existing.styles as string, {}), ...(patch.styles as object) })
+      : (existing.styles as string);
+    const newPosition = patch.position ? JSON.stringify(patch.position) : (existing.position as string);
+    const newSize = patch.size ? JSON.stringify(patch.size) : (existing.size as string);
+    const newVariants = patch.variants ? JSON.stringify(patch.variants) : (existing.variants as string);
+
+    await c.env.DB.prepare(`
+      UPDATE canvas_components SET
+        name = ?, props = ?, styles = ?, position = ?, size = ?, variants = ?, viewport = ?, updated_at = ?
+      WHERE id = ?
+    `)
+      .bind(
+        (patch.name as string) ?? existing.name,
+        newProps,
+        newStyles,
+        newPosition,
+        newSize,
+        newVariants,
+        patch.viewport !== undefined ? ((patch.viewport as string) || null) : existing.viewport,
+        now,
+        comment.anchor_id,
+      )
+      .run();
+
+    const shouldResolve = body.resolve !== false;
+    if (shouldResolve) {
+      await c.env.DB.prepare('UPDATE comments SET status = ?, updated_at = ? WHERE id = ?')
+        .bind('resolved', now, id).run();
+    }
+
+    // Broadcast via CollabRoom
+    const updatedComp = await c.env.DB.prepare('SELECT * FROM canvas_components WHERE id = ?')
+      .bind(comment.anchor_id)
+      .first<Record<string, unknown>>();
+    const roomId = c.env.COLLAB_ROOM.idFromName(comment.page_id);
+    const room = c.env.COLLAB_ROOM.get(roomId);
+    await room.fetch(new Request('http://internal/broadcast', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'canvas:component:update', payload: { id: comment.anchor_id, patch: updatedComp } }),
+    }));
+
+    const openCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM comments
+      WHERE page_id = ? AND comment_type = 'agent_instruction' AND status = 'open'
+    `).bind(comment.page_id).first<{ count: number }>();
+
+    const updatedComment = await c.env.DB.prepare(`
+      SELECT c.*, u.name as author_name FROM comments c
+      JOIN users u ON c.user_id = u.id WHERE c.id = ?
+    `).bind(id).first();
+
+    return c.json({
+      ok: true,
+      page_id: comment.page_id,
+      comment_id: id,
+      component: updatedComp,
+      comment_resolved: shouldResolve,
+      open_count: openCount?.count ?? 0,
+      comment: enrichAgentComment(updatedComment as Record<string, unknown>),
+    });
+  }
+
+  // ── Text patch path (existing behavior) ──────────────────────────────────
   if (comment.page_type === 'database' || comment.page_type === 'folder') {
     return c.json({ error: 'Cannot apply edits to folder or database pages' }, 400);
   }
   if (body.new_text === undefined) {
-    return c.json({ error: 'new_text is required' }, 400);
+    return c.json({ error: 'new_text or component_patch is required' }, 400);
   }
 
   const oldText = (body.old_text ?? comment.selection_quote ?? '').trim();
   if (!oldText) {
     return c.json({ error: 'old_text is required (or comment must have selection_quote)' }, 400);
   }
-
-  const member = await c.env.DB.prepare(
-    'SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?',
-  ).bind(comment.workspace_id, auth.user.id).first();
-  if (!member) return c.json({ error: 'Access denied' }, 403);
 
   try {
     const result = await editPageSection(
@@ -165,7 +268,6 @@ comments.post('/comments/:id/apply', async (c) => {
 
     const shouldResolve = body.resolve !== false;
     if (shouldResolve) {
-      const now = Math.floor(Date.now() / 1000);
       await c.env.DB.prepare('UPDATE comments SET status = ?, updated_at = ? WHERE id = ?')
         .bind('resolved', now, id).run();
     }
@@ -230,12 +332,19 @@ comments.post('/pages/:pageId/comments', async (c) => {
     selectionQuote?: string;
     selectionMeta?: object;
     status?: string;
+    // canvas anchor fields
+    anchor_kind?: 'text' | 'component';
+    anchor_id?: string;
+    anchor_path?: string;
+    tags?: string[];
   }>();
 
   const commentId = generateId();
   const now = Math.floor(Date.now() / 1000);
   const commentType = body.commentType || 'discussion';
-  const status = body.status || (commentType === 'agent_instruction' ? 'open' : 'open');
+  const status = body.status || 'open';
+  const anchorKind = body.anchor_kind || 'text';
+  const tags = JSON.stringify(body.tags || []);
 
   const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
   const mentions: string[] = [];
@@ -245,8 +354,10 @@ comments.post('/pages/:pageId/comments', async (c) => {
   }
 
   await c.env.DB.prepare(`
-    INSERT INTO comments (id, page_id, block_id, user_id, content, mentions, comment_type, selection_quote, selection_meta, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO comments
+      (id, page_id, block_id, user_id, content, mentions, comment_type, selection_quote, selection_meta, status,
+       anchor_kind, anchor_id, anchor_path, tags, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     commentId,
     pageId,
@@ -258,6 +369,10 @@ comments.post('/pages/:pageId/comments', async (c) => {
     body.selectionQuote || null,
     body.selectionMeta ? JSON.stringify(body.selectionMeta) : null,
     status,
+    anchorKind,
+    body.anchor_id || null,
+    body.anchor_path || null,
+    tags,
     now,
     now,
   ).run();

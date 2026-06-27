@@ -11,7 +11,7 @@ export interface Page {
   parent_id: string | null;
   title: string;
   icon: string | null;
-  type: 'page' | 'folder' | 'database';
+  type: 'page' | 'folder' | 'database' | 'canvas';
   visibility: 'private' | 'shared' | 'public';
   content_md: string | null;
   is_row_page?: number;

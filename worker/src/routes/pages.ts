@@ -127,6 +127,8 @@ pages.post('/workspaces/:workspaceId/pages', async (c) => {
     ).bind(generateId(), pageId, 'paragraph', JSON.stringify({ text: '' }), 0, now, now).run();
   }
 
+  // canvas pages start empty — no blocks, no default content
+
   if (type === 'database') {
     await c.env.DB.prepare(
       'INSERT INTO database_properties (id, database_id, name, type, options, order_index) VALUES (?, ?, ?, ?, ?, ?)'
@@ -352,13 +354,37 @@ pages.post('/pages/:pageId/restore/:versionId', async (c) => {
   const versionId = c.req.param('versionId');
 
   const version = await c.env.DB.prepare('SELECT * FROM page_versions WHERE id = ? AND page_id = ?')
-    .bind(versionId, pageId).first<{ blocks_snapshot: string; title: string | null }>();
+    .bind(versionId, pageId).first<{ blocks_snapshot: string; canvas_snapshot: string | null; title: string | null }>();
 
   if (!version) return c.json({ error: 'Version not found' }, 404);
 
-  const snapshot = JSON.parse(version.blocks_snapshot) as Block[];
   const now = Math.floor(Date.now() / 1000);
 
+  if (version.title) {
+    await c.env.DB.prepare('UPDATE pages SET title = ?, updated_at = ? WHERE id = ?').bind(version.title, now, pageId).run();
+  }
+
+  // Canvas restore
+  if (version.canvas_snapshot) {
+    const snap = JSON.parse(version.canvas_snapshot) as { components: Record<string, unknown>[]; tokens: Record<string, unknown>[] };
+    await c.env.DB.prepare('DELETE FROM canvas_components WHERE page_id = ?').bind(pageId).run();
+    for (const comp of snap.components || []) {
+      await c.env.DB.prepare(`
+        INSERT INTO canvas_components
+          (id, page_id, parent_id, node_path, type, name, props, styles, position, size, variants, viewport, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        comp.id, pageId, comp.parent_id ?? null,
+        comp.node_path, comp.type, comp.name,
+        comp.props, comp.styles, comp.position, comp.size,
+        comp.variants, comp.viewport ?? null, comp.order_index, now, now,
+      ).run();
+    }
+    return c.json({ ok: true, restored: 'canvas', count: snap.components.length });
+  }
+
+  // Block restore (existing behavior)
+  const snapshot = JSON.parse(version.blocks_snapshot) as Block[];
   await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
   for (const block of snapshot) {
     await c.env.DB.prepare(
@@ -366,12 +392,66 @@ pages.post('/pages/:pageId/restore/:versionId', async (c) => {
     ).bind(block.id, pageId, block.parent_id, block.type, block.content, block.order_index, now, now).run();
   }
 
-  if (version.title) {
-    await c.env.DB.prepare('UPDATE pages SET title = ?, updated_at = ? WHERE id = ?').bind(version.title, now, pageId).run();
-  }
-
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all();
   return c.json({ blocks: blocks.results });
+});
+
+pages.post('/pages/:pageId/duplicate', async (c) => {
+  const auth = c.get('auth');
+  const pageId = c.req.param('pageId');
+
+  const page = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(pageId).first<Page>();
+  if (!page) return c.json({ error: 'Page not found' }, 404);
+  if (!(await checkWorkspaceAccess(c.env.DB, page.workspace_id, auth.user.id))) {
+    return c.json({ error: 'Access denied' }, 403);
+  }
+
+  const newPageId = generateId();
+  const now = Math.floor(Date.now() / 1000);
+  const newTitle = `${page.title} (copy)`;
+
+  await c.env.DB.prepare(`
+    INSERT INTO pages (id, workspace_id, parent_id, title, icon, type, visibility, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'private', ?, ?, ?)
+  `).bind(newPageId, page.workspace_id, page.parent_id, newTitle, page.icon, page.type, auth.user.id, now, now).run();
+
+  await updatePageFts(c.env.DB, newPageId, newTitle, '');
+
+  if (page.type === 'page') {
+    const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all<Block>();
+    for (const b of blocks.results || []) {
+      await c.env.DB.prepare(
+        'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).bind(generateId(), newPageId, b.parent_id, b.type, b.content, b.order_index, now, now).run();
+    }
+  }
+
+  if (page.type === 'canvas') {
+    const components = await c.env.DB.prepare(
+      'SELECT * FROM canvas_components WHERE page_id = ? ORDER BY order_index ASC'
+    ).bind(pageId).all<Record<string, unknown>>();
+    for (const comp of components.results || []) {
+      await c.env.DB.prepare(`
+        INSERT INTO canvas_components
+          (id, page_id, parent_id, node_path, type, name, props, styles, position, size, variants, viewport, order_index, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        generateId(), newPageId, null,
+        comp.node_path, comp.type, comp.name,
+        comp.props, comp.styles, comp.position, comp.size,
+        comp.variants, comp.viewport, comp.order_index, now, now,
+      ).run();
+    }
+
+    const tokens = await c.env.DB.prepare('SELECT * FROM canvas_tokens WHERE page_id = ?').bind(pageId).all<Record<string, unknown>>();
+    for (const t of tokens.results || []) {
+      await c.env.DB.prepare('INSERT INTO canvas_tokens (id, page_id, name, type, value) VALUES (?, ?, ?, ?, ?)')
+        .bind(generateId(), newPageId, t.name, t.type, t.value).run();
+    }
+  }
+
+  const newPage = await c.env.DB.prepare('SELECT * FROM pages WHERE id = ?').bind(newPageId).first<Page>();
+  return c.json({ page: newPage }, 201);
 });
 
 pages.post('/pages/:pageId/edit-section', async (c) => {
