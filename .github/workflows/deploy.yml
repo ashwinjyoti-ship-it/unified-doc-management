@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: deploy-ash-doc
-  cancel-in-progress: true
+  # Queue deploys instead of cancelling — rapid back-to-back merges to main
+  # otherwise show a red "cancelled" run even though a later deploy succeeds.
+  cancel-in-progress: false
 
 jobs:
   deploy:
