@@ -13,7 +13,7 @@ import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { common, createLowlight } from 'lowlight';
 import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bold, Italic, Strikethrough, MessageSquarePlus } from 'lucide-react';
+import { MessageSquarePlus, Slash } from 'lucide-react';
 import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
 import { PageLink } from '../extensions/PageLink';
 import { Callout } from '../extensions/Callout';
@@ -43,8 +43,7 @@ import {
   sanitizePastedHtml,
   shouldPreferPlainTextPaste,
 } from '../lib/pasteMarkdown';
-import { serializeInlineNodes, createPageIdResolver } from '../lib/pageLinks';
-import { blocksToTiptapHtml } from '../lib/markdownBlocks';
+import { serializeInlineNodes } from '../lib/pageLinks';
 
 export { blocksToTiptapHtml } from '../lib/markdownBlocks';
 
@@ -70,6 +69,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
   const [insertOpen, setInsertOpen] = useState(false);
   const [pageLinkOpen, setPageLinkOpen] = useState(false);
   const [newPagePromptOpen, setNewPagePromptOpen] = useState(false);
+  const [dbNamePrompt, setDbNamePrompt] = useState<{ range: { from: number; to: number } } | null>(null);
   const [placementModal, setPlacementModal] = useState<{
     item: SlashCommandItem;
     range: { from: number; to: number };
@@ -242,13 +242,17 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     }
   }, [editor]);
 
-  const createDatabaseAndLink = useCallback(async (range: { from: number; to: number }, navigateToDb = false) => {
+  const createDatabaseAndLink = useCallback(async (
+    range: { from: number; to: number },
+    dbTitle: string,
+    navigateToDb = false,
+  ) => {
     if (!editor) return;
     const currentPages = useStore.getState().pages;
     const parentId = navigateToDb
       ? resolveInsertParentId(pageId, currentPages)
       : (pageId ?? resolveInsertParentId(pageId, currentPages));
-    const title = defaultTitleFor('database');
+    const title = dbTitle.trim() || defaultTitleFor('database');
 
     if (navigateToDb) {
       const page = await createPage({ type: 'database', title, parentId, icon: defaultIconFor('database') });
@@ -260,21 +264,27 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
 
     if (!pageId || !workspace) return;
 
-    editor.chain().focus().deleteRange(range).run();
-    await api.createPage(workspace.id, {
-      type: 'database',
-      title,
-      parentId: pageId,
-      icon: defaultIconFor('database'),
-      embedInPageId: pageId,
-    });
-    await loadPages();
-
-    const { blocks: freshBlocks } = await api.getPage(pageId);
-    const html = blocksToTiptapHtml(freshBlocks, createPageIdResolver(useStore.getState().pages));
-    editor.commands.setContent(html, { emitUpdate: true });
-    emitContent(editor);
-  }, [editor, pageId, workspace, createPage, loadPages, navigate, emitContent]);
+    try {
+      const { page } = await api.createPage(workspace.id, {
+        type: 'database',
+        title,
+        parentId: pageId,
+        icon: defaultIconFor('database'),
+      });
+      await loadPages();
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: 'databaseEmbed',
+          attrs: { databaseId: page.id, title },
+        })
+        .run();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not create database');
+    }
+  }, [editor, pageId, workspace, createPage, loadPages, navigate]);
 
   const openNewPageInProject = useCallback(async (key: FunctionalSlashKey, range: { from: number; to: number }, title?: string) => {
     if (!editor) return;
@@ -283,7 +293,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     const pageTitle = title || defaultTitleFor(key);
 
     if (key === 'database') {
-      await createDatabaseAndLink(range, true);
+      await createDatabaseAndLink(range, defaultTitleFor('database'), true);
       return;
     }
 
@@ -360,15 +370,20 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       return;
     }
 
+    if (key === 'database') {
+      setDbNamePrompt({ range });
+      return;
+    }
+
     runInlineFunctional(key, editor, range, {
       openPageLinkPicker: () => {
         pageLinkRangeRef.current = range;
         setPageLinkOpen(true);
       },
       openImagePicker: () => fileInputRef.current?.click(),
-      onDatabaseLink: () => { void createDatabaseAndLink(range, false); },
+      onDatabaseLink: () => { /* handled via dbNamePrompt */ },
     });
-  }, [editor, placementModal, createDatabaseAndLink]);
+  }, [editor, placementModal]);
 
   const handleNewPage = useCallback(() => {
     if (!editor || !placementModal?.item.key) return;
@@ -426,9 +441,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     return <div className="text-mid-gray text-sm py-8">Loading editor...</div>;
   }
 
-  const BubbleButton = ({ onMouseDown, active, title, children }: {
+  const BubbleButton = ({ onMouseDown, title, children }: {
     onMouseDown: (e: React.MouseEvent) => void;
-    active?: boolean;
     title: string;
     children: React.ReactNode;
   }) => (
@@ -436,7 +450,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       type="button"
       title={title}
       onMouseDown={onMouseDown}
-      className={`p-1.5 rounded-md transition-colors ${active ? 'bg-white/20 text-white' : 'hover:bg-white/10 text-tooltip-fg'}`}
+      className="p-1.5 rounded-md transition-colors hover:bg-linen text-charcoal"
     >
       {children}
     </button>
@@ -452,42 +466,17 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
         onChange={handleFileSelect}
       />
       {editable && (
-        <EditorToolbar
-          editor={editor}
-          onInsertOpen={() => setInsertOpen(true)}
-          onAddImage={addImage}
-          onUploadClick={() => fileInputRef.current?.click()}
-          onAddLink={addLink}
-        />
-      )}
-
-      {editable && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }} shouldShow={bubbleMenuShouldShow}>
-          <div className="flex gap-1 bg-tooltip-bg rounded-lg p-1 shadow-lg items-center">
-            <BubbleButton
-              title="Make selected text bold"
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBold().run(); }}
-              active={editor.isActive('bold')}
-            >
-              <Bold className="w-4 h-4 text-tooltip-fg" />
-            </BubbleButton>
-            <BubbleButton
-              title="Make selected text italic"
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleItalic().run(); }}
-              active={editor.isActive('italic')}
-            >
-              <Italic className="w-4 h-4 text-tooltip-fg" />
-            </BubbleButton>
-            <BubbleButton
-              title="Strike through selected text"
-              onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleStrike().run(); }}
-              active={editor.isActive('strike')}
-            >
-              <Strikethrough className="w-4 h-4 text-tooltip-fg" />
-            </BubbleButton>
+        <BubbleMenu editor={editor} tippyOptions={{ duration: 100, maxWidth: 'none' }} shouldShow={bubbleMenuShouldShow}>
+          <div className="flex flex-col gap-1 items-start">
+            <EditorToolbar
+              editor={editor}
+              variant="bubble"
+              onAddImage={addImage}
+              onUploadClick={() => fileInputRef.current?.click()}
+              onAddLink={addLink}
+            />
             {pageId && (
-              <>
-                <span className="w-px h-5 bg-white/20 mx-0.5" />
+              <div className="flex gap-1 bg-warm-white rounded-lg p-1 shadow-lg border border-green-mist items-center">
                 <BubbleButton
                   title="Comment for AI agent — instruction applies to selected text"
                   onMouseDown={(e) => {
@@ -496,12 +485,26 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
                     openAgentComment(editor);
                   }}
                 >
-                  <MessageSquarePlus className="w-4 h-4 text-amber-300" />
+                  <MessageSquarePlus className="w-4 h-4 text-forest" />
                 </BubbleButton>
-              </>
+              </div>
             )}
           </div>
         </BubbleMenu>
+      )}
+
+      {editable && (
+        <div className="md:hidden fixed bottom-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))] right-4 z-30">
+          <button
+            type="button"
+            onClick={() => setInsertOpen(true)}
+            className="p-3 rounded-full bg-forest text-white shadow-lg hover:bg-dark-teal"
+            aria-label="Insert block"
+            title="Insert block"
+          >
+            <Slash className="w-5 h-5" />
+          </button>
+        </div>
       )}
 
       {agentComment && pageId && (
@@ -583,6 +586,22 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
         confirmLabel="Create & open"
         onClose={() => { setNewPagePromptOpen(false); newPageRangeRef.current = null; }}
         onConfirm={(name) => void confirmNewPageAndNavigate(name)}
+      />
+
+      <NamePromptModal
+        open={!!dbNamePrompt}
+        title="New inline database"
+        label="Database name"
+        placeholder="e.g. Tasks, Reading list"
+        defaultValue={defaultTitleFor('database')}
+        confirmLabel="Insert"
+        onClose={() => setDbNamePrompt(null)}
+        onConfirm={(name) => {
+          if (!dbNamePrompt) return;
+          const range = dbNamePrompt.range;
+          setDbNamePrompt(null);
+          void createDatabaseAndLink(range, name, false);
+        }}
       />
     </div>
   );

@@ -94,6 +94,8 @@ export default function PageView() {
   const [editorContentEpoch, setEditorContentEpoch] = useState(0);
   const sidePanelRef = useRef<SidePanel>(null);
   sidePanelRef.current = sidePanel;
+  const loadedPageIdRef = useRef<string | null>(null);
+  const titleSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const { presence, lastUpdate } = useCollab(pageId, user?.id || '', user?.name || '');
 
@@ -124,7 +126,9 @@ export default function PageView() {
         setEditorContent(blocksToTiptapHtml(data.blocks, createPageIdResolver(useStore.getState().pages)));
         setEditorContentEpoch((n) => n + 1);
         await cachePage(pageId, data);
+        dirtyRef.current = false;
         setDirty(false);
+        loadedPageIdRef.current = pageId;
         setLastSaved(new Date());
       } else {
         const cached = await getCachedPage(pageId) as { page: { title: string; type: string; visibility: string }; blocks: Block[] } | undefined;
@@ -135,6 +139,7 @@ export default function PageView() {
           setBlocks(cached.blocks);
           setEditorContent(blocksToTiptapHtml(cached.blocks, createPageIdResolver(useStore.getState().pages)));
           setEditorContentEpoch((n) => n + 1);
+          loadedPageIdRef.current = pageId;
         } else {
           setLoadError('Page not available offline');
         }
@@ -199,9 +204,16 @@ export default function PageView() {
   };
 
   useEffect(() => {
+    if (!pageId) return;
+    loadedPageIdRef.current = null;
+    dirtyRef.current = false;
+    setDirty(false);
+    setTitle('');
+    clearTimeout(autosaveTimerRef.current);
+    clearTimeout(titleSaveTimerRef.current);
     loadPage();
     loadFavoriteStatus();
-  }, [loadPage]);
+  }, [pageId, loadPage]);
 
   useEffect(() => {
     const onPageImported = (e: Event) => {
@@ -230,20 +242,22 @@ export default function PageView() {
     loadPageTags();
   }, [pageId, pageType]);
 
-  const saveTitle = useCallback(async (newTitle: string) => {
-    if (!pageId) return;
+  const saveTitle = useCallback(async (newTitle: string, forPageId = pageId) => {
+    if (!forPageId || loadedPageIdRef.current !== forPageId) return;
     if (online) {
-      await api.updatePage(pageId, { title: newTitle });
-      useStore.getState().patchPageInStore(pageId, { title: newTitle });
+      await api.updatePage(forPageId, { title: newTitle });
+      useStore.getState().patchPageInStore(forPageId, { title: newTitle });
     }
   }, [pageId, online]);
 
   useEffect(() => {
     if (!pageId || !dirty || !title.trim()) return;
-    const timer = setTimeout(() => {
-      void saveTitle(title);
+    if (loadedPageIdRef.current !== pageId) return;
+    clearTimeout(titleSaveTimerRef.current);
+    titleSaveTimerRef.current = setTimeout(() => {
+      void saveTitle(title, pageId);
     }, 800);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(titleSaveTimerRef.current);
   }, [title, dirty, pageId, saveTitle]);
 
   const persistBlocks = useCallback(async (html: string, json: object) => {
@@ -750,7 +764,11 @@ export default function PageView() {
           <input
             value={title}
             onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
-            onBlur={(e) => saveTitle(e.target.value)}
+            onBlur={(e) => {
+              if (loadedPageIdRef.current === pageId) {
+                void saveTitle(e.target.value, pageId);
+              }
+            }}
             className="flex-1 min-w-0 text-base md:text-xl font-semibold bg-transparent border-none outline-none text-charcoal page-title-input"
             placeholder="Untitled"
           />

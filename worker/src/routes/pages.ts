@@ -141,8 +141,8 @@ pages.post('/workspaces/:workspaceId/pages', async (c) => {
     if (!host || host.workspace_id !== workspaceId) {
       return c.json({ error: 'embedInPageId must be a page in this workspace' }, 400);
     }
-    if (host.type !== 'page') {
-      return c.json({ error: 'embedInPageId must reference a page (not folder or database)' }, 400);
+    if (host.type !== 'page' && host.type !== 'folder') {
+      return c.json({ error: 'embedInPageId must reference a page or folder (not database)' }, 400);
     }
     await appendDatabaseEmbedBlock(c.env.DB, body.embedInPageId, pageId, title, workspaceId);
   }

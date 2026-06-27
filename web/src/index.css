@@ -156,6 +156,35 @@ input, textarea {
 .ProseMirror div[data-type="callout"].callout-box > * + * {
   margin-top: 0.375rem;
 }
+
+/* Database table — embedded grid with subtle inset lines */
+.db-table-shell {
+  border: 1px solid color-mix(in srgb, var(--color-green-mist) 55%, transparent);
+  background: color-mix(in srgb, var(--color-warm-white) 92%, var(--color-linen));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-warm-white) 80%, transparent),
+              inset 0 0 0 1px color-mix(in srgb, var(--color-green-mist) 18%, transparent);
+}
+.db-embed-shell {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-green-mist) 12%, transparent);
+}
+.db-table .db-th,
+.db-table .db-td {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-green-mist) 48%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--color-green-mist) 42%, transparent);
+}
+.db-table .db-th {
+  background: color-mix(in srgb, var(--color-linen) 65%, var(--color-warm-white));
+  border-bottom-width: 1px;
+  border-bottom-color: color-mix(in srgb, var(--color-sage) 35%, var(--color-green-mist));
+}
+.db-table tbody tr:last-child .db-td {
+  border-bottom: none;
+}
+.db-table thead .db-th:last-child,
+.db-table tbody .db-td:last-child {
+  border-right: none;
+}
+
 .ProseMirror pre { background: var(--color-dark-ink); color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; }
 .ProseMirror code { background: var(--color-linen); padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875em; }
 .ProseMirror pre code { background: none; padding: 0; }

@@ -5,7 +5,8 @@ export function isSidebarHiddenPage(page: Page, pages: Page[]): boolean {
   if (page.is_row_page) return true;
   if (page.type !== 'database' || !page.parent_id) return false;
   const parent = pages.find((p) => p.id === page.parent_id);
-  return parent?.type === 'page';
+  // Inline databases parented under a document host (page or folder) are hidden from sidebar
+  return parent?.type === 'page' || parent?.type === 'folder';
 }
 
 /** Children for sidebar tree — excludes hidden database row backing pages */
