@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
 import { saveLastAuthEmail, getLastAuthEmail } from '../lib/authSession';
 import { Shield, Users, Search, Settings, BarChart3 } from 'lucide-react';
+import AppAvatar from './AppAvatar';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -100,8 +101,8 @@ export default function AuthPage() {
           <div className="hidden md:flex flex-col justify-between bg-gradient-to-br from-forest to-shaded-green p-8 text-white">
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <div className="w-32 h-32 mx-auto mb-6 rounded-2xl bg-warm-white/10 flex items-center justify-center">
-                  <span className="text-6xl">📄</span>
+                <div className="w-32 h-32 mx-auto mb-6 rounded-2xl bg-warm-white/10 flex items-center justify-center shadow-lg shadow-black/10">
+                  <AppAvatar size="xl" className="rounded-2xl" />
                 </div>
                 <p className="text-sage text-lg">Create. Organize. Collaborate.</p>
               </div>
