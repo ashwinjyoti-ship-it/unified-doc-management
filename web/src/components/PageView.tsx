@@ -14,7 +14,7 @@ import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
-import { databaseToMarkdown, markdownToPdfHtml, stripDuplicateTitleFromHtml, downloadHtmlAsPdf } from '../lib/pageExport';
+import { databaseToMarkdown, markdownToPdfHtml, downloadHtmlAsPdf } from '../lib/pageExport';
 import { createPageIdResolver } from '../lib/pageLinks';
 import { buildAgentPrompt } from '../lib/agentComments';
 import type { Block, Comment, Tag, DatabaseProperty } from '../types';
@@ -488,20 +488,9 @@ export default function PageView() {
       let bodyHtml: string;
 
       if (pageType === 'page') {
-        if (markdownMode) {
-          bodyHtml = markdownToPdfHtml(markdown, pageTitle);
-        } else {
-          const snapshot = editorRef.current?.getSnapshot();
-          let rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks, createPageIdResolver(useStore.getState().pages));
-          rawHtml = stripDuplicateTitleFromHtml(rawHtml, pageTitle);
-          const textOnly = rawHtml.replace(/<[^>]+>/g, '').trim();
-          if (!textOnly && pageId) {
-            const { markdown: md } = await api.getMarkdown(pageId);
-            bodyHtml = markdownToPdfHtml(md, pageTitle);
-          } else {
-            bodyHtml = rawHtml;
-          }
-        }
+        const md = markdownMode ? markdown : (await api.getMarkdown(pageId)).markdown;
+        if (operationCancelledRef.current) return;
+        bodyHtml = markdownToPdfHtml(md, pageTitle);
       } else {
         const { markdown: md } = await getExportContent();
         if (operationCancelledRef.current) return;
