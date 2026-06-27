@@ -63,7 +63,7 @@ export async function resolveEmbeddedDatabase(
   const host = await db.prepare('SELECT id, workspace_id, type FROM pages WHERE id = ?')
     .bind(hostPageId)
     .first<{ id: string; workspace_id: string; type: string }>();
-  if (!host || host.type !== 'page') return null;
+  if (!host || (host.type !== 'page' && host.type !== 'folder')) return null;
 
   const embedBlocks = await db.prepare(
     'SELECT id, content FROM blocks WHERE page_id = ? AND type = ? ORDER BY order_index',

@@ -712,9 +712,9 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
       </div>
 
       {view === 'table' && (
-        <div className="overflow-x-auto rounded-lg border border-green-mist/30 bg-warm-white/40">
+        <div className="overflow-x-auto rounded-lg db-table-shell">
           <table
-            className="text-sm border-collapse"
+            className="text-sm border-collapse db-table"
             style={{ tableLayout: 'fixed', width: Math.max(tableWidth, 480) }}
           >
             <colgroup>
@@ -729,7 +729,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                 {properties.map((prop) => (
                   <th
                     key={prop.id}
-                    className="text-left px-3 py-2.5 font-medium text-charcoal relative group border-b border-r border-green-mist/25"
+                    className="text-left px-3 py-2.5 font-medium text-charcoal relative group db-th"
                   >
                     <div className="flex items-center gap-1 min-w-0 pr-2">
                       <span className="truncate" title={prop.type === 'rollup' ? rollupHeaderHint(prop) : prop.name}>{prop.name}</span>
@@ -772,7 +772,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     )}
                   </th>
                 ))}
-                <th className="p-2 border-b border-r border-green-mist/25">
+                <th className="p-2 db-th">
                   <button
                     type="button"
                     onMouseDown={(e) => e.stopPropagation()}
@@ -790,19 +790,19 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     <Plus className="w-4 h-4" />
                   </button>
                 </th>
-                <th className="border-b border-green-mist/25" />
+                <th className="db-th" />
               </tr>
             </thead>
             <tbody>
               {displayRows.map((row) => (
                 <tr key={row.id} className="hover:bg-linen/30">
                   {properties.map((prop) => (
-                    <td key={prop.id} className="px-2 py-1.5 align-top border-b border-r border-green-mist/20 overflow-hidden">
+                    <td key={prop.id} className="px-2 py-1.5 align-top db-td overflow-hidden">
                       {renderCell(row, prop)}
                     </td>
                   ))}
-                  <td className="border-b border-r border-green-mist/20" />
-                  <td className="px-2 py-1.5 border-b border-green-mist/20">
+                  <td className="db-td" />
+                  <td className="px-2 py-1.5 db-td">
                     <button
                       type="button"
                       onClick={() => void deleteRow(row.id)}

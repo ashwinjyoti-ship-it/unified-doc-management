@@ -13,16 +13,46 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
   const navigate = useNavigate();
   const { pageId: hostPageId } = useParams<{ pageId: string }>();
   const loadPages = useStore((s) => s.loadPages);
+  const patchPageInStore = useStore((s) => s.patchPageInStore);
   const removePageFromStore = useStore((s) => s.removePageFromStore);
   const databaseId = node.attrs.databaseId as string | null;
-  const title = (node.attrs.title as string) || 'Database';
+  const nodeTitle = (node.attrs.title as string) || 'Database';
 
+  const [displayTitle, setDisplayTitle] = useState(nodeTitle);
   const [resolvedDatabaseId, setResolvedDatabaseId] = useState<string | null>(null);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [resolving, setResolving] = useState(true);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayTitle(nodeTitle);
+  }, [nodeTitle]);
+
+  const updateEmbedTitle = useCallback(async (nextTitle: string) => {
+    const trimmed = nextTitle.trim() || 'Database';
+    setDisplayTitle(trimmed);
+
+    const pos = getPos();
+    if (editor && typeof pos === 'number') {
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          title: trimmed,
+        }),
+      );
+    }
+
+    if (resolvedDatabaseId) {
+      try {
+        await api.updatePage(resolvedDatabaseId, { title: trimmed });
+        patchPageInStore(resolvedDatabaseId, { title: trimmed });
+      } catch {
+        /* keep local embed title */
+      }
+    }
+  }, [editor, getPos, node.attrs, patchPageInStore, resolvedDatabaseId]);
 
   useEffect(() => {
     if (!hostPageId) {
@@ -48,10 +78,11 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
               editor.state.tr.setNodeMarkup(pos, undefined, {
                 ...node.attrs,
                 databaseId: resolved.databaseId,
-                title: resolved.title || title,
+                title: resolved.title || displayTitle,
               }),
             );
           }
+          setDisplayTitle(resolved.title || displayTitle);
           await loadPages();
         }
       } catch (err) {
@@ -66,7 +97,7 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
     return () => {
       cancelled = true;
     };
-  }, [hostPageId, databaseId, editor, getPos, loadPages, node.attrs, title]);
+  }, [hostPageId, databaseId, editor, getPos, loadPages, node.attrs, displayTitle]);
 
   const removeEmbedFromEditor = useCallback(() => {
     if (!editor) return;
@@ -118,14 +149,31 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
   return (
     <NodeViewWrapper className="database-embed my-6" data-drag-handle>
       <div
-        className="rounded-xl border border-green-mist overflow-hidden bg-warm-white shadow-sm"
+        className="rounded-xl border border-green-mist/50 overflow-hidden bg-warm-white shadow-sm db-embed-shell"
         contentEditable={false}
         suppressContentEditableWarning
         onMouseDown={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-green-mist bg-linen/40">
-          <span className="text-sm font-medium text-charcoal truncate">🗃️ {title}</span>
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-green-mist/40 bg-linen/30">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-sm shrink-0">🗃️</span>
+            <input
+              type="text"
+              value={displayTitle}
+              onChange={(e) => setDisplayTitle(e.target.value)}
+              onBlur={() => void updateEmbedTitle(displayTitle)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
+              className="flex-1 min-w-0 text-sm bg-transparent border-none outline-none text-mid-gray/80 placeholder:text-mid-gray/50 font-normal"
+              placeholder="Database name"
+              aria-label="Database name"
+            />
+          </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
@@ -154,7 +202,7 @@ export default function DatabaseEmbedView({ node, editor, getPos }: NodeViewProp
       <ConfirmDialog
         open={confirmDeleteOpen}
         title="Delete database"
-        message={`Remove "${title}" from this page and delete all of its rows and columns?\n\nThis cannot be undone.`}
+        message={`Remove "${displayTitle}" from this page and delete all of its rows and columns?\n\nThis cannot be undone.`}
         confirmLabel={deleting ? 'Deleting…' : 'Delete'}
         cancelLabel="Cancel"
         destructive
