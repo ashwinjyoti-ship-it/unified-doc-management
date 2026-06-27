@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { API_ENDPOINT_GROUPS } from '../lib/apiEndpoints';
 import Tooltip from './Tooltip';
 import MobileStandaloneHeader from './MobileStandaloneHeader';
+import ConfirmDialog from './ConfirmDialog';
 import type { Theme, Workspace } from '../types';
 import { ArrowLeft, Key, Copy, Check, Sun, Moon, Monitor, Sparkles, Loader2 } from 'lucide-react';
 
@@ -52,6 +53,7 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
+  const [confirmSeed, setConfirmSeed] = useState(false);
 
   const generateApiKey = async () => {
     const { key } = await api.createApiKey('Integration Key');
@@ -66,12 +68,12 @@ export default function SettingsPage() {
     }
   };
 
-  const loadDemoKnowledgeBase = async () => {
-    const confirmed = window.confirm(
-      'Load demo Knowledge Base?\n\nThis adds folders (Learning, Ideas, Tasks, Interesting), sample pages, daily note, and [[page links]]. Safe to run once — if already loaded, you\'ll be taken to the existing demo.',
-    );
-    if (!confirmed) return;
+  const loadDemoKnowledgeBase = () => {
+    setConfirmSeed(true);
+  };
 
+  const confirmLoadDemoKnowledgeBase = async () => {
+    setConfirmSeed(false);
     setSeedLoading(true);
     setSeedMessage(null);
     try {
@@ -227,6 +229,15 @@ export default function SettingsPage() {
         </Tooltip>
       </section>
       </div>
+
+      <ConfirmDialog
+        open={confirmSeed}
+        title="Load demo Knowledge Base?"
+        message={'This adds folders (Learning, Ideas, Tasks, Interesting), sample pages, daily note, and [[page links]]. Safe to run once — if already loaded, you\'ll be taken to the existing demo.'}
+        confirmLabel="Load demo"
+        onConfirm={() => { void confirmLoadDemoKnowledgeBase(); }}
+        onCancel={() => setConfirmSeed(false)}
+      />
     </>
   );
 }

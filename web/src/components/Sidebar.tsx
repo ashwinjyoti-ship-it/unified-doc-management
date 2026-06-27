@@ -22,6 +22,8 @@ import { closeSidebarOnMobile } from '../lib/device';
 import { useDocumentCreate } from '../hooks/useDocumentCreate';
 import SidebarItemMenu from './SidebarItemMenu';
 import AppAvatar from './AppAvatar';
+import ConfirmDialog from './ConfirmDialog';
+import AlertDialog from './AlertDialog';
 import type { Page } from '../types';
 import {
   X, LogOut, Bell, Search as SearchIcon, Wifi, WifiOff, Settings,
@@ -121,6 +123,10 @@ export default function Sidebar() {
   const [operationLabel, setOperationLabel] = useState<string | null>(null);
   const [moveModal, setMoveModal] = useState<string[] | null>(null);
   const [renameModal, setRenameModal] = useState<Page | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Page | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [importModal, setImportModal] = useState<{
     sourceLabel: string;
@@ -141,9 +147,16 @@ export default function Sidebar() {
     setRenameModal(null);
   };
 
-  const handleDeletePage = async (page: Page) => {
-    const message = buildDeleteConfirmMessage(pages, page);
-    if (!window.confirm(message)) return;
+  // Open the in-app confirm dialog. window.confirm() is unreliable inside the
+  // Capacitor mobile webview (it can resolve to false without prompting), which
+  // silently swallowed every sidebar delete — so we use a real React dialog.
+  const handleDeletePage = (page: Page) => {
+    setDeleteTarget(page);
+  };
+
+  const confirmDeletePage = async () => {
+    const page = deleteTarget;
+    if (!page) return;
 
     const idsToDelete = getDeleteOrder(pages, page.id);
     const deletedIds = new Set(idsToDelete);
@@ -152,6 +165,8 @@ export default function Sidebar() {
     const nextPageId = deletedCurrent
       ? resolvePageAfterDelete(sidebarOrder, deletedIds, activePageId)
       : null;
+
+    setDeleting(true);
 
     // Leave the deleted page immediately so its content does not linger in the editor
     if (deletedCurrent) {
@@ -177,8 +192,11 @@ export default function Sidebar() {
       await loadPages();
       await loadFavorites();
       await loadRecent();
-      alert(err instanceof Error ? err.message : 'Failed to delete page');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to delete page');
       return;
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
 
     closeSidebarOnMobile(setSidebarOpen);
@@ -205,9 +223,13 @@ export default function Sidebar() {
     });
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selected.size === 0) return;
-    if (!window.confirm(`Delete ${selected.size} page(s)? This cannot be undone.`)) return;
+    setBulkDeleteOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selected.size === 0) { setBulkDeleteOpen(false); return; }
     const idsToDelete = [...selected];
     const deletedIds = new Set(idsToDelete);
     const deletedCurrent = Boolean(activePageId && deletedIds.has(activePageId));
@@ -218,6 +240,7 @@ export default function Sidebar() {
 
     setSelected(new Set());
     setBulkMode(false);
+    setDeleting(true);
 
     if (deletedCurrent) {
       if (nextPageId) {
@@ -237,8 +260,11 @@ export default function Sidebar() {
       await loadPages();
       await loadFavorites();
       await loadRecent();
-      alert(err instanceof Error ? err.message : 'Failed to delete pages');
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to delete pages');
       return;
+    } finally {
+      setDeleting(false);
+      setBulkDeleteOpen(false);
     }
 
     closeSidebarOnMobile(setSidebarOpen);
@@ -533,6 +559,32 @@ export default function Sidebar() {
       {operationLabel && (
         <OperationBanner label={operationLabel} onCancel={cancelOperation} />
       )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete page"
+        message={deleteTarget ? buildDeleteConfirmMessage(pages, deleteTarget) : ''}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        destructive
+        onConfirm={() => { void confirmDeletePage(); }}
+        onCancel={() => { if (!deleting) setDeleteTarget(null); }}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title="Delete pages"
+        message={`Delete ${selected.size} page(s)? This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting…' : 'Delete'}
+        destructive
+        onConfirm={() => { void confirmBulkDelete(); }}
+        onCancel={() => { if (!deleting) setBulkDeleteOpen(false); }}
+      />
+
+      <AlertDialog
+        open={errorMessage != null}
+        message={errorMessage ?? ''}
+        onClose={() => setErrorMessage(null)}
+      />
     </>
   );
 }

@@ -30,6 +30,7 @@ import RelationPicker from './RelationPicker';
 import DatabaseRowPanel from './DatabaseRowPanel';
 import Tooltip from './Tooltip';
 import AlertDialog from './AlertDialog';
+import ConfirmDialog from './ConfirmDialog';
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -75,6 +76,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [deleteColumnId, setDeleteColumnId] = useState<string | null>(null);
 
   const showAlert = useCallback((message: string) => {
     setAlertMessage(message);
@@ -265,12 +267,23 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
     await loadDatabase();
   };
 
-  const deleteProperty = async (propId: string) => {
-    if (!window.confirm('Delete this column? Values in all rows will be removed.')) return;
-    await api.deleteDatabaseProperty(pageId, propId);
-    setProperties((prev) => prev.filter((p) => p.id !== propId));
+  const deleteProperty = (propId: string) => {
     setColumnMenuId(null);
-    await loadDatabase();
+    setDeleteColumnId(propId);
+  };
+
+  const confirmDeleteProperty = async () => {
+    const propId = deleteColumnId;
+    if (!propId) return;
+    try {
+      await api.deleteDatabaseProperty(pageId, propId);
+      setProperties((prev) => prev.filter((p) => p.id !== propId));
+      await loadDatabase();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'Could not delete column');
+    } finally {
+      setDeleteColumnId(null);
+    }
   };
 
   const rollupHeaderHint = (prop: DatabaseProperty) => {
@@ -392,7 +405,10 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
         <DatabaseTextCell
           rowId={row.id}
           propId={prop.id}
-          value={String(getPropValue(row, prop.id) || '')}
+          // The row title lives in two places — the Name property and the linked
+          // page's title. They can drift (e.g. a partial data restore), so fall
+          // back to the page title rather than render a blank Name cell.
+          value={String(getPropValue(row, prop.id) || row.page_title || '')}
           type="text"
           onPersist={persistCell}
           className="flex-1 bg-transparent border-none outline-none px-1 py-0.5 rounded hover:bg-linen focus:bg-linen text-sm text-charcoal db-cell-input"
@@ -1106,6 +1122,16 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
           onPropertiesChange={() => void loadDatabase()}
         />
       )}
+
+      <ConfirmDialog
+        open={deleteColumnId != null}
+        title="Delete column"
+        message="Delete this column? Values in all rows will be removed."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { void confirmDeleteProperty(); }}
+        onCancel={() => setDeleteColumnId(null)}
+      />
 
       <AlertDialog
         open={alertMessage != null}

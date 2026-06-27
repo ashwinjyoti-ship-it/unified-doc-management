@@ -12,6 +12,8 @@ import NamePromptModal from './NamePromptModal';
 import Tooltip from './Tooltip';
 import ImportOptionsModal, { type ImportMode } from './ImportOptionsModal';
 import OperationBanner from './OperationBanner';
+import ConfirmDialog from './ConfirmDialog';
+import AlertDialog from './AlertDialog';
 import { applyImportContent } from '../lib/importContent';
 import { PAGE_IMPORTED_EVENT } from '../lib/pageEvents';
 import { databaseToMarkdown, markdownToPdfHtml, downloadHtmlAsPdf } from '../lib/pageExport';
@@ -61,6 +63,10 @@ export default function PageView() {
   const [commentFilter, setCommentFilter] = useState<CommentFilter>('all');
   const [newComment, setNewComment] = useState('');
   const [sidePanel, setSidePanel] = useState<SidePanel>(null);
+  const [confirmDeletePage, setConfirmDeletePage] = useState(false);
+  const [deletingPage, setDeletingPage] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<Comment | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [versions, setVersions] = useState<Array<{ id: string; title: string; created_at: number; author_name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -646,11 +652,21 @@ export default function PageView() {
     loadComments();
   };
 
-  const deleteComment = async (comment: Comment) => {
-    const label = comment.comment_type === 'agent_instruction' ? 'AI instruction' : 'comment';
-    if (!window.confirm(`Delete this ${label}?`)) return;
-    await api.deleteComment(comment.id);
-    setComments((prev) => prev.filter((c) => c.id !== comment.id));
+  const deleteComment = (comment: Comment) => {
+    setCommentToDelete(comment);
+  };
+
+  const confirmDeleteComment = async () => {
+    const comment = commentToDelete;
+    if (!comment) return;
+    try {
+      await api.deleteComment(comment.id);
+      setComments((prev) => prev.filter((c) => c.id !== comment.id));
+    } catch (err) {
+      setAlertMessage(err instanceof Error ? err.message : 'Failed to delete comment');
+    } finally {
+      setCommentToDelete(null);
+    }
   };
 
   const setCommentStatus = async (commentId: string, status: 'open' | 'resolved') => {
@@ -683,13 +699,15 @@ export default function PageView() {
     setSidePanel((current) => (current === panel ? null : panel));
   };
 
-  const deletePage = async () => {
+  const deletePage = () => {
+    if (!pageId) return;
+    setConfirmDeletePage(true);
+  };
+
+  const confirmDeletePageAction = async () => {
     if (!pageId) return;
     const page = pages.find((p) => p.id === pageId);
-    const message = page
-      ? buildDeleteConfirmMessage(pages, page)
-      : `Delete "${title || 'Untitled'}"? This cannot be undone.`;
-    if (!window.confirm(message)) return;
+    setDeletingPage(true);
 
     const idsToDelete = page ? getDeleteOrder(pages, page.id) : [pageId];
     const sidebarOrder = getSidebarPageOrder(pages, favorites);
@@ -719,7 +737,10 @@ export default function PageView() {
       await loadPages();
       await loadFavorites();
       await loadRecent();
-      alert(err instanceof Error ? err.message : 'Failed to delete page');
+      setAlertMessage(err instanceof Error ? err.message : 'Failed to delete page');
+    } finally {
+      setDeletingPage(false);
+      setConfirmDeletePage(false);
     }
   };
 
@@ -1377,6 +1398,39 @@ export default function PageView() {
         />
       )}
       {exportMenuPortal}
+
+      <ConfirmDialog
+        open={confirmDeletePage}
+        title="Delete page"
+        message={(() => {
+          const page = pages.find((p) => p.id === pageId);
+          return page
+            ? buildDeleteConfirmMessage(pages, page)
+            : `Delete "${title || 'Untitled'}"? This cannot be undone.`;
+        })()}
+        confirmLabel={deletingPage ? 'Deleting…' : 'Delete'}
+        destructive
+        onConfirm={() => { void confirmDeletePageAction(); }}
+        onCancel={() => { if (!deletingPage) setConfirmDeletePage(false); }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(commentToDelete)}
+        title="Delete"
+        message={commentToDelete
+          ? `Delete this ${commentToDelete.comment_type === 'agent_instruction' ? 'AI instruction' : 'comment'}?`
+          : ''}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { void confirmDeleteComment(); }}
+        onCancel={() => setCommentToDelete(null)}
+      />
+
+      <AlertDialog
+        open={alertMessage != null}
+        message={alertMessage ?? ''}
+        onClose={() => setAlertMessage(null)}
+      />
     </div>
   );
 }
