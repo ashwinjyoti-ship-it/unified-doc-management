@@ -1,3 +1,4 @@
+import html2canvas from 'html2canvas';
 import { marked } from 'marked';
 import { jsPDF } from 'jspdf';
 import type { DatabaseProperty, DatabaseRow, Page } from '../types';
@@ -7,7 +8,7 @@ import { getChildren, pageIcon } from './pageTree';
 marked.setOptions({ gfm: true, breaks: false });
 
 const PDF_STYLES = `
-  .pdf-export { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1D3325; line-height: 1.6; font-size: 14px; }
+  .pdf-export { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1D3325; line-height: 1.6; font-size: 14px; overflow-wrap: break-word; word-wrap: break-word; }
   .pdf-title { font-size: 28px; font-weight: 700; margin: 0 0 24px; color: #1D3325; border-bottom: 2px solid #004228; padding-bottom: 12px; }
   .pdf-body h1 { font-size: 24px; font-weight: 700; margin: 20px 0 10px; color: #1D3325; }
   .pdf-body h2 { font-size: 20px; font-weight: 600; margin: 16px 0 8px; color: #1D3325; }
@@ -32,7 +33,8 @@ const PDF_STYLES = `
 `;
 
 const PDF_PAGE_WIDTH_PX = 794; // ~A4 at 96dpi
-const PDF_MARGIN_PT = 40; // page margin in points (A4 is 595.28 x 841.89 pt)
+const PDF_CAPTURE_SCALE = 2;
+const PDF_PAGE_BREAK_SEARCH_PX = 80; // scan this many px above the ideal break for whitespace
 
 export function folderToMarkdown(title: string, pages: Page[], folderId: string): string {
   const children = getChildren(pages, folderId);
@@ -139,23 +141,18 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElement {
   const container = document.createElement('div');
   container.setAttribute('data-pdf-export-root', 'true');
-  // Rendered off-screen (non-interactive) at a fixed A4-ish pixel width so
-  // jsPDF.html can rasterize and paginate it. Page margins are applied by jsPDF
-  // below, so the container itself carries no padding.
-  //
-  // It is hidden by positioning it far off-screen — NOT with `opacity: 0` or
-  // `visibility: hidden`. jsPDF renders via html2canvas, which honors opacity
-  // and visibility, so hiding it that way rasterizes a fully transparent
-  // (blank) capture. Off-screen positioning keeps it fully opaque for capture
-  // while invisible to the user.
+  // Must stay fully opaque and on-screen for html2canvas. Keep behind the UI so
+  // the user never sees a flash; do not use opacity:0 or visibility:hidden.
   container.style.cssText = [
     'position: fixed',
-    'left: -10000px',
+    'left: 0',
     'top: 0',
     `width: ${PDF_PAGE_WIDTH_PX}px`,
+    'padding: 48px 56px',
     'background: #ffffff',
     'box-sizing: border-box',
     'color: #1D3325',
+    'z-index: -1',
     'pointer-events: none',
     'overflow: visible',
   ].join(';');
@@ -171,12 +168,57 @@ function buildPdfExportContainer(title: string, bodyHtml: string): HTMLDivElemen
   return container;
 }
 
+/** Return true when every sampled pixel in a canvas row is near-white. */
+function isCanvasRowBlank(ctx: CanvasRenderingContext2D, y: number, width: number): boolean {
+  const row = ctx.getImageData(0, y, width, 1).data;
+  for (let x = 0; x < width; x += 8) {
+    const i = x * 4;
+    if (row[i] < 248 || row[i + 1] < 248 || row[i + 2] < 248) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Find a horizontal whitespace band near the ideal page break so we slice
+ * between lines/paragraphs instead of through them.
+ */
+function findPageBreakY(
+  ctx: CanvasRenderingContext2D,
+  idealBreakY: number,
+  minY: number,
+  width: number,
+): number {
+  const searchStart = Math.max(minY, idealBreakY - PDF_PAGE_BREAK_SEARCH_PX);
+  for (let y = Math.floor(idealBreakY); y >= searchStart; y--) {
+    if (isCanvasRowBlank(ctx, y, width)) {
+      return y;
+    }
+  }
+  return idealBreakY;
+}
+
+function sliceCanvasPage(source: HTMLCanvasElement, srcY: number, height: number): HTMLCanvasElement {
+  const pageCanvas = document.createElement('canvas');
+  pageCanvas.width = source.width;
+  pageCanvas.height = height;
+  const ctx = pageCanvas.getContext('2d');
+  if (!ctx) {
+    throw new Error('Failed to create PDF page canvas');
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+  ctx.drawImage(source, 0, srcY, source.width, height, 0, 0, source.width, height);
+  return pageCanvas;
+}
+
 /**
  * Render styled HTML content to a downloadable PDF file.
  *
- * Uses jsPDF's `html()` with `autoPaging: 'text'` so the document flows across
- * pages breaking *between* text lines and table rows — rather than slicing one
- * tall raster image at fixed page heights, which cut through lines mid-glyph.
+ * Captures the styled HTML with html2canvas (reliable, fully opaque rendering)
+ * and paginates by scanning for whitespace near each A4 page boundary so lines
+ * and table rows are not cut mid-glyph.
  */
 export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filename: string): Promise<void> {
   const container = buildPdfExportContainer(title, bodyHtml);
@@ -185,24 +227,57 @@ export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filenam
   try {
     await waitForImages(container);
 
+    const canvas = await html2canvas(container, {
+      scale: PDF_CAPTURE_SCALE,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: -window.scrollY,
+      width: PDF_PAGE_WIDTH_PX,
+      windowWidth: PDF_PAGE_WIDTH_PX,
+    });
+
     const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
     const pageWidth = pdf.internal.pageSize.getWidth();
-    const contentWidthPt = pageWidth - PDF_MARGIN_PT * 2;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const pxPerPt = canvas.width / pageWidth;
+    const pageHeightPx = pageHeight * pxPerPt;
+    const ctx = canvas.getContext('2d');
 
-    await pdf.html(container, {
-      x: PDF_MARGIN_PT,
-      y: PDF_MARGIN_PT,
-      width: contentWidthPt,
-      windowWidth: PDF_PAGE_WIDTH_PX,
-      margin: [PDF_MARGIN_PT, PDF_MARGIN_PT, PDF_MARGIN_PT, PDF_MARGIN_PT],
-      autoPaging: 'text',
-      html2canvas: {
-        scale: contentWidthPt / PDF_PAGE_WIDTH_PX,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-      },
-    });
+    if (!ctx || canvas.height === 0) {
+      throw new Error('PDF export produced empty content');
+    }
+
+    let srcY = 0;
+    let pageIndex = 0;
+
+    while (srcY < canvas.height) {
+      if (pageIndex > 0) {
+        pdf.addPage();
+      }
+
+      const remaining = canvas.height - srcY;
+      let sliceHeight = Math.min(pageHeightPx, remaining);
+
+      if (remaining > pageHeightPx) {
+        const idealBreak = srcY + pageHeightPx;
+        const minBreak = srcY + pageHeightPx * 0.55;
+        const breakY = findPageBreakY(ctx, idealBreak, minBreak, canvas.width);
+        if (breakY > minBreak) {
+          sliceHeight = breakY - srcY;
+        }
+      }
+
+      sliceHeight = Math.max(1, Math.floor(sliceHeight));
+      const pageCanvas = sliceCanvasPage(canvas, srcY, sliceHeight);
+      const imgData = pageCanvas.toDataURL('image/jpeg', 0.92);
+      const imgHeightPt = sliceHeight / pxPerPt;
+      pdf.addImage(imgData, 'JPEG', 0, 0, pageWidth, imgHeightPt);
+
+      srcY += sliceHeight;
+      pageIndex += 1;
+    }
 
     pdf.save(filename);
   } finally {
