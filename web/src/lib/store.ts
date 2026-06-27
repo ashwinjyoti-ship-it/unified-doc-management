@@ -51,7 +51,13 @@ interface AppState {
   loadRecent: () => Promise<void>;
   loadTags: () => Promise<void>;
   loadNotifications: () => Promise<void>;
-  createPage: (data?: { title?: string; parentId?: string; type?: string; icon?: string }) => Promise<Page>;
+  createPage: (data?: {
+    title?: string;
+    parentId?: string;
+    type?: string;
+    icon?: string;
+    embedInPageId?: string;
+  }) => Promise<Page>;
 }
 
 export const useStore = create<AppState>((set, get) => ({

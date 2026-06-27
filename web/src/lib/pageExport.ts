@@ -139,21 +139,26 @@ async function waitForImages(root: HTMLElement): Promise<void> {
 export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filename: string): Promise<void> {
   const container = document.createElement('div');
   container.setAttribute('aria-hidden', 'true');
+  // Keep in viewport but invisible — off-screen positioning breaks html2canvas capture.
   container.style.cssText = [
     'position: fixed',
-    'left: -10000px',
+    'left: 0',
     'top: 0',
     `width: ${PDF_PAGE_WIDTH_PX}px`,
     'padding: 48px 56px',
     'background: #ffffff',
     'box-sizing: border-box',
+    'z-index: -1',
+    'opacity: 0',
+    'pointer-events: none',
+    'overflow: visible',
   ].join(';');
 
   container.innerHTML = `
     <style>${PDF_STYLES}</style>
     <article class="pdf-export">
       <h1 class="pdf-title">${escapeHtml(title || 'Untitled')}</h1>
-      <div class="pdf-body">${bodyHtml}</div>
+      <div class="pdf-body">${bodyHtml || '<p></p>'}</div>
     </article>
   `;
 
@@ -175,6 +180,8 @@ export async function downloadHtmlAsPdf(title: string, bodyHtml: string, filenam
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
+        scrollX: 0,
+        scrollY: 0,
       },
     });
 

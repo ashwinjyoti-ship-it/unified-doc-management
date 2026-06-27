@@ -481,8 +481,15 @@ export default function PageView() {
           bodyHtml = markdownToPdfHtml(markdown, pageTitle);
         } else {
           const snapshot = editorRef.current?.getSnapshot();
-          const rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks, createPageIdResolver(useStore.getState().pages));
-          bodyHtml = stripDuplicateTitleFromHtml(rawHtml, pageTitle);
+          let rawHtml = snapshot?.html ?? blocksToTiptapHtml(blocks, createPageIdResolver(useStore.getState().pages));
+          rawHtml = stripDuplicateTitleFromHtml(rawHtml, pageTitle);
+          const textOnly = rawHtml.replace(/<[^>]+>/g, '').trim();
+          if (!textOnly && pageId) {
+            const { markdown: md } = await api.getMarkdown(pageId);
+            bodyHtml = markdownToPdfHtml(md, pageTitle);
+          } else {
+            bodyHtml = rawHtml;
+          }
         }
       } else {
         const { markdown: md } = await getExportContent();

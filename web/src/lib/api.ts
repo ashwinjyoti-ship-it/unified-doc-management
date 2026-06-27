@@ -80,8 +80,14 @@ class ApiClient {
     return this.request<{ pages: Page[] }>(`/workspaces/${workspaceId}/pages`);
   }
 
-  createPage(workspaceId: string, data: { title?: string; parentId?: string; type?: string; icon?: string }) {
-    return this.request<{ page: Page }>(
+  createPage(workspaceId: string, data: {
+    title?: string;
+    parentId?: string;
+    type?: string;
+    icon?: string;
+    embedInPageId?: string;
+  }) {
+    return this.request<{ page: Page; embeddedInPageId?: string | null }>(
       `/workspaces/${workspaceId}/pages`, { method: 'POST', body: JSON.stringify(data) }
     );
   }
@@ -127,6 +133,13 @@ class ApiClient {
   restoreVersion(pageId: string, versionId: string) {
     return this.request<{ blocks: Block[] }>(
       `/pages/${pageId}/restore/${versionId}`, { method: 'POST' }
+    );
+  }
+
+  resolveEmbeddedDatabase(hostPageId: string, candidateId?: string) {
+    const qs = candidateId ? `?candidateId=${encodeURIComponent(candidateId)}` : '';
+    return this.request<{ databaseId: string; title: string; repaired: boolean }>(
+      `/pages/${hostPageId}/embedded-database${qs}`,
     );
   }
 
