@@ -136,6 +136,13 @@ class ApiClient {
     );
   }
 
+  resolveEmbeddedDatabase(hostPageId: string, candidateId?: string) {
+    const qs = candidateId ? `?candidateId=${encodeURIComponent(candidateId)}` : '';
+    return this.request<{ databaseId: string; title: string; repaired: boolean }>(
+      `/pages/${hostPageId}/embedded-database${qs}`,
+    );
+  }
+
   getDatabase(pageId: string) {
     return this.request<{
       properties: DatabaseProperty[];

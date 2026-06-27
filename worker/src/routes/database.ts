@@ -8,6 +8,7 @@ import {
   computeRollupValues,
   syncPageTitleFromRowProperty,
 } from '../database-helpers';
+import { resolveEmbeddedDatabase } from '../embedded-database';
 
 const database = new Hono<{ Bindings: Env; Variables: { auth: AuthContext } }>();
 
@@ -17,6 +18,19 @@ async function getDatabasePage(db: D1Database, pageId: string) {
     workspace_id: string;
   }>();
 }
+
+database.get('/pages/:hostPageId/embedded-database', async (c) => {
+  const hostPageId = c.req.param('hostPageId');
+  const candidateId = c.req.query('candidateId') || undefined;
+  const auth = c.get('auth');
+
+  const resolved = await resolveEmbeddedDatabase(c.env.DB, hostPageId, candidateId, auth.user.id);
+  if (!resolved) {
+    return c.json({ error: 'Database not found' }, 404);
+  }
+
+  return c.json(resolved);
+});
 
 database.get('/pages/:pageId/database', async (c) => {
   const pageId = c.req.param('pageId');

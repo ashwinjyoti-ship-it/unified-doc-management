@@ -29,6 +29,7 @@ import DatabaseTextCell from './DatabaseTextCell';
 import RelationPicker from './RelationPicker';
 import DatabaseRowPanel from './DatabaseRowPanel';
 import Tooltip from './Tooltip';
+import AlertDialog from './AlertDialog';
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -41,6 +42,7 @@ const FILTER_OPS: { value: FilterOperator; label: string }[] = [
 interface DatabaseViewProps {
   pageId: string;
   embedded?: boolean;
+  hostPageId?: string;
 }
 
 export default function DatabaseView({ pageId, embedded = false }: DatabaseViewProps) {
@@ -72,6 +74,11 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const [newRollupTargetPropId, setNewRollupTargetPropId] = useState('');
   const [newRollupAggregation, setNewRollupAggregation] = useState<RollupAggregation>('count');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
+  const showAlert = useCallback((message: string) => {
+    setAlertMessage(message);
+  }, []);
 
   useEffect(() => {
     void loadDatabase();
@@ -137,7 +144,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
         });
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not add row');
+      showAlert(err instanceof Error ? err.message : 'Could not add row');
     }
   };
 
@@ -198,25 +205,25 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
 
   const addProperty = async () => {
     if (!newPropName.trim()) {
-      alert('Enter a property name');
+      showAlert('Enter a property name');
       return;
     }
     let options: string[] | { relatedDatabaseId?: string; relationPropertyId?: string; targetPropertyId?: string; aggregation?: string } | undefined;
     if (newPropType === 'select' || newPropType === 'multi_select') {
       options = newPropOptions.split(',').map((s) => s.trim()).filter(Boolean);
       if (options.length === 0) {
-        alert('Enter at least one option (comma-separated)');
+        showAlert('Enter at least one option (comma-separated)');
         return;
       }
     } else if (newPropType === 'relation') {
       if (!newRelationDbId) {
-        alert('Select a database to link to');
+        showAlert('Select a database to link to');
         return;
       }
       options = { relatedDatabaseId: newRelationDbId };
     } else if (newPropType === 'rollup') {
       if (!newRollupRelationPropId || !newRollupTargetPropId) {
-        alert('Select a relation property and target property for the rollup');
+        showAlert('Select a relation property and target property for the rollup');
         return;
       }
       options = {
@@ -242,7 +249,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
       setEditingColumnId(null);
       await loadDatabase();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Could not add property');
+      showAlert(err instanceof Error ? err.message : 'Could not add property');
     }
   };
 
@@ -1099,6 +1106,12 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
           onPropertiesChange={() => void loadDatabase()}
         />
       )}
+
+      <AlertDialog
+        open={alertMessage != null}
+        message={alertMessage ?? ''}
+        onClose={() => setAlertMessage(null)}
+      />
     </div>
   );
 }
