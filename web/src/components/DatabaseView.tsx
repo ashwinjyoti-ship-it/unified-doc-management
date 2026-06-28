@@ -1,8 +1,24 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  horizontalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { useCollab } from '../hooks/useCollab';
 import { useDatabaseColumnResize } from '../hooks/useDatabaseColumnResize';
+import { loadColumnOrder, saveColumnOrder } from '../lib/databaseColumnOrder';
 import type { DatabaseProperty, DatabaseRow, SavedDatabaseView } from '../types';
 import {
   applyFilters,
@@ -24,7 +40,7 @@ import {
 } from '../lib/databaseFilters';
 import {
   Plus, Table, LayoutGrid, Calendar, List, Trash2, Images,
-  Filter, Save, ExternalLink, X, MoreHorizontal,
+  Filter, Save, ExternalLink, X, MoreHorizontal, GripVertical,
 } from 'lucide-react';
 import DatabaseTextCell from './DatabaseTextCell';
 import RelationPicker from './RelationPicker';
@@ -32,6 +48,113 @@ import DatabaseRowPanel from './DatabaseRowPanel';
 import Tooltip from './Tooltip';
 import AlertDialog from './AlertDialog';
 import ConfirmDialog from './ConfirmDialog';
+
+interface SortableColumnHeaderProps {
+  prop: DatabaseProperty;
+  rollupHeaderHint: (prop: DatabaseProperty) => string;
+  columnMenuId: string | null;
+  setColumnMenuId: (id: string | null) => void;
+  setEditingColumnId: (id: string | null) => void;
+  setNewPropName: (name: string) => void;
+  setNewPropType: (type: string) => void;
+  setAddingColumn: (v: boolean) => void;
+  onDeleteProperty: (id: string) => void;
+  startResize: (id: string, name: string, clientX: number) => void;
+}
+
+function SortableColumnHeader({
+  prop,
+  rollupHeaderHint,
+  columnMenuId,
+  setColumnMenuId,
+  setEditingColumnId,
+  setNewPropName,
+  setNewPropType,
+  setAddingColumn,
+  onDeleteProperty,
+  startResize,
+}: SortableColumnHeaderProps) {
+  const { setNodeRef, transform, transition, isDragging, listeners, attributes } = useSortable({ id: prop.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    position: isDragging ? 'relative' : undefined,
+    zIndex: isDragging ? 1 : undefined,
+  };
+
+  return (
+    <th
+      ref={setNodeRef}
+      style={style}
+      className="text-left px-3 py-2.5 font-medium text-charcoal relative group db-th"
+    >
+      <div className="flex items-center gap-1 min-w-0 pr-2">
+        <button
+          {...listeners}
+          {...attributes}
+          type="button"
+          className="shrink-0 opacity-0 group-hover:opacity-40 hover:!opacity-80 cursor-grab active:cursor-grabbing touch-none p-0.5 rounded"
+          aria-label={`Drag to reorder ${prop.name} column`}
+          title="Drag to reorder"
+          tabIndex={-1}
+        >
+          <GripVertical className="w-3 h-3" />
+        </button>
+        <span className="truncate" title={prop.type === 'rollup' ? rollupHeaderHint(prop) : prop.name}>{prop.name}</span>
+        <button
+          type="button"
+          onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
+          className="p-0.5 rounded shrink-0 opacity-30 group-hover:opacity-100 hover:bg-linen focus-visible:opacity-100"
+          aria-label="Column options"
+          title="Column options — rename, change type, or delete"
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <button
+        type="button"
+        aria-label={`Resize ${prop.name} column`}
+        className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none opacity-0 group-hover:opacity-100 hover:bg-forest/10 focus-visible:opacity-100"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          startResize(prop.id, prop.name, e.clientX);
+        }}
+      />
+      {columnMenuId === prop.id && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setColumnMenuId(null)} />
+          <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-green-mist bg-warm-white shadow-lg py-1 text-sm">
+            <button
+              type="button"
+              className="w-full px-3 py-2 text-left hover:bg-linen"
+              onClick={() => {
+                setEditingColumnId(prop.id);
+                setNewPropName(prop.name);
+                setNewPropType(prop.type);
+                setColumnMenuId(null);
+                setAddingColumn(true);
+              }}
+            >
+              Rename / change type
+            </button>
+            {prop.name.toLowerCase() !== 'name' && (
+              <button
+                type="button"
+                className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                onClick={() => onDeleteProperty(prop.id)}
+              >
+                Delete column
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </th>
+  );
+}
 
 const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
@@ -349,6 +472,50 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
   const nameProp = properties.find((p) => p.name.toLowerCase() === 'name') || properties[0];
   const relationProperties = properties.filter((p) => p.type === 'relation');
   const { getWidth, startResize, tableWidth } = useDatabaseColumnResize(pageId, properties);
+
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => loadColumnOrder(pageId));
+
+  useEffect(() => {
+    setColumnOrder((prev) => {
+      const existingIds = new Set(properties.map((p) => p.id));
+      const filtered = prev.filter((id) => existingIds.has(id));
+      const newIds = properties.map((p) => p.id).filter((id) => !filtered.includes(id));
+      const next = [...filtered, ...newIds];
+      if (next.join(',') !== prev.join(',')) {
+        saveColumnOrder(pageId, next);
+        return next;
+      }
+      return prev;
+    });
+  }, [properties, pageId]);
+
+  const orderedProperties = useMemo(() => {
+    if (columnOrder.length === 0) return properties;
+    const orderMap = new Map(columnOrder.map((id, i) => [id, i]));
+    return [...properties].sort((a, b) => {
+      const ia = orderMap.get(a.id) ?? properties.indexOf(a);
+      const ib = orderMap.get(b.id) ?? properties.indexOf(b);
+      return ia - ib;
+    });
+  }, [columnOrder, properties]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleColumnDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setColumnOrder((prev) => {
+      const ids = prev.length ? prev : properties.map((p) => p.id);
+      const oldIndex = ids.indexOf(String(active.id));
+      const newIndex = ids.indexOf(String(over.id));
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const next = arrayMove(ids, oldIndex, newIndex);
+      saveColumnOrder(pageId, next);
+      return next;
+    });
+  }, [properties, pageId]);
 
   const rollupTargetProperties = useMemo(() => {
     if (!newRollupRelationPropId) return [];
@@ -747,110 +914,83 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
 
       {view === 'table' && (
         <div className="overflow-x-auto rounded-lg db-table-shell">
-          <table
-            className="text-sm border-collapse db-table"
-            style={{ tableLayout: 'fixed', width: Math.max(tableWidth, 480) }}
-          >
-            <colgroup>
-              {properties.map((prop) => (
-                <col key={prop.id} style={{ width: getWidth(prop.id, prop.name) }} />
-              ))}
-              <col style={{ width: 40 }} />
-              <col style={{ width: 40 }} />
-            </colgroup>
-            <thead>
-              <tr>
-                {properties.map((prop) => (
-                  <th
-                    key={prop.id}
-                    className="text-left px-3 py-2.5 font-medium text-charcoal relative group db-th"
-                  >
-                    <div className="flex items-center gap-1 min-w-0 pr-2">
-                      <span className="truncate" title={prop.type === 'rollup' ? rollupHeaderHint(prop) : prop.name}>{prop.name}</span>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+            <table
+              className="text-sm border-collapse db-table"
+              style={{ tableLayout: 'fixed', width: Math.max(tableWidth, 480) }}
+            >
+              <colgroup>
+                {orderedProperties.map((prop) => (
+                  <col key={prop.id} style={{ width: getWidth(prop.id, prop.name) }} />
+                ))}
+                <col style={{ width: 40 }} />
+                <col style={{ width: 40 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <SortableContext items={orderedProperties.map((p) => p.id)} strategy={horizontalListSortingStrategy}>
+                    {orderedProperties.map((prop) => (
+                      <SortableColumnHeader
+                        key={prop.id}
+                        prop={prop}
+                        rollupHeaderHint={rollupHeaderHint}
+                        columnMenuId={columnMenuId}
+                        setColumnMenuId={setColumnMenuId}
+                        setEditingColumnId={setEditingColumnId}
+                        setNewPropName={setNewPropName}
+                        setNewPropType={setNewPropType}
+                        setAddingColumn={setAddingColumn}
+                        onDeleteProperty={deleteProperty}
+                        startResize={startResize}
+                      />
+                    ))}
+                  </SortableContext>
+                  <th className="p-2 db-th">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => {
+                        setEditingColumnId(null);
+                        setNewPropName('');
+                        setNewPropType('text');
+                        setNewPropOptions('');
+                        setAddingColumn(true);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-linen text-forest"
+                      title="Add a new column to this table"
+                      aria-label="Add a new column to this table"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </th>
+                  <th className="db-th" />
+                </tr>
+              </thead>
+              <tbody>
+                {displayRows.map((row) => (
+                  <tr key={row.id} className="hover:bg-linen/30">
+                    {orderedProperties.map((prop) => (
+                      <td key={prop.id} className="px-2 py-1.5 align-top db-td overflow-hidden">
+                        {renderCell(row, prop)}
+                      </td>
+                    ))}
+                    <td className="db-td" />
+                    <td className="px-2 py-1.5 db-td">
                       <button
                         type="button"
-                        onClick={() => setColumnMenuId(columnMenuId === prop.id ? null : prop.id)}
-                        className="p-0.5 rounded shrink-0 opacity-30 group-hover:opacity-100 hover:bg-linen focus-visible:opacity-100"
-                        aria-label="Column options"
-                        title="Column options — rename, change type, or delete"
+                        onClick={() => void deleteRow(row.id)}
+                        className="text-red-400 hover:text-red-600"
+                        title="Delete this row"
+                        aria-label="Delete this row"
                       >
-                        <MoreHorizontal className="w-3.5 h-3.5" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`Resize ${prop.name} column`}
-                      className="absolute top-0 right-0 h-full w-2 cursor-col-resize touch-none opacity-0 group-hover:opacity-100 hover:bg-forest/10 focus-visible:opacity-100"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startResize(prop.id, prop.name, e.clientX);
-                      }}
-                    />
-                    {columnMenuId === prop.id && (
-                      <>
-                        <div className="fixed inset-0 z-40" onClick={() => setColumnMenuId(null)} />
-                        <div className="absolute left-0 top-full mt-1 z-50 w-44 rounded-xl border border-green-mist bg-warm-white shadow-lg py-1 text-sm">
-                          <button type="button" className="w-full px-3 py-2 text-left hover:bg-linen" onClick={() => {
-                            setEditingColumnId(prop.id);
-                            setNewPropName(prop.name);
-                            setNewPropType(prop.type);
-                            setColumnMenuId(null);
-                            setAddingColumn(true);
-                          }}>Rename / change type</button>
-                          {prop.name.toLowerCase() !== 'name' && (
-                            <button type="button" className="w-full px-3 py-2 text-left text-red-600 hover:bg-red-50" onClick={() => void deleteProperty(prop.id)}>Delete column</button>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </th>
-                ))}
-                <th className="p-2 db-th">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      setEditingColumnId(null);
-                      setNewPropName('');
-                      setNewPropType('text');
-                      setNewPropOptions('');
-                      setAddingColumn(true);
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-linen text-forest"
-                    title="Add a new column to this table"
-                    aria-label="Add a new column to this table"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </th>
-                <th className="db-th" />
-              </tr>
-            </thead>
-            <tbody>
-              {displayRows.map((row) => (
-                <tr key={row.id} className="hover:bg-linen/30">
-                  {properties.map((prop) => (
-                    <td key={prop.id} className="px-2 py-1.5 align-top db-td overflow-hidden">
-                      {renderCell(row, prop)}
                     </td>
-                  ))}
-                  <td className="db-td" />
-                  <td className="px-2 py-1.5 db-td">
-                    <button
-                      type="button"
-                      onClick={() => void deleteRow(row.id)}
-                      className="text-red-400 hover:text-red-600"
-                      title="Delete this row"
-                      aria-label="Delete this row"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DndContext>
         </div>
       )}
 
