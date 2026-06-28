@@ -46,7 +46,7 @@ export default function AuthPage() {
           <div className="p-8 md:p-12">
             <h1 className="text-3xl font-bold text-charcoal leading-tight mb-2">
               Tandem —{' '}
-              <span className="text-forest">Agent Human Workspace</span>
+              <span className="text-forest">Agent-Human Workspace</span>
             </h1>
             <p className="text-warm-gray mb-8">
               Where humans and AI agents work side by side.

@@ -11,9 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Tandem - Agent Human Workspace',
+        name: 'Tandem - Agent-Human Workspace',
         short_name: 'Tandem',
-        description: 'Agent Human Workspace — collaborate with AI and your team on documents',
+        description: 'Agent-Human Workspace — collaborate with AI and your team on documents',
         theme_color: '#004228',
         background_color: '#F8F5F3',
         display: 'standalone',
