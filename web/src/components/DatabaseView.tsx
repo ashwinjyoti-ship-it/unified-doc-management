@@ -849,6 +849,11 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
               setFilters(next);
               setActiveViewId(null);
             };
+            const numericRollupAggs = ['count', 'count_values', 'sum', 'average', 'min', 'max'];
+            const rollupAgg = propType === 'rollup'
+              ? (parseRollupOptions(filterProp?.options ?? '').aggregation ?? '')
+              : '';
+            const isNumericRollup = numericRollupAggs.includes(rollupAgg);
             const relevantOps = propType === 'checkbox'
               ? FILTER_OPS.filter((op) => ['eq', 'neq'].includes(op.value))
               : propType === 'multi_select'
@@ -859,6 +864,12 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
               ? FILTER_OPS.filter((op) => ['eq', 'before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'empty', 'not_empty'].includes(op.value))
               : propType === 'number'
               ? FILTER_OPS.filter((op) => ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'empty', 'not_empty'].includes(op.value))
+              : propType === 'relation'
+              ? FILTER_OPS.filter((op) => ['empty', 'not_empty'].includes(op.value))
+              : propType === 'rollup'
+              ? FILTER_OPS.filter((op) => isNumericRollup
+                  ? ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'empty', 'not_empty'].includes(op.value)
+                  : ['eq', 'neq', 'contains', 'not_contains', 'empty', 'not_empty'].includes(op.value))
               : FILTER_OPS.filter((op) => !['before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'gt', 'lt', 'gte', 'lte'].includes(op.value));
             const noValueOps = ['empty', 'not_empty', 'this_week', 'this_month'];
             const showValue = !noValueOps.includes(f.operator);
@@ -877,6 +888,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                       : newType === 'multi_select' ? 'contains'
                       : newType === 'date' ? 'after'
                       : newType === 'number' ? 'gt'
+                      : newType === 'relation' ? 'not_empty'
                       : 'eq';
                     updateFilter({ propertyId: e.target.value, operator: defaultOp, value: '' });
                   }}
@@ -925,7 +937,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
                   />
                 )}
-                {showValue && propType === 'number' && (
+                {showValue && (propType === 'number' || (propType === 'rollup' && isNumericRollup)) && (
                   <input
                     type="number"
                     value={f.value ?? ''}
@@ -934,7 +946,16 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none w-24"
                   />
                 )}
-                {showValue && !['checkbox', 'select', 'multi_select', 'date', 'number'].includes(propType) && (
+                {showValue && !['checkbox', 'select', 'multi_select', 'date', 'number', 'relation', 'rollup'].includes(propType) && (
+                  <input
+                    type="text"
+                    value={f.value ?? ''}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    placeholder="Value"
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none flex-1 min-w-[100px]"
+                  />
+                )}
+                {showValue && propType === 'rollup' && !isNumericRollup && (
                   <input
                     type="text"
                     value={f.value ?? ''}
