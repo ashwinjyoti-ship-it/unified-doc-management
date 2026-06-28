@@ -125,7 +125,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false }),
+      StarterKit.configure({ codeBlock: false, heading: { levels: [1, 2, 3, 4] } }),
       Placeholder.configure({ placeholder: 'Type / for commands, or start writing...' }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -615,7 +615,7 @@ export function tiptapJsonToBlocks(json: Record<string, unknown>): Array<{ type:
   let index = 0;
 
   for (const node of content) {
-    const type = mapNodeType(node.type as string);
+    const type = mapNodeType(node);
     blocks.push({ type, content: extractContent(node), orderIndex: index++ });
   }
 
@@ -626,10 +626,15 @@ export function tiptapJsonToBlocks(json: Record<string, unknown>): Array<{ type:
   return blocks;
 }
 
-function mapNodeType(type: string): string {
+function mapNodeType(node: Record<string, unknown>): string {
+  const type = node.type as string;
+  if (type === 'heading') {
+    const level = (node.attrs as { level?: number })?.level || 1;
+    const clamped = Math.min(Math.max(level, 1), 4);
+    return `heading${clamped}`;
+  }
   const map: Record<string, string> = {
     paragraph: 'paragraph',
-    heading: 'heading1',
     bulletList: 'bulletList',
     orderedList: 'numberedList',
     taskList: 'todo',
@@ -698,7 +703,7 @@ function extractContent(node: Record<string, unknown>): object {
     return {
       icon,
       blocks: innerNodes.map((child) => ({
-        type: mapNodeType(child.type as string),
+        type: mapNodeType(child),
         content: extractContent(child),
       })),
     };

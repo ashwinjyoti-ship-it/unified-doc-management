@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
-  Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
+  Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, Heading4,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload,
 } from 'lucide-react';
 
@@ -67,6 +67,7 @@ function EditorToolbar({
       h1: ed.isActive('heading', { level: 1 }),
       h2: ed.isActive('heading', { level: 2 }),
       h3: ed.isActive('heading', { level: 3 }),
+      h4: ed.isActive('heading', { level: 4 }),
       bulletList: ed.isActive('bulletList'),
       orderedList: ed.isActive('orderedList'),
       taskList: ed.isActive('taskList'),
@@ -104,6 +105,9 @@ function EditorToolbar({
       </ToolbarButton>
       <ToolbarButton bubble title="Heading 3" active={active.h3} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}>
         <Heading3 className="w-4 h-4" />
+      </ToolbarButton>
+      <ToolbarButton bubble title="Heading 4" active={active.h4} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 4 }).run())}>
+        <Heading4 className="w-4 h-4" />
       </ToolbarButton>
       <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
       <ToolbarButton bubble title="Bullet list" active={active.bulletList} onClick={() => run(() => editor.chain().focus().toggleBulletList().run())}>

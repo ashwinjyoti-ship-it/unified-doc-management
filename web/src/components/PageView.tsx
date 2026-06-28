@@ -102,6 +102,10 @@ export default function PageView() {
   sidePanelRef.current = sidePanel;
   const loadedPageIdRef = useRef<string | null>(null);
   const titleSaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // Timestamp of our most recent local save. Used to ignore the `blocks_updated`
+  // collab echo of our own save, which would otherwise remount the editor and
+  // clobber the live document the user is still editing.
+  const lastLocalSaveAtRef = useRef(0);
 
   const [liveUpdatedAt, setLiveUpdatedAt] = useState<number | null>(null);
 
@@ -109,6 +113,9 @@ export default function PageView() {
 
   useEffect(() => {
     if (lastUpdate?.type === 'blocks_updated' && !dirty) {
+      // Ignore the echo of our own save — reloading here would remount the
+      // editor and discard formatting/edits the user just made.
+      if (Date.now() - lastLocalSaveAtRef.current < 3000) return;
       // Silent live refresh — patch content in place without the full-page
       // loading spinner so a watcher sees the agent's edits stream in smoothly.
       void loadPage({ silent: true });
@@ -290,6 +297,7 @@ export default function PageView() {
       setSaving(true);
       try {
         const { blocks: saved } = await api.saveBlocks(pageId, blockData);
+        lastLocalSaveAtRef.current = Date.now();
         setBlocks(saved);
         dirtyRef.current = false;
         setDirty(false);
