@@ -45,11 +45,11 @@ export default function AuthPage() {
         <div className="grid md:grid-cols-2">
           <div className="p-8 md:p-12">
             <h1 className="text-3xl font-bold text-charcoal leading-tight mb-2">
-              Unified Document{' '}
-              <span className="text-forest">Platform</span>
+              Tandem —{' '}
+              <span className="text-forest">Agent Human Workspace</span>
             </h1>
             <p className="text-warm-gray mb-8">
-              One Platform. Every Document. Total Control.
+              Where humans and AI agents work side by side.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">

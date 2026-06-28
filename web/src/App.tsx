@@ -59,7 +59,7 @@ function HomePage() {
     <div className="flex-1 flex flex-col items-center justify-center p-8 pb-24 md:pb-8 text-center">
       <AppAvatar size="xl" className="mb-4 rounded-2xl shadow-md shadow-forest/10" />
       <h1 className="text-2xl font-bold text-charcoal mb-2">
-        Welcome to <span className="text-forest">Unified Doc Management</span>
+        Welcome to <span className="text-forest">Tandem</span>
       </h1>
       <p className="text-warm-gray mb-6 max-w-md">
         New pages and databases open in Inbox. Create a project folder when you want to organize them later.
@@ -154,7 +154,7 @@ export default function App() {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-3 p-8">
         <AppAvatar size="lg" variant="loading" className="rounded-2xl shadow-md shadow-forest/10" />
-        <p className="text-forest font-semibold">UnifiedDocs</p>
+        <p className="text-forest font-semibold">Tandem</p>
         <p className="text-warm-gray text-sm animate-pulse">Loading workspace...</p>
       </div>
     );

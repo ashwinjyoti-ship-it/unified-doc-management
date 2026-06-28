@@ -54,7 +54,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
         />
 
         <h2 id="onboarding-title" className="text-2xl font-bold text-charcoal mb-2">
-          Welcome to <span className="text-forest">UnifiedDocs</span>
+          Welcome to <span className="text-forest">Tandem</span>
         </h2>
         <p className="text-warm-gray mb-8">
           Your document platform with agentic collaboration built in.

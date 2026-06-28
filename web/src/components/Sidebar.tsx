@@ -374,7 +374,7 @@ export default function Sidebar() {
               >
                 <AppAvatar size="md" className="shrink-0 rounded-xl shadow-sm shadow-forest/10" />
                 <span className="min-w-0">
-                  <span className="block font-semibold text-forest text-sm leading-tight">UnifiedDocs</span>
+                  <span className="block font-semibold text-forest text-sm leading-tight">Tandem</span>
                   <span className="block text-xs text-warm-gray truncate">{workspace?.name || 'Workspace'}</span>
                 </span>
               </button>
