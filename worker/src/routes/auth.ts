@@ -46,7 +46,7 @@ auth.post('/register', async (c) => {
     blockId,
     welcomePageId,
     'paragraph',
-    JSON.stringify({ text: 'Welcome to Unified Doc Management! Start typing to create your first page.' }),
+    JSON.stringify({ text: 'Welcome to Tandem! Start typing to create your first page.' }),
     0,
     now,
     now

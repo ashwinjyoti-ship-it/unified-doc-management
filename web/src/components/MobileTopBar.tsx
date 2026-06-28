@@ -38,7 +38,7 @@ export default function MobileTopBar() {
   const showBrand = isHome;
   const barTitle = currentPage
     ? `${pageIcon(currentPage)} ${currentPage.title}`
-    : workspace?.name || 'Unified Doc Management';
+    : workspace?.name || 'Tandem';
 
   return (
     <>
@@ -61,7 +61,7 @@ export default function MobileTopBar() {
             className="flex items-center gap-2 flex-1 min-w-0 text-left rounded-lg hover:bg-linen/80 px-1 py-1 -mx-1"
           >
             <AppAvatar size="xs" className="shrink-0 rounded-lg" />
-            <span className="font-semibold text-forest text-sm truncate">UnifiedDocs</span>
+            <span className="font-semibold text-forest text-sm truncate">Tandem</span>
           </button>
         ) : (
           <>

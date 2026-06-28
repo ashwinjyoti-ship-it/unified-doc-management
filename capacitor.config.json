@@ -1,6 +1,6 @@
 {
   "appId": "com.unifieddoc.management",
-  "appName": "Unified Doc Management",
+  "appName": "Tandem - Agent-Human Workspace",
   "webDir": "web/dist",
   "server": {
     "androidScheme": "https"

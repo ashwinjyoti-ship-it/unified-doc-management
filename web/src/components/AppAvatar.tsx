@@ -38,7 +38,7 @@ export default function AppAvatar({
       width={px}
       height={px}
       role="img"
-      aria-label="UnifiedDocs"
+      aria-label="Tandem"
       className={`app-avatar ${variantClass} ${className}`.trim()}
       draggable={false}
     >

@@ -8,7 +8,7 @@ import type { Env } from '../types';
 const agent = new Hono<{ Bindings: Env }>();
 
 const CATALOG = {
-  name: 'UnifiedDocs API',
+  name: 'Tandem API',
   version: '1.1.0',
   baseUrl: '/api',
   authentication: {
