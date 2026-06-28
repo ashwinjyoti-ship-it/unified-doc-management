@@ -59,6 +59,7 @@ interface BlockEditorProps {
 
 export interface BlockEditorHandle {
   getSnapshot: () => { html: string; json: object } | null;
+  isFocused: () => boolean;
 }
 
 const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function BlockEditor(
@@ -193,6 +194,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       if (!editor) return null;
       return { html: editor.getHTML(), json: editor.getJSON() };
     },
+    isFocused: () => editor?.isFocused ?? false,
   }), [editor]);
 
   const captureEditorSelection = useCallback((ed: NonNullable<typeof editor>) => {
@@ -431,8 +433,15 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     handleSlashItemSelected({ editor, range: { from, to }, item });
   }, [editor, insertItems, handleSlashItemSelected]);
 
-  const bubbleMenuShouldShow = useCallback(({ state }: { state: import('@tiptap/pm/state').EditorState }) => {
+  const bubbleMenuShouldShow = useCallback(({ editor: ed, state }: {
+    editor: import('@tiptap/react').Editor;
+    state: import('@tiptap/pm/state').EditorState;
+  }) => {
     if (agentCommentOpenRef.current) return false;
+    // Hide the toolbar as soon as the editor loses focus (e.g. a click
+    // outside) — ProseMirror keeps the text selection on blur, so checking the
+    // selection alone would leave the bubble menu stuck open.
+    if (!ed.isFocused) return false;
     const { from, to, empty } = state.selection;
     return !empty && from !== to;
   }, []);
