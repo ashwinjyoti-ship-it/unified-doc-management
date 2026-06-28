@@ -63,10 +63,6 @@ export function getRowTitle(
   return 'Untitled';
 }
 
-function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function isoWeekBounds(): { start: string; end: string } {
   const now = new Date();
   const day = now.getDay(); // 0 = Sun, 1 = Mon, …
@@ -132,8 +128,15 @@ function matchFilter(
     case 'neq':
       return value !== (filter.value ?? '');
     case 'contains':
+      // For array values (multi-select, relation): exact option match
+      if (Array.isArray(raw)) {
+        return raw.some((item) => String(item).toLowerCase() === (filter.value ?? '').toLowerCase());
+      }
       return value.toLowerCase().includes((filter.value ?? '').toLowerCase());
     case 'not_contains':
+      if (Array.isArray(raw)) {
+        return !raw.some((item) => String(item).toLowerCase() === (filter.value ?? '').toLowerCase());
+      }
       return !value.toLowerCase().includes((filter.value ?? '').toLowerCase());
     case 'empty':
       return value === '' || (Array.isArray(raw) && raw.length === 0);
