@@ -66,6 +66,15 @@ function matchFilter(
   getValue: (row: DatabaseRow, propId: string) => unknown = getPropValue,
 ): boolean {
   const raw = getValue(row, filter.propertyId);
+
+  // Normalize checkbox comparisons: filter values "true"/"false" compare as booleans
+  if (filter.value === 'true' || filter.value === 'false') {
+    const rawBool = parseCheckboxValue(raw);
+    const filterBool = filter.value === 'true';
+    if (filter.operator === 'eq') return rawBool === filterBool;
+    if (filter.operator === 'neq') return rawBool !== filterBool;
+  }
+
   const value = Array.isArray(raw) ? raw.join(',') : String(raw ?? '');
 
   switch (filter.operator) {

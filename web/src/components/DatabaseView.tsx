@@ -827,58 +827,112 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
         {filters.length === 0 ? (
           <p className="text-xs text-mid-gray">No filters — showing all rows.</p>
         ) : (
-          filters.map((f, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2">
-              <select
-                value={f.propertyId}
-                onChange={(e) => {
-                  const next = [...filters];
-                  next[i] = { ...f, propertyId: e.target.value };
-                  setFilters(next);
-                  setActiveViewId(null);
-                }}
-                className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
-              >
-                {properties.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <select
-                value={f.operator}
-                onChange={(e) => {
-                  const next = [...filters];
-                  next[i] = { ...f, operator: e.target.value as FilterOperator };
-                  setFilters(next);
-                  setActiveViewId(null);
-                }}
-                className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
-              >
-                {FILTER_OPS.map((op) => (
-                  <option key={op.value} value={op.value}>{op.label}</option>
-                ))}
-              </select>
-              {!['empty', 'not_empty'].includes(f.operator) && (
-                <input
-                  value={f.value || ''}
+          filters.map((f, i) => {
+            const filterProp = properties.find((p) => p.id === f.propertyId);
+            const propType = filterProp?.type ?? 'text';
+            const updateFilter = (patch: Partial<DatabaseFilter>) => {
+              const next = [...filters];
+              next[i] = { ...f, ...patch };
+              setFilters(next);
+              setActiveViewId(null);
+            };
+            const relevantOps = propType === 'checkbox'
+              ? FILTER_OPS.filter((op) => ['eq', 'neq'].includes(op.value))
+              : propType === 'multi_select'
+              ? FILTER_OPS.filter((op) => ['contains', 'empty', 'not_empty'].includes(op.value))
+              : (propType === 'select' || propType === 'date' || propType === 'number')
+              ? FILTER_OPS.filter((op) => ['eq', 'neq', 'empty', 'not_empty'].includes(op.value))
+              : FILTER_OPS;
+            const showValue = !['empty', 'not_empty'].includes(f.operator);
+            let selectOptions: string[] = [];
+            if (propType === 'select' || propType === 'multi_select') {
+              try { selectOptions = JSON.parse(filterProp?.options || '[]') as string[]; } catch { /* */ }
+            }
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <select
+                  value={f.propertyId}
                   onChange={(e) => {
-                    const next = [...filters];
-                    next[i] = { ...f, value: e.target.value };
-                    setFilters(next);
-                    setActiveViewId(null);
+                    const newProp = properties.find((p) => p.id === e.target.value);
+                    const newType = newProp?.type ?? 'text';
+                    const defaultOp: FilterOperator = newType === 'checkbox' ? 'eq'
+                      : newType === 'multi_select' ? 'contains'
+                      : 'eq';
+                    updateFilter({ propertyId: e.target.value, operator: defaultOp, value: '' });
                   }}
-                  placeholder="Value"
-                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none flex-1 min-w-[100px]"
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => { setFilters(filters.filter((_, j) => j !== i)); setActiveViewId(null); }}
-                className="p-1 text-mid-gray hover:text-red-500"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          ))
+                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                >
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={f.operator}
+                  onChange={(e) => updateFilter({ operator: e.target.value as FilterOperator })}
+                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                >
+                  {relevantOps.map((op) => (
+                    <option key={op.value} value={op.value}>{op.label}</option>
+                  ))}
+                </select>
+                {showValue && propType === 'checkbox' && (
+                  <select
+                    value={f.value ?? 'true'}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                  >
+                    <option value="true">Checked</option>
+                    <option value="false">Unchecked</option>
+                  </select>
+                )}
+                {showValue && (propType === 'select' || propType === 'multi_select') && (
+                  <select
+                    value={f.value ?? ''}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                  >
+                    <option value="">Any</option>
+                    {selectOptions.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                )}
+                {showValue && propType === 'date' && (
+                  <input
+                    type="date"
+                    value={f.value ?? ''}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                  />
+                )}
+                {showValue && propType === 'number' && (
+                  <input
+                    type="number"
+                    value={f.value ?? ''}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    placeholder="Value"
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none w-24"
+                  />
+                )}
+                {showValue && !['checkbox', 'select', 'multi_select', 'date', 'number'].includes(propType) && (
+                  <input
+                    type="text"
+                    value={f.value ?? ''}
+                    onChange={(e) => updateFilter({ value: e.target.value })}
+                    placeholder="Value"
+                    className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none flex-1 min-w-[100px]"
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setFilters(filters.filter((_, j) => j !== i)); setActiveViewId(null); }}
+                  className="p-1 text-mid-gray hover:text-red-500"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })
         )}
         <div className="flex items-center gap-2 pt-1 border-t border-green-mist/50">
           <span className="text-xs text-mid-gray">Sort by:</span>
