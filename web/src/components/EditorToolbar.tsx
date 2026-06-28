@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
-  Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3, Heading4,
+  Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload,
 } from 'lucide-react';
 
@@ -68,6 +68,7 @@ function EditorToolbar({
       h2: ed.isActive('heading', { level: 2 }),
       h3: ed.isActive('heading', { level: 3 }),
       h4: ed.isActive('heading', { level: 4 }),
+      paragraph: ed.isActive('paragraph'),
       bulletList: ed.isActive('bulletList'),
       orderedList: ed.isActive('orderedList'),
       taskList: ed.isActive('taskList'),
@@ -97,6 +98,9 @@ function EditorToolbar({
         <Code className="w-4 h-4" />
       </ToolbarButton>
       <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+      <ToolbarButton bubble title="Normal text — clears heading/quote formatting" active={active.paragraph} onClick={() => run(() => editor.chain().focus().setParagraph().run())}>
+        <Pilcrow className="w-4 h-4" />
+      </ToolbarButton>
       <ToolbarButton bubble title="Heading 1" active={active.h1} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}>
         <Heading1 className="w-4 h-4" />
       </ToolbarButton>

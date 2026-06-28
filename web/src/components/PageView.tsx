@@ -113,6 +113,9 @@ export default function PageView() {
 
   useEffect(() => {
     if (lastUpdate?.type === 'blocks_updated' && !dirty) {
+      // Never remount the editor while the user is typing in it — a live
+      // refresh would reset content and revert the formatting/edit in progress.
+      if (editorRef.current?.isFocused()) return;
       // Ignore the echo of our own save — reloading here would remount the
       // editor and discard formatting/edits the user just made.
       if (Date.now() - lastLocalSaveAtRef.current < 3000) return;
