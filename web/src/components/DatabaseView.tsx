@@ -935,7 +935,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                   }}
                   className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
                 >
-                  {properties.map((p) => (
+                  {orderedProperties.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -1039,7 +1039,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                   }}
                   className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
                 >
-                  {properties.map((p) => (
+                  {orderedProperties.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
