@@ -2,7 +2,9 @@ import type { DatabaseProperty, DatabaseRow } from '../types';
 
 export type FilterOperator =
   | 'eq' | 'neq' | 'contains' | 'not_contains' | 'empty' | 'not_empty'
-  | 'before' | 'after' | 'on_or_before' | 'on_or_after' | 'this_week' | 'this_month'
+  | 'before' | 'after' | 'on_or_before' | 'on_or_after'
+  | 'today' | 'this_week' | 'this_month'
+  | 'past_week' | 'past_month' | 'next_week' | 'next_month'
   | 'gt' | 'lt' | 'gte' | 'lte';
 
 export interface DatabaseFilter {
@@ -64,29 +66,35 @@ export function getRowTitle(
   return 'Untitled';
 }
 
-function isoWeekBounds(): { start: string; end: string } {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sun, 1 = Mon, …
-  const diffToMon = (day === 0 ? -6 : 1 - day);
-  const mon = new Date(now);
-  mon.setDate(now.getDate() + diffToMon);
-  const sun = new Date(mon);
-  sun.setDate(mon.getDate() + 6);
-  return {
-    start: mon.toISOString().slice(0, 10),
-    end: sun.toISOString().slice(0, 10),
-  };
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
 }
 
-function isoMonthBounds(): { start: string; end: string } {
+function today(): string {
+  return isoDate(new Date());
+}
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+function isoWeekBounds(offsetWeeks = 0): { start: string; end: string } {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const mon = addDays(now, diffToMon + offsetWeeks * 7);
+  return { start: isoDate(mon), end: isoDate(addDays(mon, 6)) };
+}
+
+function isoMonthBounds(offsetMonths = 0): { start: string; end: string } {
   const now = new Date();
   const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return {
-    start: `${y}-${m}-01`,
-    end: `${y}-${m}-${String(lastDay).padStart(2, '0')}`,
-  };
+  const m = now.getMonth() + offsetMonths;
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0);
+  return { start: isoDate(first), end: isoDate(last) };
 }
 
 function matchFilter(
@@ -116,12 +124,30 @@ function matchFilter(
       return value !== '' && value <= (filter.value ?? '');
     case 'on_or_after':
       return value !== '' && value >= (filter.value ?? '');
+    case 'today':
+      return value !== '' && value === today();
     case 'this_week': {
-      const { start, end } = isoWeekBounds();
+      const { start, end } = isoWeekBounds(0);
       return value !== '' && value >= start && value <= end;
     }
     case 'this_month': {
-      const { start, end } = isoMonthBounds();
+      const { start, end } = isoMonthBounds(0);
+      return value !== '' && value >= start && value <= end;
+    }
+    case 'past_week': {
+      const t = today();
+      return value !== '' && value >= isoDate(addDays(new Date(), -7)) && value <= t;
+    }
+    case 'past_month': {
+      const t = today();
+      return value !== '' && value >= isoDate(addDays(new Date(), -30)) && value <= t;
+    }
+    case 'next_week': {
+      const { start, end } = isoWeekBounds(1);
+      return value !== '' && value >= start && value <= end;
+    }
+    case 'next_month': {
+      const { start, end } = isoMonthBounds(1);
       return value !== '' && value >= start && value <= end;
     }
     case 'eq':

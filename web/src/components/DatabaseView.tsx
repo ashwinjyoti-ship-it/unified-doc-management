@@ -163,13 +163,19 @@ const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'not_contains', label: 'does not contain' },
   { value: 'empty', label: 'is empty' },
   { value: 'not_empty', label: 'is not empty' },
-  // Date
+  // Date — absolute
   { value: 'before', label: 'is before' },
   { value: 'after', label: 'is after' },
   { value: 'on_or_before', label: 'is on or before' },
   { value: 'on_or_after', label: 'is on or after' },
+  // Date — relative (no value input needed)
+  { value: 'today', label: 'is today' },
   { value: 'this_week', label: 'is this week' },
   { value: 'this_month', label: 'is this month' },
+  { value: 'past_week', label: 'is in the past week' },
+  { value: 'past_month', label: 'is in the past month' },
+  { value: 'next_week', label: 'is next week' },
+  { value: 'next_month', label: 'is next month' },
   // Number
   { value: 'gt', label: 'greater than' },
   { value: 'lt', label: 'less than' },
@@ -472,10 +478,27 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
     setSavedViews(savedViews.map((v) => (v.id === activeViewId ? updated : v)));
   };
 
+  const defaultFilterOp = (propType: string): FilterOperator => {
+    if (propType === 'checkbox') return 'eq';
+    if (propType === 'multi_select') return 'contains';
+    if (propType === 'date') return 'after';
+    if (propType === 'number') return 'gt';
+    if (propType === 'relation') return 'not_empty';
+    return 'contains';
+  };
+
   const addFilter = () => {
     const firstProp = properties[0];
     if (!firstProp) return;
-    setFilters([...filters, { propertyId: firstProp.id, operator: 'contains', value: '' }]);
+    setFilters([...filters, { propertyId: firstProp.id, operator: defaultFilterOp(firstProp.type), value: '' }]);
+    setActiveViewId(null);
+  };
+
+  const addSort = () => {
+    const usedIds = new Set(sorts.map((s) => s.propertyId));
+    const firstUnused = properties.find((p) => !usedIds.has(p.id));
+    if (!firstUnused) return;
+    setSorts([...sorts, { propertyId: firstUnused.id, direction: 'asc' }]);
     setActiveViewId(null);
   };
 
@@ -862,7 +885,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
               : propType === 'select'
               ? FILTER_OPS.filter((op) => ['eq', 'neq', 'empty', 'not_empty'].includes(op.value))
               : propType === 'date'
-              ? FILTER_OPS.filter((op) => ['eq', 'before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'empty', 'not_empty'].includes(op.value))
+              ? FILTER_OPS.filter((op) => ['eq', 'before', 'after', 'on_or_before', 'on_or_after', 'today', 'this_week', 'this_month', 'past_week', 'past_month', 'next_week', 'next_month', 'empty', 'not_empty'].includes(op.value))
               : propType === 'number'
               ? FILTER_OPS.filter((op) => ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'empty', 'not_empty'].includes(op.value))
               : propType === 'relation'
@@ -872,7 +895,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                   ? ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'empty', 'not_empty'].includes(op.value)
                   : ['eq', 'neq', 'contains', 'not_contains', 'empty', 'not_empty'].includes(op.value))
               : FILTER_OPS.filter((op) => !['before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'gt', 'lt', 'gte', 'lte'].includes(op.value));
-            const noValueOps = ['empty', 'not_empty', 'this_week', 'this_month'];
+            const noValueOps = ['empty', 'not_empty', 'today', 'this_week', 'this_month', 'past_week', 'past_month', 'next_week', 'next_month'];
             const showValue = !noValueOps.includes(f.operator);
             let selectOptions: string[] = [];
             if (propType === 'select' || propType === 'multi_select') {
@@ -993,34 +1016,56 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
             ];
           })
         )}
-        <div className="flex items-center gap-2 pt-1 border-t border-green-mist/50">
-          <span className="text-xs text-mid-gray">Sort by:</span>
-          <select
-            value={sorts[0]?.propertyId || ''}
-            onChange={(e) => {
-              if (!e.target.value) { setSorts([]); setActiveViewId(null); return; }
-              setSorts([{ propertyId: e.target.value, direction: sorts[0]?.direction || 'asc' }]);
-              setActiveViewId(null);
-            }}
-            className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
-          >
-            <option value="">Default order</option>
-            {properties.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {sorts[0] && (
-            <select
-              value={sorts[0].direction}
-              onChange={(e) => {
-                setSorts([{ ...sorts[0], direction: e.target.value as 'asc' | 'desc' }]);
-                setActiveViewId(null);
-              }}
-              className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
+        <div className="pt-1 border-t border-green-mist/50 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-mid-gray">Sort</span>
+            <button type="button" onClick={addSort} disabled={sorts.length >= properties.length} className="text-xs text-forest hover:underline disabled:opacity-40">
+              + Add sort
+            </button>
+          </div>
+          {sorts.length === 0 ? (
+            <p className="text-xs text-mid-gray">No sort — default order.</p>
+          ) : (
+            sorts.map((sort, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-mid-gray w-10 shrink-0 text-right">{i === 0 ? 'by' : 'then'}</span>
+                <select
+                  value={sort.propertyId}
+                  onChange={(e) => {
+                    const next = [...sorts];
+                    next[i] = { ...sort, propertyId: e.target.value };
+                    setSorts(next);
+                    setActiveViewId(null);
+                  }}
+                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                >
+                  {properties.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={sort.direction}
+                  onChange={(e) => {
+                    const next = [...sorts];
+                    next[i] = { ...sort, direction: e.target.value as 'asc' | 'desc' };
+                    setSorts(next);
+                    setActiveViewId(null);
+                  }}
+                  className="text-sm bg-linen rounded-lg px-2 py-1 border-none outline-none"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => { setSorts(sorts.filter((_, j) => j !== i)); setActiveViewId(null); }}
+                  className="p-1 text-mid-gray hover:text-red-500"
+                  aria-label="Remove sort"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))
           )}
         </div>
       </div>
