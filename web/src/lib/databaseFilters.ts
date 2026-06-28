@@ -1,6 +1,9 @@
 import type { DatabaseProperty, DatabaseRow } from '../types';
 
-export type FilterOperator = 'eq' | 'neq' | 'contains' | 'empty' | 'not_empty';
+export type FilterOperator =
+  | 'eq' | 'neq' | 'contains' | 'not_contains' | 'empty' | 'not_empty'
+  | 'before' | 'after' | 'on_or_before' | 'on_or_after' | 'this_week' | 'this_month'
+  | 'gt' | 'lt' | 'gte' | 'lte';
 
 export interface DatabaseFilter {
   propertyId: string;
@@ -60,6 +63,35 @@ export function getRowTitle(
   return 'Untitled';
 }
 
+function isoToday(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isoWeekBounds(): { start: string; end: string } {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sun, 1 = Mon, …
+  const diffToMon = (day === 0 ? -6 : 1 - day);
+  const mon = new Date(now);
+  mon.setDate(now.getDate() + diffToMon);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  return {
+    start: mon.toISOString().slice(0, 10),
+    end: sun.toISOString().slice(0, 10),
+  };
+}
+
+function isoMonthBounds(): { start: string; end: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return {
+    start: `${y}-${m}-01`,
+    end: `${y}-${m}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
 function matchFilter(
   row: DatabaseRow,
   filter: DatabaseFilter,
@@ -77,17 +109,52 @@ function matchFilter(
 
   const value = Array.isArray(raw) ? raw.join(',') : String(raw ?? '');
 
+  // Date-specific operators — ISO strings compare lexicographically
   switch (filter.operator) {
+    case 'before':
+      return value !== '' && value < (filter.value ?? '');
+    case 'after':
+      return value !== '' && value > (filter.value ?? '');
+    case 'on_or_before':
+      return value !== '' && value <= (filter.value ?? '');
+    case 'on_or_after':
+      return value !== '' && value >= (filter.value ?? '');
+    case 'this_week': {
+      const { start, end } = isoWeekBounds();
+      return value !== '' && value >= start && value <= end;
+    }
+    case 'this_month': {
+      const { start, end } = isoMonthBounds();
+      return value !== '' && value >= start && value <= end;
+    }
     case 'eq':
       return value === (filter.value ?? '');
     case 'neq':
       return value !== (filter.value ?? '');
     case 'contains':
       return value.toLowerCase().includes((filter.value ?? '').toLowerCase());
+    case 'not_contains':
+      return !value.toLowerCase().includes((filter.value ?? '').toLowerCase());
     case 'empty':
       return value === '' || (Array.isArray(raw) && raw.length === 0);
     case 'not_empty':
       return value !== '' && !(Array.isArray(raw) && raw.length === 0);
+    case 'gt': {
+      const n = parseFloat(value); const fv = parseFloat(filter.value ?? '');
+      return !isNaN(n) && !isNaN(fv) && n > fv;
+    }
+    case 'lt': {
+      const n = parseFloat(value); const fv = parseFloat(filter.value ?? '');
+      return !isNaN(n) && !isNaN(fv) && n < fv;
+    }
+    case 'gte': {
+      const n = parseFloat(value); const fv = parseFloat(filter.value ?? '');
+      return !isNaN(n) && !isNaN(fv) && n >= fv;
+    }
+    case 'lte': {
+      const n = parseFloat(value); const fv = parseFloat(filter.value ?? '');
+      return !isNaN(n) && !isNaN(fv) && n <= fv;
+    }
     default:
       return true;
   }

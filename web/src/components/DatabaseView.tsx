@@ -160,8 +160,21 @@ const FILTER_OPS: { value: FilterOperator; label: string }[] = [
   { value: 'eq', label: 'is' },
   { value: 'neq', label: 'is not' },
   { value: 'contains', label: 'contains' },
+  { value: 'not_contains', label: 'does not contain' },
   { value: 'empty', label: 'is empty' },
   { value: 'not_empty', label: 'is not empty' },
+  // Date
+  { value: 'before', label: 'is before' },
+  { value: 'after', label: 'is after' },
+  { value: 'on_or_before', label: 'is on or before' },
+  { value: 'on_or_after', label: 'is on or after' },
+  { value: 'this_week', label: 'is this week' },
+  { value: 'this_month', label: 'is this month' },
+  // Number
+  { value: 'gt', label: 'greater than' },
+  { value: 'lt', label: 'less than' },
+  { value: 'gte', label: '≥ greater than or equal' },
+  { value: 'lte', label: '≤ less than or equal' },
 ];
 
 interface DatabaseViewProps {
@@ -839,11 +852,16 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
             const relevantOps = propType === 'checkbox'
               ? FILTER_OPS.filter((op) => ['eq', 'neq'].includes(op.value))
               : propType === 'multi_select'
-              ? FILTER_OPS.filter((op) => ['contains', 'empty', 'not_empty'].includes(op.value))
-              : (propType === 'select' || propType === 'date' || propType === 'number')
+              ? FILTER_OPS.filter((op) => ['contains', 'not_contains', 'empty', 'not_empty'].includes(op.value))
+              : propType === 'select'
               ? FILTER_OPS.filter((op) => ['eq', 'neq', 'empty', 'not_empty'].includes(op.value))
-              : FILTER_OPS;
-            const showValue = !['empty', 'not_empty'].includes(f.operator);
+              : propType === 'date'
+              ? FILTER_OPS.filter((op) => ['eq', 'before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'empty', 'not_empty'].includes(op.value))
+              : propType === 'number'
+              ? FILTER_OPS.filter((op) => ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'empty', 'not_empty'].includes(op.value))
+              : FILTER_OPS.filter((op) => !['before', 'after', 'on_or_before', 'on_or_after', 'this_week', 'this_month', 'gt', 'lt', 'gte', 'lte'].includes(op.value));
+            const noValueOps = ['empty', 'not_empty', 'this_week', 'this_month'];
+            const showValue = !noValueOps.includes(f.operator);
             let selectOptions: string[] = [];
             if (propType === 'select' || propType === 'multi_select') {
               try { selectOptions = JSON.parse(filterProp?.options || '[]') as string[]; } catch { /* */ }
@@ -857,6 +875,8 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     const newType = newProp?.type ?? 'text';
                     const defaultOp: FilterOperator = newType === 'checkbox' ? 'eq'
                       : newType === 'multi_select' ? 'contains'
+                      : newType === 'date' ? 'after'
+                      : newType === 'number' ? 'gt'
                       : 'eq';
                     updateFilter({ propertyId: e.target.value, operator: defaultOp, value: '' });
                   }}
@@ -897,7 +917,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                     ))}
                   </select>
                 )}
-                {showValue && propType === 'date' && (
+                {showValue && propType === 'date' && !['this_week', 'this_month'].includes(f.operator) && (
                   <input
                     type="date"
                     value={f.value ?? ''}
