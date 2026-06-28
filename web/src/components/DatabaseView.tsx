@@ -843,6 +843,7 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
           filters.map((f, i) => {
             const filterProp = properties.find((p) => p.id === f.propertyId);
             const propType = filterProp?.type ?? 'text';
+            const isOr = f.conjunction === 'or';
             const updateFilter = (patch: Partial<DatabaseFilter>) => {
               const next = [...filters];
               next[i] = { ...f, ...patch };
@@ -877,8 +878,25 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
             if (propType === 'select' || propType === 'multi_select') {
               try { selectOptions = JSON.parse(filterProp?.options || '[]') as string[]; } catch { /* */ }
             }
-            return (
-              <div key={i} className="flex flex-wrap items-center gap-2">
+            return [
+              i > 0 && (
+                <div key={`conj-${i}`} className="flex items-center gap-2 py-0.5">
+                  <button
+                    type="button"
+                    onClick={() => updateFilter({ conjunction: isOr ? 'and' : 'or' })}
+                    className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border transition-colors ${
+                      isOr
+                        ? 'bg-forest text-warm-white border-forest'
+                        : 'bg-linen text-warm-gray border-green-mist hover:border-forest hover:text-charcoal'
+                    }`}
+                    title={isOr ? 'Click to change to AND' : 'Click to change to OR'}
+                  >
+                    {isOr ? 'OR' : 'AND'}
+                  </button>
+                  <div className="flex-1 h-px bg-green-mist/40" />
+                </div>
+              ),
+              <div key={`filter-${i}`} className="flex flex-wrap items-center gap-2">
                 <select
                   value={f.propertyId}
                   onChange={(e) => {
@@ -971,8 +989,8 @@ export default function DatabaseView({ pageId, embedded = false }: DatabaseViewP
                 >
                   <X className="w-4 h-4" />
                 </button>
-              </div>
-            );
+              </div>,
+            ];
           })
         )}
         <div className="flex items-center gap-2 pt-1 border-t border-green-mist/50">
