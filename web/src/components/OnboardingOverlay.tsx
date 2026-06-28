@@ -61,7 +61,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           Welcome to <span className="text-forest">Tandem</span>
         </h2>
         <p className="text-warm-gray mb-8">
-          Write, design, and collaborate — with AI built in.
+          An open-source, agent-native workspace where humans and coding agents collaborate through structured documents, databases, and design canvases.
         </p>
 
         <ul className="space-y-4 mb-8 text-left">

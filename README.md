@@ -1,6 +1,6 @@
-# Unified Doc Management
+# Tandem
 
-A cross-platform productivity application for creating, organizing, and collaborating on structured and unstructured content. Built with React, Cloudflare Workers, and D1.
+Tandem is an open-source, agent-native workspace where humans and coding agents collaborate through structured documents, databases, and design canvases. Inline instructions become executable agent tasks, and completed work is written back into the same shared source of truth.
 
 ## Features
 
