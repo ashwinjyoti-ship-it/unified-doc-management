@@ -9,6 +9,7 @@ export interface DatabaseFilter {
   propertyId: string;
   operator: FilterOperator;
   value?: string;
+  conjunction?: 'and' | 'or'; // conjunction with the PREVIOUS filter; undefined = 'and'
 }
 
 export interface DatabaseSort {
@@ -169,7 +170,21 @@ export function applyFilters(
   getValue: (row: DatabaseRow, propId: string) => unknown = getPropValue,
 ): DatabaseRow[] {
   if (filters.length === 0) return rows;
-  return rows.filter((row) => filters.every((f) => matchFilter(row, f, getValue)));
+
+  // Split flat filter list into AND-groups at each 'or' boundary.
+  // A filter with conjunction 'or' starts a new group.
+  // Row passes if ANY group passes (all filters in the group must match).
+  const groups: DatabaseFilter[][] = [[]];
+  for (const f of filters) {
+    if (f.conjunction === 'or' && groups[groups.length - 1].length > 0) {
+      groups.push([]);
+    }
+    groups[groups.length - 1].push(f);
+  }
+
+  return rows.filter((row) =>
+    groups.some((group) => group.every((f) => matchFilter(row, f, getValue))),
+  );
 }
 
 export function applySort(
