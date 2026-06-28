@@ -10,7 +10,7 @@ export function pageItemClass(active: boolean, extra = '') {
           'ring-2 ring-forest/50',
           'pl-[calc(0.75rem-5px)]',
         ].join(' ')
-      : 'hover:bg-linen text-charcoal border-l-[5px] border-transparent pl-3',
+      : 'hover:bg-linen text-sage hover:text-forest border-l-[5px] border-transparent pl-3',
     extra,
   ].join(' ');
 }
@@ -25,6 +25,6 @@ export function pageTreeRowClass(active: boolean) {
           'shadow-[inset_0_0_0_1px_rgba(255,255,255,0.12),0_2px_10px_rgba(0,66,40,0.4)]',
           'ring-2 ring-forest/50',
         ].join(' ')
-      : 'hover:bg-linen text-charcoal border-l-[5px] border-transparent',
+      : 'hover:bg-linen text-sage hover:text-forest border-l-[5px] border-transparent',
   ].join(' ');
 }
