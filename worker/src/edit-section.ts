@@ -93,6 +93,7 @@ function blockPlainText(block: Block): string | null {
     case 'heading1':
     case 'heading2':
     case 'heading3':
+    case 'heading4':
     case 'paragraph':
     case 'quote':
       return typeof content.text === 'string' ? content.text : null;
@@ -120,6 +121,7 @@ function replaceAllInBlock(block: Block, oldText: string, newText: string): Bloc
     case 'heading1':
     case 'heading2':
     case 'heading3':
+    case 'heading4':
     case 'paragraph':
     case 'quote':
       if (typeof content.text !== 'string' || !content.text.includes(oldText)) return null;
@@ -155,6 +157,7 @@ function setBlockPlainText(block: Block, newText: string, oldText: string): Bloc
     case 'heading1':
     case 'heading2':
     case 'heading3':
+    case 'heading4':
     case 'paragraph':
     case 'quote':
       if (typeof content.text !== 'string' || !content.text.includes(oldText)) return null;

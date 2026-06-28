@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import {
-  Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare,
+  Heading1, Heading2, Heading3, Heading4, Pilcrow, List, ListOrdered, CheckSquare,
   Quote, Minus, Code, ImageIcon, FileText, Table2, Database, MessageSquare, Square, Info,
 } from 'lucide-react';
 import type { FunctionalSlashKey } from '../lib/slashInsert';
@@ -22,6 +22,13 @@ export interface SlashCommandItem {
 
 export const slashCommands: SlashCommandItem[] = [
   {
+    title: 'Normal Text',
+    description: 'Plain paragraph text',
+    icon: <Pilcrow className="w-4 h-4" />,
+    placement: 'format',
+    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setParagraph().run(),
+  },
+  {
     title: 'Heading 1',
     description: 'Large section heading',
     icon: <Heading1 className="w-4 h-4" />,
@@ -41,6 +48,13 @@ export const slashCommands: SlashCommandItem[] = [
     icon: <Heading3 className="w-4 h-4" />,
     placement: 'format',
     command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHeading({ level: 3 }).run(),
+  },
+  {
+    title: 'Heading 4',
+    description: 'Smallest section heading',
+    icon: <Heading4 className="w-4 h-4" />,
+    placement: 'format',
+    command: ({ editor, range }) => editor.chain().focus().deleteRange(range).setHeading({ level: 4 }).run(),
   },
   {
     title: 'Bullet List',

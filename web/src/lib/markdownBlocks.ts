@@ -10,12 +10,14 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
   while (i < lines.length) {
     const line = lines[i];
 
-    if (line.startsWith('# ')) {
-      blocks.push({ type: 'heading1', content: { text: line.slice(2) } });
-    } else if (line.startsWith('## ')) {
-      blocks.push({ type: 'heading2', content: { text: line.slice(3) } });
+    if (line.startsWith('#### ')) {
+      blocks.push({ type: 'heading4', content: { text: line.slice(5) } });
     } else if (line.startsWith('### ')) {
       blocks.push({ type: 'heading3', content: { text: line.slice(4) } });
+    } else if (line.startsWith('## ')) {
+      blocks.push({ type: 'heading2', content: { text: line.slice(3) } });
+    } else if (line.startsWith('# ')) {
+      blocks.push({ type: 'heading1', content: { text: line.slice(2) } });
     } else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
       blocks.push({
         type: 'todo',
@@ -80,6 +82,9 @@ export function blocksToTiptapHtml(
       case 'heading3':
         parts.push(`<h3>${inline(content.text)}</h3>`);
         break;
+      case 'heading4':
+        parts.push(`<h4>${inline(content.text)}</h4>`);
+        break;
       case 'bulletList':
         parts.push(`<ul>${(content.items || []).map((item: string) => `<li>${inline(item)}</li>`).join('')}</ul>`);
         break;
@@ -134,6 +139,8 @@ function nestedBlockToHtml(
       return `<h2>${inline(String(content.text || ''))}</h2>`;
     case 'heading3':
       return `<h3>${inline(String(content.text || ''))}</h3>`;
+    case 'heading4':
+      return `<h4>${inline(String(content.text || ''))}</h4>`;
     case 'bulletList':
       return `<ul>${((content.items as string[]) || []).map((item) => `<li>${inline(item)}</li>`).join('')}</ul>`;
     case 'numberedList':

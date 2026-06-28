@@ -91,6 +91,8 @@ export function blocksToMarkdown(blocks: Array<{ type: string; content: string }
           return `## ${content.text || ''}`;
         case 'heading3':
           return `### ${content.text || ''}`;
+        case 'heading4':
+          return `#### ${content.text || ''}`;
         case 'bulletList':
           return (content.items || []).map((i: string) => `- ${i}`).join('\n');
         case 'numberedList':
@@ -130,12 +132,14 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
   while (i < lines.length) {
     const line = lines[i];
 
-    if (line.startsWith('# ')) {
-      blocks.push({ type: 'heading1', content: { text: line.slice(2) } });
-    } else if (line.startsWith('## ')) {
-      blocks.push({ type: 'heading2', content: { text: line.slice(3) } });
+    if (line.startsWith('#### ')) {
+      blocks.push({ type: 'heading4', content: { text: line.slice(5) } });
     } else if (line.startsWith('### ')) {
       blocks.push({ type: 'heading3', content: { text: line.slice(4) } });
+    } else if (line.startsWith('## ')) {
+      blocks.push({ type: 'heading2', content: { text: line.slice(3) } });
+    } else if (line.startsWith('# ')) {
+      blocks.push({ type: 'heading1', content: { text: line.slice(2) } });
     } else if (line.startsWith('- [ ] ') || line.startsWith('- [x] ')) {
       blocks.push({
         type: 'todo',
