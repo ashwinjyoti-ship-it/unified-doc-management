@@ -1,6 +1,6 @@
-# How to Use Unified Doc Management
+# How to Use Tandem
 
-Welcome to **Unified Doc Management** — your all-in-one platform for documents, notes, tasks, and databases. This guide walks you through every feature.
+Welcome to **Tandem** — an open-source, agent-native workspace where humans and coding agents collaborate through structured documents, databases, and design canvases. Inline instructions become executable agent tasks, and completed work is written back into the same shared source of truth. This guide walks you through every feature.
 
 ---
 
@@ -286,4 +286,4 @@ curl -X POST \
 
 ---
 
-*Unified Doc Management — One Platform. Every Document. Total Control.*
+*Tandem — Where humans and coding agents build together.*
