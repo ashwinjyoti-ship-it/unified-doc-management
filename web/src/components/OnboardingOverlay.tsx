@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { markOnboardingComplete } from '../lib/onboarding';
 import AppAvatar from './AppAvatar';
-import { FileText, Sparkles, Users } from 'lucide-react';
+import { FileText, Palette, Sparkles, Users } from 'lucide-react';
 
 interface OnboardingOverlayProps {
   onComplete: () => void;
@@ -12,31 +12,35 @@ const STEPS = [
   {
     icon: FileText,
     title: 'Write',
-    description: 'Create pages, folders, and databases in a block editor.',
+    description: 'Create pages, folders, and databases in a rich block editor with markdown support.',
+  },
+  {
+    icon: Palette,
+    title: 'Design',
+    description: 'Build visual layouts on an infinite canvas with frames, shapes, and agent design-to-code.',
   },
   {
     icon: Sparkles,
     title: 'Instruct your agent',
-    description: 'Select text and leave agent instructions on any block.',
+    description: 'Select text and leave agent instructions on any block — let AI do the work.',
   },
   {
     icon: Users,
     title: 'Collaborate',
-    description: 'Edit together in real time and keep everyone in sync.',
+    description: 'Edit together in real time with shared cursors and live sync across all your docs.',
   },
 ] as const;
 
 export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
   const navigate = useNavigate();
+  const recent = useStore((s) => s.recent);
   const pages = useStore((s) => s.pages);
 
-  const finish = (navigateToGettingStarted: boolean) => {
+  const finish = () => {
     markOnboardingComplete();
     onComplete();
-    if (navigateToGettingStarted) {
-      const gettingStarted = pages.find((p) => p.title === 'Getting Started');
-      navigate(gettingStarted ? `/page/${gettingStarted.id}` : '/');
-    }
+    const lastDoc = recent[0] ?? pages[0];
+    navigate(lastDoc ? `/page/${lastDoc.id}` : '/');
   };
 
   return (
@@ -57,7 +61,7 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           Welcome to <span className="text-forest">Tandem</span>
         </h2>
         <p className="text-warm-gray mb-8">
-          Your document platform with agentic collaboration built in.
+          Write, design, and collaborate — with AI built in.
         </p>
 
         <ul className="space-y-4 mb-8 text-left">
@@ -78,14 +82,9 @@ export default function OnboardingOverlay({ onComplete }: OnboardingOverlayProps
           ))}
         </ul>
 
-        <div className="flex flex-col sm:flex-row gap-2">
-          <button type="button" className="btn-primary flex-1" onClick={() => finish(true)}>
-            Get started
-          </button>
-          <button type="button" className="btn-secondary flex-1" onClick={() => finish(false)}>
-            Skip tour
-          </button>
-        </div>
+        <button type="button" className="btn-primary w-full" onClick={finish}>
+          Get started
+        </button>
       </div>
     </div>
   );
