@@ -206,6 +206,55 @@ POST /api/import-url
 { "url": "https://example.com/article", "workspaceId": "{id}", "parentId": "{folderId}" }
 ```
 
+### 12. Import Word / documents with embedded images (flowcharts)
+
+Use this when copying a **Word document** (`.docx`) or markdown that contains **base64-embedded diagrams** into Tandem. The server extracts text, uploads embedded images (Word flowcharts, SmartArt, pasted diagrams), and creates proper **image blocks**.
+
+**Multipart (recommended for agents with a local file):**
+
+```http
+POST /api/import-document
+Content-Type: multipart/form-data
+X-API-Key: <key>
+
+file: report.docx
+workspaceId: {workspace-id}
+mode: new          # new | append | overwrite
+title: Architecture Overview   # optional, for mode=new
+pageId: {page-id}  # required for append/overwrite
+```
+
+**JSON with base64 Word file:**
+
+```http
+POST /api/import-document
+Content-Type: application/json
+
+{
+  "format": "docx",
+  "base64": "<base64-encoded .docx bytes>",
+  "filename": "report.docx",
+  "workspaceId": "{workspace-id}",
+  "title": "Architecture Overview"
+}
+```
+
+**JSON with markdown + inline base64 images:**
+
+```http
+POST /api/import-document
+Content-Type: application/json
+
+{
+  "markdown": "# Flow\n\n![signup flow](data:image/png;base64,iVBORw0KGgo...)",
+  "workspaceId": "{workspace-id}"
+}
+```
+
+Response includes `imagesUploaded` (count) and `hint`. Word flowcharts are stored as **images**, not editable diagram objects.
+
+`PUT /api/pages/:id/markdown` also auto-uploads `data:image/...;base64,...` URLs found in markdown.
+
 ## Full endpoint index
 
 | Method | Path | Description |
@@ -252,6 +301,7 @@ POST /api/import-url
 | POST | `/api/bulk` | Bulk delete/move |
 | POST | `/api/fetch-url` | Fetch URL content |
 | POST | `/api/import-url` | Import URL as page |
+| POST | `/api/import-document` | Import .docx or markdown with base64 images |
 | GET/POST | `/api/workspaces/:id/tags` | Workspace tags |
 | GET/POST/DELETE | `/api/pages/:id/tags` | Page tags |
 | POST | `/api/uploads` | File upload |

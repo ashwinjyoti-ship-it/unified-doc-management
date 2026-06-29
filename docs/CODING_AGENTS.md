@@ -136,7 +136,52 @@ Expected result in the page: `hello-world`
 
 ---
 
-## 4. Canvas / Design-to-code workflow
+## 4. Import Word documents and flowcharts
+
+Agents should use **`POST /api/import-document`** — not raw `PUT /markdown` — when ingesting a **Word file** or content with **embedded diagram images**.
+
+### Quick recipe
+
+```bash
+# Import a .docx (flowcharts inside Word become image blocks)
+curl -X POST https://ash-doc.pages.dev/api/import-document \
+  -H "X-API-Key: $TANDEM_API_KEY" \
+  -F "file=@/path/to/spec.docx" \
+  -F "workspaceId=$WORKSPACE_ID" \
+  -F "mode=new" \
+  -F "title=Product Spec"
+```
+
+### JSON (base64 docx)
+
+```http
+POST /api/import-document
+{
+  "format": "docx",
+  "base64": "<file-as-base64>",
+  "filename": "spec.docx",
+  "workspaceId": "{workspaceId}",
+  "title": "Product Spec"
+}
+```
+
+### Markdown with base64 images
+
+```http
+POST /api/import-document
+{
+  "markdown": "# Diagrams\n\n![flow](data:image/png;base64,...)",
+  "workspaceId": "{workspaceId}"
+}
+```
+
+**What works:** headings, lists, tables, paragraphs, images embedded in Word (including flowchart/SmartArt exports).
+
+**What does not work yet:** live editable Mermaid/draw.io diagrams — those import as images.
+
+---
+
+## 5. Canvas / Design-to-code workflow
 
 UDM includes an **Infinite Canvas** for designing UI layouts. Agents can read the final canvas, then generate real frontend code from it.
 
@@ -228,7 +273,7 @@ Pass this JSON to your LLM and ask it to generate React / HTML / Tailwind / any 
 
 ---
 
-## 5. Discovery endpoint
+## 6. Discovery endpoint
 
 Agents can introspect all endpoints without reading this file:
 
@@ -241,7 +286,7 @@ Returns auth info, property types, endpoint list, and example workflows.
 
 ---
 
-## 6. Copy-paste: Claude Code / Codex instructions
+## 7. Copy-paste: Claude Code / Codex instructions
 
 Add to `CLAUDE.md`, `AGENTS.md`, or a project skill:
 
@@ -277,7 +322,7 @@ Full API: docs/AGENT_API.md in the UDM repo
 
 ---
 
-## 7. Copy-paste: Cursor / shell one-liners
+## 8. Copy-paste: Cursor / shell one-liners
 
 ```bash
 # Health check (no auth)
@@ -311,7 +356,7 @@ curl -s -X PATCH -H "X-API-Key: $UDM_API_KEY" \
 
 ---
 
-## 8. Creating an API key (one-time)
+## 9. Creating an API key (one-time)
 
 While logged into UDM in the browser:
 
@@ -329,7 +374,7 @@ Authorization: Bearer <jwt>
 
 ---
 
-## 9. Common operations quick reference
+## 10. Common operations quick reference
 
 | Goal | Method | Path |
 |------|--------|------|
@@ -350,7 +395,7 @@ Authorization: Bearer <jwt>
 
 ---
 
-## 10. UDM concepts agents must know
+## 11. UDM concepts agents must know
 
 ### Row identity
 - **Stable ID:** `database_rows.id` (UUID)
@@ -369,7 +414,7 @@ Read-only; computed on `GET .../database` → `rollupValues[rowId][propId]`.
 
 ---
 
-## 11. Error handling
+## 12. Error handling
 
 | Code | Meaning |
 |------|---------|
@@ -380,7 +425,7 @@ Read-only; computed on `GET .../database` → `rollupValues[rowId][propId]`.
 
 ---
 
-## 12. Is MCP required?
+## 13. Is MCP required?
 
 **No.** API key + this doc is enough for Claude Code, Codex, and scripts.
 
@@ -388,7 +433,7 @@ Build an MCP server later if you want native Cursor tools (e.g. `list_open_instr
 
 ---
 
-## 13. Related files in this repo
+## 14. Related files in this repo
 
 | File | Purpose |
 |------|---------|

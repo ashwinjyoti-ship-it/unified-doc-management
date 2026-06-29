@@ -9,7 +9,7 @@ const agent = new Hono<{ Bindings: Env }>();
 
 const CATALOG = {
   name: 'Tandem API',
-  version: '1.1.0',
+  version: '1.2.0',
   baseUrl: '/api',
   authentication: {
     methods: [
@@ -173,6 +173,16 @@ const CATALOG = {
       body: { url: 'string', workspaceId: 'string', parentId: 'string?' },
       description: 'Import URL as new page',
     },
+    {
+      method: 'POST',
+      path: '/api/import-document',
+      auth: true,
+      description: 'Import Word (.docx) or markdown with embedded base64 images (flowcharts/diagrams). Multipart: file + workspaceId + optional pageId/mode/title. JSON: { format: "docx", base64, workspaceId } or { markdown, workspaceId }.',
+      body: {
+        multipart: 'file (.docx|.md|.txt), workspaceId, pageId?, mode?: new|append|overwrite, title?, parentId?',
+        json: '{ format?: docx|markdown, base64?: string, markdown?: string, workspaceId, pageId?, mode?, title?, parentId?, filename? }',
+      },
+    },
 
     { method: 'GET', path: '/api/workspaces/:workspaceId/tags', auth: true },
     { method: 'POST', path: '/api/workspaces/:workspaceId/tags', auth: true, body: { name: 'string', color: 'string?' } },
@@ -333,6 +343,17 @@ const CATALOG = {
         'For each comment with anchor_kind=component: read anchor_id, POST /api/comments/:id/apply { "component_patch": { "styles": { ... } } }',
         '→ component updated, snapshot_before recorded, comment resolved, canvas:component:update broadcast',
         'When user is happy: agent reads GET /api/pages/:pageId/canvas and generates real UI code for the target app',
+      ],
+    },
+    {
+      intent: 'Import a Word document with flowcharts/diagrams into Tandem',
+      steps: [
+        'GET /api/workspaces → workspaceId',
+        'POST /api/import-document (multipart): file=@report.docx, workspaceId, mode=new|append|overwrite, pageId? (required for append/overwrite), title?',
+        '→ extracts text + embedded images (Word flowcharts/SmartArt become image blocks), uploads images to /api/uploads',
+        'Alternative JSON: POST /api/import-document { "format": "docx", "base64": "<file-bytes>", "workspaceId", "title" }',
+        'For markdown with inline diagrams: POST { "markdown": "# Title\\n\\n![flow](data:image/png;base64,...)", "workspaceId" } — base64 images are uploaded automatically',
+        'Do NOT use PUT /markdown with raw base64 — use /import-document or PUT /markdown (base64 is now auto-uploaded on PUT too)',
       ],
     },
     {

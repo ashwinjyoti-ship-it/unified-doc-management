@@ -342,6 +342,45 @@ class ApiClient {
     );
   }
 
+  async importDocument(opts: {
+    file?: File;
+    workspaceId: string;
+    pageId?: string;
+    mode?: 'new' | 'append' | 'overwrite';
+    title?: string;
+    parentId?: string | null;
+    signal?: AbortSignal;
+  }) {
+    const formData = new FormData();
+    formData.append('workspaceId', opts.workspaceId);
+    if (opts.file) formData.append('file', opts.file);
+    if (opts.pageId) formData.append('pageId', opts.pageId);
+    if (opts.mode) formData.append('mode', opts.mode);
+    if (opts.title) formData.append('title', opts.title);
+    if (opts.parentId) formData.append('parentId', opts.parentId);
+
+    const headers: Record<string, string> = {};
+    if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+    const res = await fetch(`${API_BASE}/import-document`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      signal: opts.signal,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || 'Import failed');
+    }
+    return res.json() as Promise<{
+      page: Page;
+      blocks: Block[];
+      imagesUploaded: number;
+      mode: string;
+      hint?: string;
+    }>;
+  }
+
   getFavorites() {
     return this.request<{ pages: Page[] }>('/favorites');
   }

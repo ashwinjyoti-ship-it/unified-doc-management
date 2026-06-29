@@ -177,6 +177,11 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       if (match) {
         blocks.push({ type: 'database_embed', content: { databaseId: match[1], title: match[2] || 'Database' } });
       }
+    } else if (/^!\[([^\]]*)\]\(([^)]+)\)\s*$/.test(line.trim())) {
+      const match = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+      if (match) {
+        blocks.push({ type: 'image', content: { alt: match[1], url: match[2] } });
+      }
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
 import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks } from '../utils';
+import { resolveDataUrisInText } from '../import-document';
 import { editPageSection, EditSectionError } from '../edit-section';
 import { syncRowPageTitle } from '../database-helpers';
 
@@ -311,7 +312,8 @@ pages.put('/pages/:pageId/markdown', async (c) => {
     return c.json({ error: 'Access denied' }, 403);
   }
 
-  const parsed = markdownToBlocks(markdown);
+  const { text: resolvedMarkdown } = await resolveDataUrisInText(markdown, c.env.UPLOADS, auth.user.id);
+  const parsed = markdownToBlocks(resolvedMarkdown);
   const now = Math.floor(Date.now() / 1000);
 
   await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
@@ -321,9 +323,10 @@ pages.put('/pages/:pageId/markdown', async (c) => {
     ).bind(generateId(), pageId, parsed[i].type, JSON.stringify(parsed[i].content), i, now, now).run();
   }
 
-  await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(markdown, now, pageId).run();
-  await updatePageFts(c.env.DB, pageId, page.title, markdown);
-  await syncBacklinks(c.env.DB, pageId, page.workspace_id, markdown);
+  const contentMd = blocksToMarkdown(parsed.map((b) => ({ type: b.type, content: JSON.stringify(b.content) })));
+  await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(contentMd, now, pageId).run();
+  await updatePageFts(c.env.DB, pageId, page.title, contentMd);
+  await syncBacklinks(c.env.DB, pageId, page.workspace_id, contentMd);
 
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all();
   return c.json({ blocks: blocks.results });

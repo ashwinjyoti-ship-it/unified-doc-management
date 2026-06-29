@@ -50,6 +50,11 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       blocks.push({ type: 'quote', content: { text: line.slice(2) } });
     } else if (line === '---') {
       blocks.push({ type: 'divider', content: {} });
+    } else if (/^!\[([^\]]*)\]\(([^)]+)\)\s*$/.test(line.trim())) {
+      const match = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/);
+      if (match) {
+        blocks.push({ type: 'image', content: { alt: match[1], url: match[2] } });
+      }
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }
