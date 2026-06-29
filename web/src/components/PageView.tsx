@@ -80,7 +80,8 @@ export default function PageView() {
   const [importModal, setImportModal] = useState<{
     sourceLabel: string;
     sourceType: 'file' | 'url';
-    content: string;
+    content?: string;
+    file?: File;
     suggestedTitle?: string;
   } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -450,14 +451,27 @@ export default function PageView() {
     setImporting(true);
     startOperation('Importing...');
     try {
-      const targetId = await applyImportContent({
-        content: modal.content,
-        mode,
-        pageId,
-        workspaceId: workspace.id,
-        suggestedTitle: modal.suggestedTitle,
-        signal: abortRef.current?.signal,
-      });
+      let targetId: string;
+      if (modal.file) {
+        const result = await api.importDocument({
+          file: modal.file,
+          workspaceId: workspace.id,
+          pageId: mode !== 'new' ? pageId : undefined,
+          mode,
+          title: modal.suggestedTitle,
+          signal: abortRef.current?.signal,
+        });
+        targetId = result.page.id;
+      } else {
+        targetId = await applyImportContent({
+          content: modal.content || '',
+          mode,
+          pageId,
+          workspaceId: workspace.id,
+          suggestedTitle: modal.suggestedTitle,
+          signal: abortRef.current?.signal,
+        });
+      }
       if (mode === 'new' || targetId !== pageId) {
         navigate(`/page/${targetId}`);
       } else {
@@ -647,13 +661,23 @@ export default function PageView() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    const suggestedTitle = file.name.replace(/\.(md|markdown|txt|docx?)$/i, '') || 'Imported';
+    if (/\.docx?$/i.test(file.name)) {
+      setImportModal({
+        sourceLabel: file.name,
+        sourceType: 'file',
+        file,
+        suggestedTitle,
+      });
+      return;
+    }
     try {
       const text = await file.text();
       setImportModal({
         sourceLabel: file.name,
         sourceType: 'file',
         content: text,
-        suggestedTitle: file.name.replace(/\.(md|markdown|txt)$/i, '') || 'Imported',
+        suggestedTitle,
       });
     } catch {
       setAlertMessage('Could not read file');
@@ -787,7 +811,7 @@ export default function PageView() {
       <input
         ref={importInputRef}
         type="file"
-        accept=".md,.markdown,.txt"
+        accept=".md,.markdown,.txt,.doc,.docx"
         className="hidden"
         onChange={handleImport}
       />

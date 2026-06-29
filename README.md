@@ -6,6 +6,7 @@ Tandem is an open-source, agent-native workspace where humans and coding agents 
 
 - **Block-based editor** — Rich text, headings, lists, to-do, code blocks, images, embeds
 - **Markdown support** — View and edit pages as `.md` files
+- **Document import** — Import Word (`.docx`) and markdown with base64-embedded images (flowcharts/diagrams become image blocks); agent API: `POST /api/import-document`
 - **Real-time collaboration** — Multi-user editing via WebSockets (Durable Objects)
 - **Hierarchical pages** — Folders, sub-pages, and backlinks
 - **Databases** — Table, board (kanban), calendar, and list views with custom properties
