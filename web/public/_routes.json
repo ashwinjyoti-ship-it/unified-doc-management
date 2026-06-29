@@ -1,5 +1,13 @@
 {
   "version": 1,
   "include": ["/api/*"],
-  "exclude": ["/assets/*", "/*.js", "/*.css", "/*.svg", "/*.png", "/*.ico", "/*.webmanifest", "/*.woff2", "/sw.js", "/workbox-*"]
+  "exclude": [
+    "/assets/*",
+    "/*.js",
+    "/*.css",
+    "/favicon.svg",
+    "/manifest.webmanifest",
+    "/sw.js",
+    "/workbox-*"
+  ]
 }
