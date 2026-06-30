@@ -503,7 +503,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       )}
 
       {editable && (
-        <div className="md:hidden fixed bottom-[max(5rem,calc(env(safe-area-inset-bottom)+4rem))] right-4 z-30">
+        <div className="md:hidden fixed bottom-[max(1.5rem,env(safe-area-inset-bottom))] left-4 z-50">
           <button
             type="button"
             onClick={() => setInsertOpen(true)}
