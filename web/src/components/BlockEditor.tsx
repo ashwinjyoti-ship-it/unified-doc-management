@@ -1,4 +1,5 @@
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import { sticky } from 'tippy.js';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
@@ -475,7 +476,11 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
         onChange={handleFileSelect}
       />
       {editable && (
-        <BubbleMenu editor={editor} tippyOptions={{ duration: 100, maxWidth: 'none' }} shouldShow={bubbleMenuShouldShow}>
+        <BubbleMenu
+          editor={editor}
+          tippyOptions={{ duration: 100, maxWidth: 'none', plugins: [sticky], sticky: true }}
+          shouldShow={bubbleMenuShouldShow}
+        >
           <div className="flex flex-col gap-1 items-start">
             <EditorToolbar
               editor={editor}

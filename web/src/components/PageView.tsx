@@ -1123,7 +1123,7 @@ export default function PageView() {
 
       <div className="flex">
         <div className="flex-1 min-w-0 w-full">
-          <div className="p-6 md:p-10 max-w-4xl mx-auto w-full">
+          <div className="p-6 md:p-10 max-w-5xl mx-auto w-full">
           {pageType === 'database' ? (
             <DatabaseView pageId={pageId!} />
           ) : pageType === 'folder' ? (
