@@ -182,6 +182,15 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       if (match) {
         blocks.push({ type: 'image', content: { alt: match[1], url: match[2] } });
       }
+    } else if (line.trim().startsWith('|') && i + 1 < lines.length && isTableSeparatorLine(lines[i + 1])) {
+      const rows: string[][] = [splitTableRow(line)];
+      i += 2;
+      while (i < lines.length && lines[i].trim().startsWith('|')) {
+        rows.push(splitTableRow(lines[i]));
+        i++;
+      }
+      i--;
+      blocks.push({ type: 'table', content: { rows } });
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }
@@ -193,6 +202,21 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
   }
 
   return blocks;
+}
+
+/** Splits a `| a | b |` markdown table row into trimmed cell strings. */
+function splitTableRow(line: string): string[] {
+  let t = line.trim();
+  if (t.startsWith('|')) t = t.slice(1);
+  if (t.endsWith('|')) t = t.slice(0, -1);
+  return t.split('|').map((cell) => cell.trim());
+}
+
+/** True if `line` is a GFM table header separator, e.g. `|---|:--:|---|`. */
+function isTableSeparatorLine(line: string): boolean {
+  if (!line.trim().startsWith('|')) return false;
+  const cells = splitTableRow(line);
+  return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
 }
 
 export async function isPageDescendant(
