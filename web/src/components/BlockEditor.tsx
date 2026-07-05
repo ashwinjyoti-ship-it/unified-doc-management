@@ -706,6 +706,13 @@ function extractContent(node: Record<string, unknown>): object {
     return { text: getTextContent(node) };
   }
 
+  if (type === 'table') {
+    const rows = ((node.content as Array<Record<string, unknown>>) || []).map((row) =>
+      ((row.content as Array<Record<string, unknown>>) || []).map((cell) => getTextContent(cell)),
+    );
+    return { rows };
+  }
+
   if (type === 'callout') {
     const icon = (node.attrs as { icon?: string })?.icon || '💡';
     const innerNodes = (node.content as Array<Record<string, unknown>>) || [];
