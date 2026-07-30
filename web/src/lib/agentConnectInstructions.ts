@@ -1,5 +1,10 @@
 /** Build a paste-ready instruction agents can use to connect to Tandem via REST. */
 
+/** Single-user permanent agent key (shown in Settings → API). Override via Generate / paste. */
+export const PERMANENT_AGENT_API_KEY = 'udm_c63640afdddb469a82e651923abe180e';
+
+export const AGENT_API_KEY_STORAGE_KEY = 'tandem_agent_api_key';
+
 export function resolveAgentApiBaseUrl(origin = typeof window !== 'undefined' ? window.location.origin : ''): string {
   if (!origin) return 'https://ash-doc.pages.dev/api';
   try {
@@ -10,6 +15,28 @@ export function resolveAgentApiBaseUrl(origin = typeof window !== 'undefined' ? 
     return `${origin.replace(/\/$/, '')}/api`;
   } catch {
     return 'https://ash-doc.pages.dev/api';
+  }
+}
+
+export function loadStoredAgentApiKey(): string {
+  if (typeof window === 'undefined') return PERMANENT_AGENT_API_KEY;
+  try {
+    const stored = window.localStorage.getItem(AGENT_API_KEY_STORAGE_KEY)?.trim();
+    if (stored) return stored;
+  } catch {
+    /* ignore quota / private mode */
+  }
+  return PERMANENT_AGENT_API_KEY;
+}
+
+export function persistAgentApiKey(key: string): void {
+  if (typeof window === 'undefined') return;
+  const trimmed = key.trim();
+  try {
+    if (trimmed) window.localStorage.setItem(AGENT_API_KEY_STORAGE_KEY, trimmed);
+    else window.localStorage.removeItem(AGENT_API_KEY_STORAGE_KEY);
+  } catch {
+    /* ignore quota / private mode */
   }
 }
 
