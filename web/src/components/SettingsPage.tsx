@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { API_ENDPOINT_GROUPS } from '../lib/apiEndpoints';
+import { buildAgentConnectInstructions } from '../lib/agentConnectInstructions';
 import Tooltip from './Tooltip';
 import MobileStandaloneHeader from './MobileStandaloneHeader';
 import ConfirmDialog from './ConfirmDialog';
@@ -49,23 +50,34 @@ function WorkspaceRenameSection({
 export default function SettingsPage() {
   const { user, logout, theme, setTheme, workspace, renameWorkspace, loadWorkspace, loadPages } = useStore();
   const navigate = useNavigate();
-  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [keyDraft, setKeyDraft] = useState('');
   const [copied, setCopied] = useState(false);
+  const [copiedInstructions, setCopiedInstructions] = useState(false);
   const [seedLoading, setSeedLoading] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [confirmSeed, setConfirmSeed] = useState(false);
 
+  const effectiveApiKey = keyDraft.trim() || null;
+  const agentInstructions = effectiveApiKey ? buildAgentConnectInstructions(effectiveApiKey) : null;
+
   const generateApiKey = async () => {
     const { key } = await api.createApiKey('Integration Key');
-    setApiKey(key);
+    setKeyDraft(key);
   };
 
   const copyKey = () => {
-    if (apiKey) {
-      navigator.clipboard.writeText(apiKey);
+    if (effectiveApiKey) {
+      navigator.clipboard.writeText(effectiveApiKey);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const copyAgentInstructions = () => {
+    if (!agentInstructions) return;
+    navigator.clipboard.writeText(agentInstructions);
+    setCopiedInstructions(true);
+    setTimeout(() => setCopiedInstructions(false), 2000);
   };
 
   const loadDemoKnowledgeBase = () => {
@@ -181,22 +193,66 @@ export default function SettingsPage() {
           Generate an API key for integrations and automation. Use the <code className="bg-linen px-1 rounded">X-API-Key</code> header.
         </p>
 
-        {apiKey ? (
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-linen px-3 py-2 rounded-lg text-xs break-all">{apiKey}</code>
-            <Tooltip text="Copy API key to clipboard">
-              <button onClick={copyKey} className="btn-secondary p-2">
-                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Tooltip text="Create a new API key for external integrations">
+              <button type="button" onClick={() => void generateApiKey()} className="btn-primary text-sm">
+                Generate API Key
               </button>
             </Tooltip>
+            {effectiveApiKey && (
+              <Tooltip text="Copy API key to clipboard">
+                <button type="button" onClick={copyKey} className="btn-secondary text-sm flex items-center gap-2">
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copied ? 'Copied key' : 'Copy key'}
+                </button>
+              </Tooltip>
+            )}
           </div>
-        ) : (
-          <Tooltip text="Create a new API key for external integrations">
-            <button onClick={generateApiKey} className="btn-primary text-sm">
-              Generate API Key
-            </button>
-          </Tooltip>
-        )}
+          <div>
+            <label htmlFor="api-key-input" className="block text-xs text-warm-gray mb-1">
+              API key (generated or paste an existing one)
+            </label>
+            <input
+              id="api-key-input"
+              type="text"
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              placeholder="udm_…"
+              spellCheck={false}
+              autoComplete="off"
+              className="w-full px-3 py-2 rounded-lg border border-green-mist bg-warm-white outline-none focus:border-forest text-xs font-mono"
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 pt-5 border-t border-green-mist">
+          <h3 className="font-medium text-charcoal mb-1">Agent connection instructions</h3>
+          <p className="text-sm text-warm-gray mb-3">
+            Copy-paste this into Cursor, Claude Code, or Codex so the agent can connect to Tandem over REST (includes your API key).
+          </p>
+          {agentInstructions ? (
+            <>
+              <pre className="bg-linen px-3 py-3 rounded-lg text-xs text-charcoal whitespace-pre-wrap break-words max-h-64 overflow-y-auto mb-3 font-mono leading-relaxed">
+                {agentInstructions}
+              </pre>
+              <Tooltip text="Copy full agent instructions including API key">
+                <button
+                  type="button"
+                  onClick={copyAgentInstructions}
+                  className="btn-primary text-sm flex items-center gap-2"
+                >
+                  {copiedInstructions ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedInstructions ? 'Copied' : 'Copy instructions'}
+                </button>
+              </Tooltip>
+            </>
+          ) : (
+            <p className="text-sm text-warm-gray bg-linen rounded-lg px-3 py-3">
+              Generate or paste an API key above to unlock a ready-to-paste agent instruction with the key filled in.
+            </p>
+          )}
+        </div>
 
         <div className="mt-4 p-3 bg-linen rounded-lg text-xs text-warm-gray">
           <p className="font-medium text-charcoal mb-2">API Endpoints</p>
