@@ -44,6 +44,7 @@ import {
   sanitizePastedHtml,
   shouldPreferPlainTextPaste,
 } from '../lib/pasteMarkdown';
+import { CompactClipboard } from '../lib/copyClipboard';
 import { serializeInlineNodes } from '../lib/pageLinks';
 
 export { blocksToTiptapHtml } from '../lib/markdownBlocks';
@@ -140,6 +141,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       CodeBlockLowlight.configure({ lowlight }),
       DatabaseEmbed,
       Callout,
+      CompactClipboard,
       SlashCommands.configure({
         onImageUpload: uploadImage,
         onSlashItemSelected: handleSlashItemSelected,
@@ -148,6 +150,13 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     content: initialContent,
     editable,
     immediatelyRender: false,
+    // TipTap defaults to "\n\n" between blocks on text/plain copy, which looks
+    // like huge gaps when pasting into Notes, Slack, plain textareas, etc.
+    coreExtensionOptions: {
+      clipboardTextSerializer: {
+        blockSeparator: '\n',
+      },
+    },
     editorProps: {
       handleClick(_view, _pos, event) {
         const target = event.target as HTMLElement | null;
