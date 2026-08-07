@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env } from './types';
 import { authMiddleware } from './middleware/auth';
+import { generateId, replacePageBlocksAtomic } from './utils';
 import authRoutes from './routes/auth';
 import pagesRoutes from './routes/pages';
 import databaseRoutes from './routes/database';
@@ -78,13 +79,20 @@ app.post('/api/sync', async (c) => {
   for (const op of operations) {
     try {
       if (op.operation === 'update_blocks') {
-        const payload = op.payload as { pageId: string; blocks: Array<{ id: string; parent_id?: string | null; type: string; content: unknown; order_index: number }> };
-        await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(payload.pageId).run();
-        for (const block of payload.blocks ?? []) {
-          await c.env.DB.prepare(
-            'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index) VALUES (?, ?, ?, ?, ?, ?)'
-          ).bind(block.id, payload.pageId, block.parent_id ?? null, block.type, JSON.stringify(block.content), block.order_index).run();
-        }
+        const payload = op.payload as { pageId: string; blocks: Array<{ id?: string; parent_id?: string | null; type: string; content: unknown; order_index: number }> };
+        const now = Math.floor(Date.now() / 1000);
+        await replacePageBlocksAtomic(
+          c.env.DB,
+          payload.pageId,
+          (payload.blocks ?? []).map((block, i) => ({
+            id: block.id || generateId(),
+            parentId: block.parent_id ?? null,
+            type: block.type,
+            content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? {}),
+            orderIndex: block.order_index ?? i,
+          })),
+          now,
+        );
         results.push({ id: op.id, status: 'synced' });
       } else {
         results.push({ id: op.id, status: 'synced' });

@@ -2,6 +2,9 @@
 
 import { wikiLinksToHtml } from './pageLinks';
 
+/** Marker written for empty paragraph blocks so markdown round-trips keep visual gaps. */
+export const EMPTY_PARAGRAPH_MARKER = '\u200B';
+
 export function markdownToBlocks(md: string): Array<{ type: string; content: object }> {
   const lines = md.replace(/\r\n/g, '\n').split('\n');
   const blocks: Array<{ type: string; content: object }> = [];
@@ -64,6 +67,8 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       }
       i--;
       blocks.push({ type: 'table', content: { rows } });
+    } else if (line === EMPTY_PARAGRAPH_MARKER) {
+      blocks.push({ type: 'paragraph', content: { text: '' } });
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }
@@ -92,11 +97,19 @@ function isTableSeparatorLine(line: string): boolean {
   return cells.length > 0 && cells.every((cell) => /^:?-+:?$/.test(cell));
 }
 
+/** Escape inline text and turn saved soft breaks (`\n`) back into `<br>`. */
+function inlineWithBreaks(
+  text: string,
+  resolvePageId?: (title: string) => string | undefined,
+): string {
+  return wikiLinksToHtml(text || '', resolvePageId).replace(/\n/g, '<br>');
+}
+
 export function blocksToTiptapHtml(
   blocks: Array<{ type: string; content: string }>,
   resolvePageId?: (title: string) => string | undefined,
 ): string {
-  const inline = (text: string) => wikiLinksToHtml(text || '', resolvePageId);
+  const inline = (text: string) => inlineWithBreaks(text, resolvePageId);
   const parts: string[] = [];
 
   for (const block of blocks) {
@@ -214,8 +227,27 @@ export function markdownToTiptapHtml(markdown: string): string {
 }
 
 export function plainTextToTiptapHtml(text: string): string {
-  const paragraphs = text.replace(/\r\n/g, '\n').split(/\n{2,}/).filter((p) => p.trim());
-  if (paragraphs.length === 0) return '<p></p>';
+  const normalized = text.replace(/\r\n/g, '\n');
+  // Build paragraphs from single-newline runs so "A\n\n\nB" keeps an empty gap
+  // paragraph (extra blank line) instead of collapsing to just A + B.
+  const lines = normalized.split('\n');
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (line === '') {
+      paragraphs.push(current.join('\n'));
+      current = [];
+    } else {
+      current.push(line);
+    }
+  }
+  paragraphs.push(current.join('\n'));
+
+  while (paragraphs.length > 1 && paragraphs[0] === '') paragraphs.shift();
+  while (paragraphs.length > 1 && paragraphs[paragraphs.length - 1] === '') paragraphs.pop();
+
+  if (paragraphs.length === 0 || paragraphs.every((p) => p === '')) return '<p></p>';
+
   return paragraphs
     .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
     .join('');

@@ -734,6 +734,9 @@ function extractContent(node: Record<string, unknown>): object {
 }
 
 function getTextContent(node: Record<string, unknown>): string {
+  if (node.type === 'hardBreak') {
+    return '\n';
+  }
   if (node.type === 'text') {
     return serializeInlineNodes([node]);
   }

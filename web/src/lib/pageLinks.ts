@@ -60,7 +60,10 @@ export function serializeInlineNodes(nodes: Array<Record<string, unknown>> | und
 
   let out = '';
   for (const node of nodes) {
-    if (node.type === 'text') {
+    if (node.type === 'hardBreak') {
+      // Soft line breaks (Shift+Enter / pasted <br>) must round-trip as \n, not vanish.
+      out += '\n';
+    } else if (node.type === 'text') {
       let text = (node.text as string) || '';
       const marks = (node.marks as Array<{ type: string; attrs?: { href?: string } }>) || [];
       const linkMark = marks.find((mark) => mark.type === 'link');
