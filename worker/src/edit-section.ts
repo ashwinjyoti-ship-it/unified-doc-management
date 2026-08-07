@@ -1,5 +1,5 @@
 import type { Block } from './types';
-import { blocksToMarkdown, markdownToBlocks, generateId, syncBacklinks } from './utils';
+import { blocksToMarkdown, markdownToBlocks, generateId, syncBacklinks, replacePageBlocksAtomic } from './utils';
 
 export class EditSectionError extends Error {
   constructor(
@@ -262,12 +262,17 @@ export async function savePageMarkdown(
   ).bind(generateId(), pageId, pageTitle, JSON.stringify(prior), userId, now).run();
 
   const parsed = markdownToBlocks(markdown);
-  await db.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-  for (let i = 0; i < parsed.length; i++) {
-    await db.prepare(
-      'INSERT INTO blocks (id, page_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    ).bind(generateId(), pageId, parsed[i].type, JSON.stringify(parsed[i].content), i, now, now).run();
-  }
+  await replacePageBlocksAtomic(
+    db,
+    pageId,
+    parsed.map((block, i) => ({
+      id: generateId(),
+      type: block.type,
+      content: JSON.stringify(block.content),
+      orderIndex: i,
+    })),
+    now,
+  );
 
   await db.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(markdown, now, pageId).run();
   await db.prepare('DELETE FROM pages_fts WHERE page_id = ?').bind(pageId).run();
@@ -305,22 +310,18 @@ export async function savePageBlocks(
     'INSERT INTO page_versions (id, page_id, title, blocks_snapshot, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
   ).bind(generateId(), pageId, pageTitle, JSON.stringify(prior), userId, now).run();
 
-  await db.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
-    await db.prepare(
-      'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).bind(
-      block.id || generateId(),
-      pageId,
-      block.parent_id || null,
-      block.type,
-      block.content,
-      block.order_index ?? i,
-      now,
-      now,
-    ).run();
-  }
+  await replacePageBlocksAtomic(
+    db,
+    pageId,
+    blocks.map((block, i) => ({
+      id: block.id || generateId(),
+      parentId: block.parent_id || null,
+      type: block.type,
+      content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+      orderIndex: block.order_index ?? i,
+    })),
+    now,
+  );
 
   const md = blocksToMarkdown(blocks.map((b) => ({ type: b.type, content: b.content })));
   await db.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(md, now, pageId).run();

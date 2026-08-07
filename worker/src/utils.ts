@@ -80,6 +80,9 @@ export async function hashApiKey(key: string): Promise<string> {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** Marker written for empty paragraph blocks so markdown round-trips keep visual gaps. */
+export const EMPTY_PARAGRAPH_MARKER = '\u200B';
+
 export function blocksToMarkdown(blocks: Array<{ type: string; content: string }>): string {
   return blocks
     .map((block) => {
@@ -118,7 +121,9 @@ export function blocksToMarkdown(blocks: Array<{ type: string; content: string }
         case 'embed':
           return `[${content.title || 'Embed'}](${content.url || ''})`;
         default:
-          return content.text || '';
+          // Preserve empty paragraphs across markdown round-trips (visual gaps).
+          if (content.text == null || content.text === '') return EMPTY_PARAGRAPH_MARKER;
+          return content.text;
       }
     })
     .join('\n\n');
@@ -191,6 +196,8 @@ export function markdownToBlocks(md: string): Array<{ type: string; content: obj
       }
       i--;
       blocks.push({ type: 'table', content: { rows } });
+    } else if (line === EMPTY_PARAGRAPH_MARKER) {
+      blocks.push({ type: 'paragraph', content: { text: '' } });
     } else if (line.trim()) {
       blocks.push({ type: 'paragraph', content: { text: line } });
     }
@@ -233,6 +240,59 @@ export async function isPageDescendant(
     currentId = row.parent_id;
   }
   return false;
+}
+
+/**
+ * Atomically replace all blocks for a page (DELETE + INSERTs in one D1 batch).
+ * Prevents interleaved concurrent saves from leaving duplicated/mixed sections.
+ */
+export async function replacePageBlocksAtomic(
+  db: D1Database,
+  pageId: string,
+  blocks: Array<{
+    id: string;
+    parentId?: string | null;
+    type: string;
+    content: string;
+    orderIndex: number;
+    createdAt?: number;
+    updatedAt?: number;
+  }>,
+  now: number,
+): Promise<void> {
+  const statements: D1PreparedStatement[] = [
+    db.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId),
+  ];
+
+  for (const block of blocks) {
+    statements.push(
+      db.prepare(
+        'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ).bind(
+        block.id,
+        pageId,
+        block.parentId ?? null,
+        block.type,
+        block.content,
+        block.orderIndex,
+        block.createdAt ?? now,
+        block.updatedAt ?? now,
+      ),
+    );
+  }
+
+  // D1 batches are transactional; keep under the statement limit by chunking only
+  // when necessary (DELETE stays with the first chunk of inserts).
+  const MAX_BATCH = 900;
+  if (statements.length <= MAX_BATCH) {
+    await db.batch(statements);
+    return;
+  }
+
+  await db.batch(statements.slice(0, MAX_BATCH));
+  for (let i = MAX_BATCH; i < statements.length; i += MAX_BATCH) {
+    await db.batch(statements.slice(i, i + MAX_BATCH));
+  }
 }
 
 /** Sync backlinks from [[Page Title]] or [[Title|page-id]] wiki-style links in content */

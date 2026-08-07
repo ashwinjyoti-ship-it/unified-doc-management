@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
-import { generateId, blocksToMarkdown, syncBacklinks } from '../utils';
+import { generateId, blocksToMarkdown, syncBacklinks, replacePageBlocksAtomic } from '../utils';
 import {
   docxToBlocks,
   markdownToImportBlocks,
@@ -40,22 +40,18 @@ async function savePageBlocks(
     'INSERT INTO page_versions (id, page_id, title, blocks_snapshot, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
   ).bind(generateId(), pageId, pageTitle, JSON.stringify(existingBlocks.results), userId, now).run();
 
-  await env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-
-  for (const block of blocks) {
-    await env.DB.prepare(
-      'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).bind(
-      generateId(),
-      pageId,
-      null,
-      block.type,
-      JSON.stringify(block.content),
-      block.orderIndex,
-      now,
-      now,
-    ).run();
-  }
+  await replacePageBlocksAtomic(
+    env.DB,
+    pageId,
+    blocks.map((block) => ({
+      id: generateId(),
+      parentId: null,
+      type: block.type,
+      content: JSON.stringify(block.content),
+      orderIndex: block.orderIndex,
+    })),
+    now,
+  );
 
   const md = blocksToMarkdown(blocks.map((b) => ({ type: b.type, content: JSON.stringify(b.content) })));
   await env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(md, now, pageId).run();

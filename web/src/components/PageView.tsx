@@ -98,6 +98,10 @@ export default function PageView() {
   const editorRef = useRef<BlockEditorHandle>(null);
   const autosaveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
+  // Bumps on every local edit so we can avoid clearing dirty if the user typed
+  // during an in-flight save (which previously dropped the next autosave).
+  const editGenerationRef = useRef(0);
   const [editorContentEpoch, setEditorContentEpoch] = useState(0);
   const sidePanelRef = useRef<SidePanel>(null);
   sidePanelRef.current = sidePanel;
@@ -289,7 +293,7 @@ export default function PageView() {
     return () => clearTimeout(titleSaveTimerRef.current);
   }, [title, dirty, pageId, saveTitle]);
 
-  const persistBlocks = useCallback(async (html: string, json: object) => {
+  const persistBlocks = useCallback(async (html: string, json: object, editGeneration: number) => {
     if (!pageId) return;
     const blockData = tiptapJsonToBlocks(json as Record<string, unknown>).map((b, i) => ({
       ...b,
@@ -298,19 +302,19 @@ export default function PageView() {
     }));
 
     if (online) {
-      setSaving(true);
-      try {
-        const { blocks: saved } = await api.saveBlocks(pageId, blockData);
-        lastLocalSaveAtRef.current = Date.now();
-        setBlocks(saved);
+      const { blocks: saved } = await api.saveBlocks(pageId, blockData);
+      lastLocalSaveAtRef.current = Date.now();
+      setBlocks(saved);
+      // Only clear dirty if nothing was typed while this save was in flight.
+      if (editGenerationRef.current === editGeneration) {
         dirtyRef.current = false;
         setDirty(false);
-        setLastSaved(new Date());
-        if (sidePanelRef.current === 'history') {
-          loadVersionHistory();
-        }
-      } finally {
-        setSaving(false);
+      } else {
+        scheduleAutosaveRef.current?.();
+      }
+      setLastSaved(new Date());
+      if (sidePanelRef.current === 'history') {
+        loadVersionHistory();
       }
     } else {
       await queueOperation({
@@ -319,8 +323,12 @@ export default function PageView() {
         entityId: pageId,
         payload: { pageId, blocks: blockData },
       });
-      dirtyRef.current = false;
-      setDirty(false);
+      if (editGenerationRef.current === editGeneration) {
+        dirtyRef.current = false;
+        setDirty(false);
+      } else {
+        scheduleAutosaveRef.current?.();
+      }
       setLastSaved(new Date());
     }
   }, [pageId, blocks, online]);
@@ -330,6 +338,8 @@ export default function PageView() {
     editorJsonRef.current = json;
   }, []);
 
+  const scheduleAutosaveRef = useRef<() => void>(() => {});
+
   const scheduleAutosave = useCallback(() => {
     clearTimeout(autosaveTimerRef.current);
     autosaveTimerRef.current = setTimeout(() => {
@@ -337,7 +347,10 @@ export default function PageView() {
     }, 1500);
   }, []);
 
+  scheduleAutosaveRef.current = scheduleAutosave;
+
   const handleEditorDirty = useCallback(() => {
+    editGenerationRef.current += 1;
     if (!dirtyRef.current) {
       dirtyRef.current = true;
       setDirty(true);
@@ -348,31 +361,41 @@ export default function PageView() {
   const saveNowRef = useRef<() => Promise<void>>(async () => {});
 
   const saveNow = useCallback(async () => {
-    if (!pageId || saving) return;
-    const snapshot = editorRef.current?.getSnapshot();
-    if (snapshot) {
-      editorHtmlRef.current = snapshot.html;
-      editorJsonRef.current = snapshot.json;
-    }
-    await saveTitle(title);
-    if (markdownMode) {
-      setSaving(true);
-      try {
+    // Use a ref lock — React `saving` state is too slow to prevent overlapping
+    // Cmd+S / autosave calls, which raced DELETE+INSERT on the server and could
+    // duplicate sections.
+    if (!pageId || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    const editGeneration = editGenerationRef.current;
+    try {
+      const snapshot = editorRef.current?.getSnapshot();
+      if (snapshot) {
+        editorHtmlRef.current = snapshot.html;
+        editorJsonRef.current = snapshot.json;
+      }
+      await saveTitle(title);
+      if (markdownMode) {
         await api.saveMarkdown(pageId, markdown);
-        dirtyRef.current = false;
-        setDirty(false);
+        if (editGenerationRef.current === editGeneration) {
+          dirtyRef.current = false;
+          setDirty(false);
+        } else {
+          scheduleAutosave();
+        }
         setLastSaved(new Date());
         await loadPage();
         if (sidePanelRef.current === 'history') {
           loadVersionHistory();
         }
-      } finally {
-        setSaving(false);
+      } else if (editorJsonRef.current) {
+        await persistBlocks(editorHtmlRef.current, editorJsonRef.current, editGeneration);
       }
-    } else if (editorJsonRef.current) {
-      await persistBlocks(editorHtmlRef.current, editorJsonRef.current);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-  }, [pageId, saving, title, markdownMode, markdown, persistBlocks, saveTitle, loadPage]);
+  }, [pageId, title, markdownMode, markdown, persistBlocks, saveTitle, loadPage, scheduleAutosave]);
 
   saveNowRef.current = saveNow;
 
@@ -1143,6 +1166,7 @@ export default function PageView() {
                   value={markdown}
                   onChange={(e) => {
                     setMarkdown(e.target.value);
+                    editGenerationRef.current += 1;
                     if (!dirtyRef.current) {
                       dirtyRef.current = true;
                       setDirty(true);
@@ -1168,6 +1192,7 @@ export default function PageView() {
               value={markdown}
               onChange={(e) => {
                 setMarkdown(e.target.value);
+                editGenerationRef.current += 1;
                 if (!dirtyRef.current) {
                   dirtyRef.current = true;
                   setDirty(true);

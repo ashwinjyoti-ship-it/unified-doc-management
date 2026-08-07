@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env, AuthContext, Page, Block } from '../types';
-import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks } from '../utils';
+import { generateId, blocksToMarkdown, markdownToBlocks, isPageDescendant, syncBacklinks, replacePageBlocksAtomic } from '../utils';
 import { resolveDataUrisInText } from '../import-document';
 import { editPageSection, EditSectionError } from '../edit-section';
 import { syncRowPageTitle } from '../database-helpers';
@@ -260,14 +260,18 @@ pages.put('/pages/:pageId/blocks', async (c) => {
     'INSERT INTO page_versions (id, page_id, title, blocks_snapshot, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   ).bind(generateId(), pageId, page.title, JSON.stringify(existingBlocks.results), auth.user.id, now).run();
 
-  await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-
-  for (const block of blocks) {
-    const blockId = block.id || generateId();
-    await c.env.DB.prepare(
-      'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(blockId, pageId, block.parentId || null, block.type, JSON.stringify(block.content), block.orderIndex, now, now).run();
-  }
+  await replacePageBlocksAtomic(
+    c.env.DB,
+    pageId,
+    blocks.map((block) => ({
+      id: block.id || generateId(),
+      parentId: block.parentId || null,
+      type: block.type,
+      content: JSON.stringify(block.content),
+      orderIndex: block.orderIndex,
+    })),
+    now,
+  );
 
   const md = blocksToMarkdown(blocks.map((b) => ({ type: b.type, content: JSON.stringify(b.content) })));
   await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(md, now, pageId).run();
@@ -316,12 +320,17 @@ pages.put('/pages/:pageId/markdown', async (c) => {
   const parsed = markdownToBlocks(resolvedMarkdown);
   const now = Math.floor(Date.now() / 1000);
 
-  await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-  for (let i = 0; i < parsed.length; i++) {
-    await c.env.DB.prepare(
-      'INSERT INTO blocks (id, page_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(generateId(), pageId, parsed[i].type, JSON.stringify(parsed[i].content), i, now, now).run();
-  }
+  await replacePageBlocksAtomic(
+    c.env.DB,
+    pageId,
+    parsed.map((block, i) => ({
+      id: generateId(),
+      type: block.type,
+      content: JSON.stringify(block.content),
+      orderIndex: i,
+    })),
+    now,
+  );
 
   const contentMd = blocksToMarkdown(parsed.map((b) => ({ type: b.type, content: JSON.stringify(b.content) })));
   await c.env.DB.prepare('UPDATE pages SET content_md = ?, updated_at = ? WHERE id = ?').bind(contentMd, now, pageId).run();
@@ -388,12 +397,18 @@ pages.post('/pages/:pageId/restore/:versionId', async (c) => {
 
   // Block restore (existing behavior)
   const snapshot = JSON.parse(version.blocks_snapshot) as Block[];
-  await c.env.DB.prepare('DELETE FROM blocks WHERE page_id = ?').bind(pageId).run();
-  for (const block of snapshot) {
-    await c.env.DB.prepare(
-      'INSERT INTO blocks (id, page_id, parent_id, type, content, order_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(block.id, pageId, block.parent_id, block.type, block.content, block.order_index, now, now).run();
-  }
+  await replacePageBlocksAtomic(
+    c.env.DB,
+    pageId,
+    snapshot.map((block) => ({
+      id: block.id,
+      parentId: block.parent_id,
+      type: block.type,
+      content: typeof block.content === 'string' ? block.content : JSON.stringify(block.content),
+      orderIndex: block.order_index,
+    })),
+    now,
+  );
 
   const blocks = await c.env.DB.prepare('SELECT * FROM blocks WHERE page_id = ? ORDER BY order_index').bind(pageId).all();
   return c.json({ blocks: blocks.results });
