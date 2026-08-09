@@ -468,3 +468,112 @@ html.dark mark {
     animation: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Poppin host mode (`?host=poppin`).
+
+   Tandem keeps its own information architecture, routing and components. Only
+   the visual variables are remapped onto Poppin's design tokens: warm ivory
+   background, cream surfaces, near-black text, amber accent, and Poppin's
+   border, radius and elevation language. Standalone Tandem is untouched.
+   --------------------------------------------------------------------------- */
+html.host-poppin {
+  --color-paper-white: #fffdf9;
+  --color-warm-white: #fffdf9;
+  --color-linen: #fbf6ee;
+  --color-green-mist: #ece4d9;
+  --color-pedestal: #e6ddd1;
+  --color-mid-gray: #a89f94;
+  --color-warm-gray: #817a71;
+  --color-charcoal: #1d1b19;
+  --color-dark-ink: #2a2521;
+  /* Accent: Poppin amber replaces Tandem forest for links, labels and fills. */
+  --color-forest: #ce7a1a;
+  --color-dark-teal: #b6670e;
+  --color-sage: #f2d9b2;
+  --color-muted-sage: #e8cfa6;
+  --color-shaded-green: #9b5911;
+  --color-tooltip-bg: #2a2521;
+  --color-tooltip-fg: #fffdf9;
+
+  --font-sans: Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', sans-serif;
+
+  /* Poppin border, radius and elevation language. */
+  --host-border: #e6ddd1;
+  --host-radius: 12px;
+  --host-elevation: 0 10px 30px rgba(65, 45, 20, 0.07);
+}
+
+html.host-poppin body {
+  background: #f7f1e7;
+  color: var(--color-charcoal);
+}
+
+html.host-poppin .card-surface {
+  border: 1px solid var(--host-border);
+  border-radius: var(--host-radius);
+  box-shadow: var(--host-elevation);
+}
+
+html.host-poppin .btn-primary,
+html.host-poppin .bg-forest {
+  background-color: #e8820b;
+  border-radius: 10px;
+  color: #fff;
+}
+
+html.host-poppin .btn-primary:hover,
+html.host-poppin .hover\:bg-dark-teal:hover {
+  background-color: #ce7a1a;
+}
+
+html.host-poppin .btn-secondary {
+  border: 1px solid var(--host-border);
+  border-radius: 10px;
+  background: var(--color-warm-white);
+  color: var(--color-charcoal);
+}
+
+html.host-poppin .btn-secondary:hover {
+  background: var(--color-linen);
+}
+
+html.host-poppin .bg-white {
+  background-color: var(--color-warm-white);
+}
+
+html.host-poppin .ProseMirror a {
+  color: #b6670e;
+}
+
+html.host-poppin .ProseMirror code {
+  background: #fff0dc;
+  color: #7b4b16;
+}
+
+html.host-poppin .ProseMirror pre {
+  background: var(--color-dark-ink);
+  color: #f4ece0;
+}
+
+html.host-poppin .ProseMirror div[data-type="callout"].callout-box {
+  background: #fff6e8;
+  border-color: rgba(210, 136, 45, 0.28);
+}
+
+html.host-poppin .ProseMirror td,
+html.host-poppin .ProseMirror th {
+  border-color: var(--host-border);
+}
+
+html.host-poppin select,
+html.host-poppin input:not([type="checkbox"]):not([type="radio"]),
+html.host-poppin textarea {
+  border-radius: 8px;
+  border-color: var(--host-border);
+}
+
+html.host-poppin mark {
+  background: #ffe6bd;
+  color: var(--color-charcoal);
+}
