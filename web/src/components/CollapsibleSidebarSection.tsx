@@ -45,7 +45,7 @@ export default function CollapsibleSidebarSection({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex-1 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-mid-gray uppercase tracking-wide hover:bg-linen rounded-lg transition-colors min-w-0"
+        className="flex-1 flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-mid-gray uppercase tracking-wide hover:bg-linen rounded-lg transition-colors min-w-0"
         aria-expanded={open}
       >
         {open ? (
@@ -66,7 +66,7 @@ export default function CollapsibleSidebarSection({
   );
 
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       {tooltip ? (
         <Tooltip text={tooltip} position="right">
           {header}
@@ -76,7 +76,7 @@ export default function CollapsibleSidebarSection({
       )}
       {open && <div className="mt-0.5">{children}</div>}
       {open && isEmpty && showWhenEmpty && (
-        <p className="px-3 py-2 text-xs text-mid-gray">Star a page from its header to pin it here</p>
+        <p className="px-2.5 py-1.5 text-xs text-mid-gray">Star a page from its header to pin it here</p>
       )}
     </div>
   );

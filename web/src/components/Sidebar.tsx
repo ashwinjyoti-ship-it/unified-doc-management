@@ -77,7 +77,7 @@ function PageListSection({
                 type="button"
                 onClick={() => onNavigate(p.id)}
                 aria-current={active ? 'page' : undefined}
-                className={`${pageItemClass(active, 'py-1.5 flex-1 min-w-0')}`}
+                className={`${pageItemClass(active, 'py-1 flex-1 min-w-0')}`}
               >
                 <span>{p.icon || '📄'}</span>
                 <span className="truncate flex-1 text-left">{p.title}</span>
@@ -364,57 +364,55 @@ export default function Sidebar() {
           ${sidebarOpen ? 'translate-x-0 md:w-72' : '-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden'}
         `}
       >
-        <div className="p-4 border-b border-green-mist shrink-0">
-          <div className="flex items-center justify-between mb-3 gap-2">
+        <div className="px-2.5 py-2 border-b border-green-mist shrink-0">
+          <div className="flex items-center justify-between mb-1.5 gap-1.5">
             <Tooltip text="Go to home">
               <button
                 type="button"
                 onClick={() => navigate('/')}
-                className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-xl hover:bg-linen/80 pl-1 py-1.5 -ml-1 transition-colors"
+                className="flex items-center gap-2 min-w-0 flex-1 text-left rounded-lg hover:bg-linen/80 pl-0.5 py-0.5 -ml-0.5 transition-colors"
               >
-                <AppAvatar size="md" className="shrink-0 rounded-xl shadow-sm shadow-forest/10" />
+                <AppAvatar size="sm" className="shrink-0 rounded-lg shadow-sm shadow-forest/10" />
                 <span className="min-w-0">
                   <span className="block font-semibold text-forest text-sm leading-tight">Tandem</span>
-                  <span className="block text-xs text-warm-gray truncate">{workspace?.name || 'Workspace'}</span>
+                  <span className="block text-[11px] text-warm-gray truncate leading-tight">{workspace?.name || 'Workspace'}</span>
                 </span>
               </button>
             </Tooltip>
             <Tooltip text="Close sidebar">
-              <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-2 -mr-1 rounded-lg hover:bg-linen">
-                <X className="w-5 h-5" />
+              <button type="button" onClick={() => setSidebarOpen(false)} className="md:hidden p-1.5 -mr-0.5 rounded-lg hover:bg-linen">
+                <X className="w-4 h-4" />
               </button>
             </Tooltip>
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-[1fr_auto] gap-1.5">
             <NewMenuDropdown
-              className="flex-1"
+              className="min-w-0 [&_.btn-primary]:!py-1.5 [&_.btn-primary]:!px-2.5 [&_.btn-primary]:text-xs"
               onNewPage={() => void handleNewPage()}
               onNewProject={() => handleNewProjectRequest()}
               onNewDatabase={() => void handleNewDatabase()}
             />
             <Tooltip text="Import a web page from a URL">
-              <button type="button" onClick={handleImportUrl} disabled={!!operationLabel} className="btn-secondary text-sm p-2 shrink-0">
-                <Link2 className="w-4 h-4" />
+              <button type="button" onClick={handleImportUrl} disabled={!!operationLabel} className="btn-secondary !py-1.5 !px-2 text-xs shrink-0">
+                <Link2 className="w-3.5 h-3.5" />
               </button>
             </Tooltip>
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-1.5 mt-1.5">
             <Tooltip text="Open or create today's daily note page">
               <button
                 type="button"
                 onClick={() => void handleDailyNote()}
-                className="btn-secondary text-xs flex-1 flex items-center justify-center gap-1"
+                className="btn-secondary !py-1.5 !px-2 text-xs flex-1 flex items-center justify-center gap-1"
               >
                 <CalendarDays className="w-3.5 h-3.5" /> Today
               </button>
             </Tooltip>
-          </div>
-          <div className="flex gap-2 mt-2">
             <Tooltip text={bulkMode ? 'Exit bulk selection mode' : 'Select multiple pages to move or delete'}>
               <button
                 type="button"
                 onClick={() => { setBulkMode(!bulkMode); setSelected(new Set()); }}
-                className={`btn-secondary text-xs flex-1 flex items-center justify-center gap-1 ${bulkMode ? 'bg-sage/30' : ''}`}
+                className={`btn-secondary !py-1.5 !px-2 text-xs flex-1 flex items-center justify-center gap-1 ${bulkMode ? 'bg-sage/30' : ''}`}
               >
                 <CheckSquare className="w-3.5 h-3.5" />
                 {bulkMode ? 'Cancel' : 'Select'}
@@ -423,12 +421,12 @@ export default function Sidebar() {
             {bulkMode && selected.size > 0 && (
               <>
                 <Tooltip text={`Delete ${selected.size} selected page(s)`}>
-                  <button type="button" onClick={handleBulkDelete} className="btn-secondary text-xs p-2 text-red-600">
+                  <button type="button" onClick={handleBulkDelete} className="btn-secondary !py-1.5 !px-2 text-xs text-red-600">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </Tooltip>
                 <Tooltip text={`Move ${selected.size} selected page(s) to a folder`}>
-                  <button type="button" onClick={() => setMoveModal([...selected])} className="btn-secondary text-xs p-2">
+                  <button type="button" onClick={() => setMoveModal([...selected])} className="btn-secondary !py-1.5 !px-2 text-xs">
                     <FolderInput className="w-3.5 h-3.5" />
                   </button>
                 </Tooltip>
@@ -437,7 +435,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain p-2 min-h-0">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-1.5 py-1 min-h-0">
           <PageListSection
             sectionId="favorites"
             title="Favorites"
@@ -470,46 +468,60 @@ export default function Sidebar() {
           />
         </div>
 
-        <div className="p-3 border-t border-green-mist space-y-1 shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <Tooltip text="Search across all pages (Ctrl+K)">
-            <button
-              type="button"
-              onClick={() => { setSearchOpen(true); closeSidebarOnMobile(setSidebarOpen); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-linen"
-            >
-              <SearchIcon className="w-4 h-4" /> Search
-            </button>
-          </Tooltip>
-          <Tooltip text="View mentions, comments, and activity updates">
-            <button
-              type="button"
-              onClick={() => { navigate('/notifications'); closeSidebarOnMobile(setSidebarOpen); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-linen"
-            >
-              <Bell className="w-4 h-4" /> Notifications
-              {unreadCount > 0 && (
-                <span className="ml-auto bg-forest text-white text-xs px-1.5 py-0.5 rounded-full">{unreadCount}</span>
-              )}
-            </button>
-          </Tooltip>
-          <Tooltip text="Account settings, theme, and API keys">
-            <button
-              type="button"
-              onClick={() => { navigate('/settings'); closeSidebarOnMobile(setSidebarOpen); }}
-              className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-linen"
-            >
-              <Settings className="w-4 h-4" /> Settings
-            </button>
-          </Tooltip>
-          <div className="flex items-center gap-2 px-3 py-2 text-xs text-mid-gray">
-            {online ? <Wifi className="w-3 h-3 text-sage" /> : <WifiOff className="w-3 h-3 text-red-400" />}
-            {online ? 'Online' : 'Offline — changes will sync'}
+        <div className="px-2.5 py-2 border-t border-green-mist shrink-0 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-3 gap-1 mb-1">
+            <Tooltip text="Search across all pages (Ctrl+K)">
+              <button
+                type="button"
+                onClick={() => { setSearchOpen(true); closeSidebarOnMobile(setSidebarOpen); }}
+                className="flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[11px] hover:bg-linen"
+              >
+                <SearchIcon className="w-4 h-4" />
+                <span>Search</span>
+              </button>
+            </Tooltip>
+            <Tooltip text="View mentions, comments, and activity updates">
+              <button
+                type="button"
+                onClick={() => { navigate('/notifications'); closeSidebarOnMobile(setSidebarOpen); }}
+                className="relative flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[11px] hover:bg-linen"
+              >
+                <Bell className="w-4 h-4" />
+                <span>Alerts</span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-0.5 right-1 bg-forest text-white text-[9px] min-w-[14px] h-[14px] px-0.5 rounded-full flex items-center justify-center leading-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+            <Tooltip text="Account settings, theme, and API keys">
+              <button
+                type="button"
+                onClick={() => { navigate('/settings'); closeSidebarOnMobile(setSidebarOpen); }}
+                className="flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-lg text-[11px] hover:bg-linen"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Settings</span>
+              </button>
+            </Tooltip>
           </div>
-          <Tooltip text="Sign out of your account">
-            <button type="button" onClick={logout} className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm hover:bg-linen text-red-600">
-              <LogOut className="w-4 h-4" /> Sign Out
-            </button>
-          </Tooltip>
+          <div className="flex items-center justify-between gap-2 px-1">
+            <div className="flex items-center gap-1.5 text-[10px] text-mid-gray min-w-0 truncate">
+              {online ? <Wifi className="w-3 h-3 text-sage shrink-0" /> : <WifiOff className="w-3 h-3 text-red-400 shrink-0" />}
+              <span className="truncate">{online ? 'Online' : 'Offline'}</span>
+            </div>
+            <Tooltip text="Sign out of your account">
+              <button
+                type="button"
+                onClick={logout}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] hover:bg-linen text-red-600 shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Sign Out
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </aside>
 
