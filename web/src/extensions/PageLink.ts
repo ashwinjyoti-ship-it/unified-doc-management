@@ -18,13 +18,17 @@ export const PageLink = Link.extend({
 
   renderHTML({ HTMLAttributes }) {
     const isPageLink = HTMLAttributes.href?.startsWith('/page/') || HTMLAttributes['data-page-link'];
+    const isExternal = HTMLAttributes.href?.startsWith('http://') || HTMLAttributes.href?.startsWith('https://');
     return [
       'a',
       {
         ...HTMLAttributes,
+        ...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {}),
         class: isPageLink
           ? 'page-link text-forest underline underline-offset-2 hover:text-dark-teal cursor-pointer'
-          : HTMLAttributes.class,
+          : isExternal
+            ? 'external-link text-forest underline underline-offset-2 hover:text-dark-teal cursor-pointer'
+            : HTMLAttributes.class,
       },
       0,
     ];
