@@ -1,6 +1,6 @@
 /** Client-side markdown → block conversion (mirrors worker/src/utils.ts markdownToBlocks). */
 
-import { wikiLinksToHtml } from './pageLinks';
+import { inlineMarkupToHtml } from './pageLinks';
 
 /** Marker written for empty paragraph blocks so markdown round-trips keep visual gaps. */
 export const EMPTY_PARAGRAPH_MARKER = '\u200B';
@@ -102,7 +102,7 @@ function inlineWithBreaks(
   text: string,
   resolvePageId?: (title: string) => string | undefined,
 ): string {
-  return wikiLinksToHtml(text || '', resolvePageId).replace(/\n/g, '<br>');
+  return inlineMarkupToHtml(text || '', resolvePageId).replace(/\n/g, '<br>');
 }
 
 export function blocksToTiptapHtml(

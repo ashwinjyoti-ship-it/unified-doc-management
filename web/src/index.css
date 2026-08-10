@@ -112,6 +112,13 @@ input, textarea {
   cursor: pointer;
 }
 
+.ProseMirror a.external-link {
+  color: var(--color-forest);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 .ProseMirror .page-link-unresolved {
   color: var(--color-mid-gray);
   text-decoration: underline dotted;

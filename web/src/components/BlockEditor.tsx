@@ -137,7 +137,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       TableHeader,
       TableCell,
       Image.configure({ inline: false }),
-      PageLink.configure({ openOnClick: false, autolink: false }),
+      PageLink.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
       CodeBlockLowlight.configure({ lowlight }),
       DatabaseEmbed,
       Callout,
@@ -160,12 +160,21 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     editorProps: {
       handleClick(_view, _pos, event) {
         const target = event.target as HTMLElement | null;
-        const anchor = target?.closest('a[href^="/page/"]');
+        const anchor = target?.closest('a[href]');
         if (!anchor) return false;
-        event.preventDefault();
         const href = anchor.getAttribute('href');
-        if (href) navigate(href);
-        return true;
+        if (!href) return false;
+        if (href.startsWith('/page/')) {
+          event.preventDefault();
+          navigate(href);
+          return true;
+        }
+        if (href.startsWith('http://') || href.startsWith('https://')) {
+          event.preventDefault();
+          window.open(href, '_blank', 'noopener,noreferrer');
+          return true;
+        }
+        return false;
       },
       handlePaste(view, event) {
         const clipboard = event.clipboardData;
