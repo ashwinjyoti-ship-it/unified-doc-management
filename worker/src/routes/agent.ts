@@ -325,16 +325,20 @@ const CATALOG = {
       ],
     },
     {
-      intent: 'Write content on a page',
+      intent: 'Write content on a page (document)',
       steps: [
+        'Documents / prose → type "page". Design / UI layouts → type "canvas" (separate workflow).',
+        'If the page does not exist yet: POST /api/workspaces/:id/pages { type: "page", title: "..." }',
         'GET /api/pages/:pageId/markdown',
         'PUT /api/pages/:pageId/markdown { markdown: "..." }',
         'Or PUT /api/pages/:pageId/blocks with block array',
+        'Inline markdown (**bold**, *italic*, colour spans) renders as rich text in the editor',
       ],
     },
     {
       intent: 'Build a UI design on a canvas and apply user feedback',
       steps: [
+        'Design / UI wireframes / design-to-code only — use type "page" for normal documents',
         'POST /api/workspaces/:id/pages { type: "canvas", title: "My Design" }  → get pageId',
         'POST /api/pages/:pageId/canvas/tokens { token: { name: "color.primary", type: "color", value: "#004228" } }',
         'POST /api/pages/:pageId/canvas/components { component: { type: "frame", name: "Login Screen", size: { w: 1440, h: 900 } } }',

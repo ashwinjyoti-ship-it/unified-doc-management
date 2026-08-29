@@ -41,7 +41,7 @@ Returns machine-readable list of all endpoints, property types, and example work
 | Page | `type: "page"` — rich document with blocks |
 | Folder | `type: "folder"` — container in sidebar tree |
 | Database | `type: "database"` — table with columns (properties) and rows |
-| Canvas | `type: "canvas"` — infinite design canvas with components and tokens |
+| Canvas | `type: "canvas"` — infinite design canvas (UI / design-to-code; not for normal documents) |
 | Row | Database row; each row has a linked **page** with full editor content |
 | Property / Column | `database_properties` — typed columns on a database |
 | Block | Structured content unit inside a page |
@@ -315,6 +315,8 @@ Response includes `imagesUploaded` (count) and `hint`. Word flowcharts are store
 | POST | `/api/pages/:id/canvas/reset` | Delete all components (tokens preserved) |
 
 ## Canvas / Design workflow
+
+Use canvas for Design / UI layouts only. Normal documents use `type: "page"` and markdown/blocks.
 
 ### 12. Read a canvas and generate UI code
 

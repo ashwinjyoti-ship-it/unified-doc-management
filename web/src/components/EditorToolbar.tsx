@@ -4,7 +4,7 @@ import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
   Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Baseline,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Baseline, Copy,
 } from 'lucide-react';
 import { TEXT_COLORS } from '../lib/pageLinks';
 
@@ -130,6 +130,8 @@ interface EditorToolbarProps {
   onAddImage: () => void;
   onUploadClick: () => void;
   onAddLink: () => void;
+  /** Copy current selection as compact HTML (email / Word friendly). */
+  onCopySelection?: () => void;
   /** Light floating bar shown on text selection */
   variant?: 'bubble';
 }
@@ -139,6 +141,7 @@ function EditorToolbar({
   onAddImage,
   onUploadClick,
   onAddLink,
+  onCopySelection,
 }: EditorToolbarProps) {
   const active = useEditorState({
     editor,
@@ -236,6 +239,18 @@ function EditorToolbar({
       <ToolbarButton bubble title="Insert hyperlink" active={active.link} onClick={onAddLink}>
         <Link2 className="w-4 h-4" />
       </ToolbarButton>
+      {onCopySelection && (
+        <>
+          <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+          <ToolbarButton
+            bubble
+            title="Copy selection (keeps colour & formatting for email / Word)"
+            onClick={onCopySelection}
+          >
+            <Copy className="w-4 h-4" />
+          </ToolbarButton>
+        </>
+      )}
     </div>
   );
 }

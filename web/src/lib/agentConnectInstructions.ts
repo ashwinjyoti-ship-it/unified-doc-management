@@ -60,5 +60,9 @@ export function buildAgentConnectInstructions(apiKey: string, baseUrl = resolveA
 3. Apply fixes: POST /comments/{commentId}/apply {new_text} (preferred for selections), POST /pages/{pageId}/edit-section {old_text,new_text}, or PUT /pages/{pageId}/markdown {markdown} for full rewrites
 4. PATCH /comments/{commentId} {status:resolved} if not auto-resolved
 
+**Document vs Design:**
+- Documents / rich text → type "page" + PUT /markdown (or blocks)
+- UI design / design-to-code → type "canvas" only
+
 Do NOT PUT full markdown for selection-scoped instructions.`;
 }

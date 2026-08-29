@@ -130,7 +130,9 @@ Inline markdown in page bodies is rendered as rich text in the editor:
 - Links: `[label](url)`, wiki `[[Title|page-id]]`
 - Text colour (optional): `<span style="color: #C0392B">coloured</span>`
 
-Prefer these markers when writing quotes or formatted copy so the UI shows real formatting (not literal `**asterisks**`). Colour spans survive save/reload and copy/paste into email or Word.
+Prefer these markers so the UI shows real formatting (not literal `**asterisks**`). Colour spans survive save/reload and copy/paste into email or Word.
+
+**Document vs Design:** `type: "page"` for documents (rich text, copy-friendly). `type: "canvas"` for UI design / design-to-code only.
 
 ### Example `agent_prompt`
 
@@ -192,6 +194,8 @@ POST /api/import-document
 ## 5. Canvas / Design-to-code workflow
 
 UDM includes an **Infinite Canvas** for designing UI layouts. Agents can read the final canvas, then generate real frontend code from it.
+
+Use canvas for Design only. Normal documents belong on `type: "page"` (see section 3).
 
 ### Canvas page lifecycle
 

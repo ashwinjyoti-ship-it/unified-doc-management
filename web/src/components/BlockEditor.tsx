@@ -46,7 +46,7 @@ import {
   sanitizePastedHtml,
   shouldPreferPlainTextPaste,
 } from '../lib/pasteMarkdown';
-import { CompactClipboard } from '../lib/copyClipboard';
+import { CompactClipboard, copyEditorSelection } from '../lib/copyClipboard';
 import { serializeInlineNodes } from '../lib/pageLinks';
 
 export { blocksToTiptapHtml } from '../lib/markdownBlocks';
@@ -82,6 +82,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
   const [agentComment, setAgentComment] = useState<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
   const agentCommentOpenRef = useRef(false);
   const selectionRef = useRef<{ quote: string; from: number; to: number; blockType?: string } | null>(null);
+  /** Hide bubble while the native context menu is open so right-click Copy keeps the selection. */
+  const suppressBubbleForContextMenuRef = useRef(false);
   const pageLinkRangeRef = useRef<{ from: number; to: number } | null>(null);
   const newPageRangeRef = useRef<{ from: number; to: number } | null>(null);
   const navigate = useNavigate();
@@ -162,6 +164,18 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       },
     },
     editorProps: {
+      handleDOMEvents: {
+        contextmenu(view) {
+          // Tippy bubble sits above the selection; hide it so the native
+          // context menu (Copy) keeps the browser selection highlight.
+          suppressBubbleForContextMenuRef.current = true;
+          view.dispatch(view.state.tr);
+          window.setTimeout(() => {
+            suppressBubbleForContextMenuRef.current = false;
+          }, 400);
+          return false;
+        },
+      },
       handleClick(_view, _pos, event) {
         const target = event.target as HTMLElement | null;
         const anchor = target?.closest('a[href]');
@@ -456,15 +470,17 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     handleSlashItemSelected({ editor, range: { from, to }, item });
   }, [editor, insertItems, handleSlashItemSelected]);
 
-  const bubbleMenuShouldShow = useCallback(({ editor: ed, state }: {
+  const bubbleMenuShouldShow = useCallback(({ editor: ed, state, view }: {
     editor: import('@tiptap/react').Editor;
     state: import('@tiptap/pm/state').EditorState;
+    view?: import('@tiptap/pm/view').EditorView;
   }) => {
     if (agentCommentOpenRef.current) return false;
-    // Hide the toolbar as soon as the editor loses focus (e.g. a click
-    // outside) — ProseMirror keeps the text selection on blur, so checking the
-    // selection alone would leave the bubble menu stuck open.
-    if (!ed.isFocused) return false;
+    if (suppressBubbleForContextMenuRef.current) return false;
+    // Keep showing while the user interacts with the bubble (toolbar buttons).
+    const active = typeof document !== 'undefined' ? document.activeElement : null;
+    const focusInMenu = Boolean(active?.closest?.('[data-bubble-menu]'));
+    if (!ed.isFocused && !focusInMenu && !(view?.hasFocus?.())) return false;
     const { from, to, empty } = state.selection;
     return !empty && from !== to;
   }, []);
@@ -500,16 +516,41 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       {editable && (
         <BubbleMenu
           editor={editor}
-          tippyOptions={{ duration: 100, maxWidth: 'none', plugins: [sticky], sticky: true }}
+          tippyOptions={{
+            duration: 100,
+            maxWidth: 'none',
+            plugins: [sticky],
+            sticky: true,
+            offset: [0, 12],
+            // Clicks on empty tippy chrome pass through to the selection (right-click Copy).
+            popperOptions: {
+              modifiers: [
+                {
+                  name: 'preventOverflow',
+                  options: { boundary: 'viewport' },
+                },
+              ],
+            },
+          }}
           shouldShow={bubbleMenuShouldShow}
         >
-          <div className="flex flex-col gap-1 items-start">
+          <div
+            data-bubble-menu
+            className="flex flex-col gap-1 items-start"
+            onMouseDown={(e) => {
+              // Keep ProseMirror selection while using the floating toolbar.
+              e.preventDefault();
+            }}
+          >
             <EditorToolbar
               editor={editor}
               variant="bubble"
               onAddImage={addImage}
               onUploadClick={() => fileInputRef.current?.click()}
               onAddLink={addLink}
+              onCopySelection={() => {
+                void copyEditorSelection(editor);
+              }}
             />
             {pageId && (
               <div className="flex gap-1 bg-warm-white rounded-lg p-1 shadow-lg border border-green-mist items-center">
