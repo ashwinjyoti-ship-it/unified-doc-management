@@ -124,6 +124,14 @@ PUT /api/pages/{pageId}/markdown
 { "markdown": "..." }
 ```
 
+Inline markdown in page bodies is rendered as rich text in the editor:
+
+- `**bold**`, `*italic*` / `_italic_`, `~~strike~~`, `` `code` ``
+- Links: `[label](url)`, wiki `[[Title|page-id]]`
+- Text colour (optional): `<span style="color: #C0392B">coloured</span>`
+
+Prefer these markers when writing quotes or formatted copy so the UI shows real formatting (not literal `**asterisks**`). Colour spans survive save/reload and copy/paste into email or Word.
+
 ### Example `agent_prompt`
 
 ```

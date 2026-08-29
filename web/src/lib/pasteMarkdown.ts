@@ -46,7 +46,15 @@ export function convertPasteToTiptapHtml(plain: string, html: string): string {
   return plainTextToTiptapHtml(trimmed);
 }
 
-/** Strip inline styles / highlight marks from HTML paste fallbacks. */
+/** Keep only a colour declaration for TipTap Color / TextStyle marks. */
+function extractColorStyle(style: string | null): string | null {
+  if (!style) return null;
+  const match = style.match(/(?:^|;)\s*color\s*:\s*(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|rgb\([^)]+\))\s*(?:;|$)/i);
+  if (!match) return null;
+  return `color: ${match[1].trim()}`;
+}
+
+/** Strip highlight / foreign styles from HTML paste; preserve text colour for TipTap. */
 export function sanitizePastedHtml(html: string): string {
   if (!html.trim()) return html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -55,10 +63,18 @@ export function sanitizePastedHtml(html: string): string {
     mark.replaceWith(doc.createTextNode(text));
   });
   doc.body.querySelectorAll('*').forEach((el) => {
-    el.removeAttribute('style');
+    const colorStyle = extractColorStyle(el.getAttribute('style'));
     el.removeAttribute('class');
     el.removeAttribute('bgcolor');
+    const legacyColor = el.getAttribute('color');
     el.removeAttribute('color');
+    if (colorStyle) {
+      el.setAttribute('style', colorStyle);
+    } else if (legacyColor && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(legacyColor.trim())) {
+      el.setAttribute('style', `color: ${legacyColor.trim()}`);
+    } else {
+      el.removeAttribute('style');
+    }
   });
   return doc.body.innerHTML;
 }

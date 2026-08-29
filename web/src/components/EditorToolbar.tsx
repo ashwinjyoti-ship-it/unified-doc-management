@@ -1,11 +1,12 @@
-import { memo } from 'react';
+import { memo, useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
   Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Baseline,
 } from 'lucide-react';
+import { TEXT_COLORS } from '../lib/pageLinks';
 
 function ToolbarButton({
   onClick,
@@ -39,6 +40,88 @@ function ToolbarButton({
     >
       {children}
     </button>
+  );
+}
+
+function ColorPicker({
+  editor,
+  activeColor,
+}: {
+  editor: Editor;
+  activeColor: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  const swatch = activeColor || 'currentColor';
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <ToolbarButton
+        bubble
+        title="Text colour"
+        active={Boolean(activeColor)}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="relative inline-flex flex-col items-center">
+          <Baseline className="w-4 h-4" />
+          <span
+            className="absolute -bottom-0.5 left-0.5 right-0.5 h-0.5 rounded-sm"
+            style={{ backgroundColor: swatch }}
+            aria-hidden
+          />
+        </span>
+      </ToolbarButton>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-green-mist bg-warm-white p-2 shadow-lg"
+          style={{ width: 148 }}
+          role="listbox"
+          aria-label="Text colour"
+        >
+          {TEXT_COLORS.map((c) => {
+            const isActive = (c.value || '') === (activeColor || '');
+            return (
+              <button
+                key={c.name}
+                type="button"
+                title={c.name}
+                aria-label={c.name}
+                role="option"
+                aria-selected={isActive}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (!c.value) {
+                    editor.chain().focus().unsetColor().run();
+                  } else {
+                    editor.chain().focus().setColor(c.value).run();
+                  }
+                  setOpen(false);
+                }}
+                className={`h-6 w-6 rounded-md border transition-transform hover:scale-110 ${
+                  isActive ? 'ring-2 ring-forest ring-offset-1' : 'border-green-mist/80'
+                }`}
+                style={{
+                  backgroundColor: c.value || '#FCF9F7',
+                  backgroundImage: c.value
+                    ? undefined
+                    : 'linear-gradient(to bottom right, transparent 46%, #c0392b 46%, #c0392b 54%, transparent 54%)',
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -76,6 +159,7 @@ function EditorToolbar({
       codeBlock: ed.isActive('codeBlock'),
       link: ed.isActive('link'),
       image: ed.isActive('image'),
+      color: (ed.getAttributes('textStyle').color as string | undefined) || '',
     }),
   });
 
@@ -97,6 +181,7 @@ function EditorToolbar({
       <ToolbarButton bubble title="Inline code" active={active.code} onClick={() => run(() => editor.chain().focus().toggleCode().run())}>
         <Code className="w-4 h-4" />
       </ToolbarButton>
+      <ColorPicker editor={editor} activeColor={active.color} />
       <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
       <ToolbarButton bubble title="Normal text — clears heading/quote formatting" active={active.paragraph} onClick={() => run(() => editor.chain().focus().setParagraph().run())}>
         <Pilcrow className="w-4 h-4" />

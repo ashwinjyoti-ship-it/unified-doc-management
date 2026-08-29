@@ -10,6 +10,8 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
 import { common, createLowlight } from 'lowlight';
 import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperativeHandle } from 'react';
@@ -138,6 +140,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       TableCell,
       Image.configure({ inline: false }),
       PageLink.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
+      TextStyle,
+      Color,
       CodeBlockLowlight.configure({ lowlight }),
       DatabaseEmbed,
       Callout,
