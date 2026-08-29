@@ -104,3 +104,47 @@ export const CompactClipboard = Extension.create({
     ];
   },
 });
+
+/**
+ * Copy the current editor selection as compact HTML + plain text.
+ * Prefer this from the bubble toolbar so focus/right-click races don't clear the action.
+ */
+export async function copyEditorSelection(editor: {
+  state: {
+    selection: { empty: boolean; from: number; to: number };
+    doc: PMNode;
+    schema: Schema;
+  };
+}): Promise<boolean> {
+  const { state } = editor;
+  const { from, to, empty } = state.selection;
+  if (empty) return false;
+
+  const slice = state.doc.cut(from, to);
+  const serializer = createCompactClipboardSerializer(state.schema);
+  const wrap = document.createElement('div');
+  wrap.appendChild(serializer.serializeFragment(slice.content, { document }));
+  const html = wrap.innerHTML;
+  const plain = state.doc.textBetween(from, to, '\n');
+
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    /* fall through to writeText */
+  }
+
+  try {
+    await navigator.clipboard.writeText(plain);
+    return true;
+  } catch {
+    return false;
+  }
+}

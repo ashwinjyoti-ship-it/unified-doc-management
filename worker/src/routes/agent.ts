@@ -325,16 +325,29 @@ const CATALOG = {
       ],
     },
     {
+      intent: 'Write a quote / email / formatted document copy (NOT a Design canvas)',
+      steps: [
+        'IMPORTANT: Prose, quotes, emails, proposals, and copy-paste text → type "page". Never type "canvas" for this.',
+        'POST /api/workspaces/:id/pages { type: "page", title: "Client Quote" }  → get pageId',
+        'PUT /api/pages/:pageId/markdown { markdown: "Dear **Acme**,\\n\\n<span style=\\"color: #C0392B\\">**Total: $1,200**</span>" }',
+        'Inline marks render as rich text in the editor (bold/italic/colour) so the user can Copy into email/Word',
+        'Design canvas (type: "canvas") is ONLY for UI wireframes / design-to-code — not for textual quotes',
+      ],
+    },
+    {
       intent: 'Write content on a page',
       steps: [
+        'If the page does not exist yet: POST /api/workspaces/:id/pages { type: "page", title: "..." }',
         'GET /api/pages/:pageId/markdown',
         'PUT /api/pages/:pageId/markdown { markdown: "..." }',
         'Or PUT /api/pages/:pageId/blocks with block array',
+        'Use type "page" for documents. Do NOT create type "canvas" for prose or quotes.',
       ],
     },
     {
       intent: 'Build a UI design on a canvas and apply user feedback',
       steps: [
+        'ONLY for UI layouts / wireframes / design-to-code — NOT for quotes, emails, or document copy',
         'POST /api/workspaces/:id/pages { type: "canvas", title: "My Design" }  → get pageId',
         'POST /api/pages/:pageId/canvas/tokens { token: { name: "color.primary", type: "color", value: "#004228" } }',
         'POST /api/pages/:pageId/canvas/components { component: { type: "frame", name: "Login Screen", size: { w: 1440, h: 900 } } }',
