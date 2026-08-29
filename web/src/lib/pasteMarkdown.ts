@@ -22,6 +22,8 @@ export function isMarkdownLike(text: string): boolean {
 export function isCodeHtmlPaste(html: string): boolean {
   if (!html.trim()) return false;
   const lower = html.toLowerCase();
+  // Tables with inline cell borders/styles are document content, not code.
+  if (/<table[\s>]/i.test(html)) return false;
   if (/<pre[\s>]/i.test(html) || /<code[\s>]/i.test(html)) return true;
   if (/githubusercontent|blob-code|highlight-source|raw\.github|data-code-cell/i.test(lower)) return true;
   const styledSpans = (html.match(/<span[^>]*style=/gi) || []).length;
@@ -54,7 +56,23 @@ function extractColorStyle(style: string | null): string | null {
   return `color: ${match[1].trim()}`;
 }
 
-/** Strip highlight / foreign styles from HTML paste; preserve text colour for TipTap. */
+/** Keep table-grid styles so pasted tables stay bordered in the editor. */
+function extractTableGridStyle(tag: string, style: string | null): string | null {
+  if (!style) return null;
+  const t = tag.toLowerCase();
+  if (t !== 'table' && t !== 'td' && t !== 'th') return null;
+  const keep: string[] = [];
+  for (const part of style.split(';')) {
+    const decl = part.trim();
+    if (!decl) continue;
+    if (/^(border|border-collapse|border-color|border-width|border-style|padding|width|min-width|background|background-color|font-weight|vertical-align|text-align)\s*:/i.test(decl)) {
+      keep.push(decl);
+    }
+  }
+  return keep.length ? keep.join('; ') : null;
+}
+
+/** Strip highlight / foreign styles from HTML paste; preserve text colour + table grid. */
 export function sanitizePastedHtml(html: string): string {
   if (!html.trim()) return html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -63,13 +81,16 @@ export function sanitizePastedHtml(html: string): string {
     mark.replaceWith(doc.createTextNode(text));
   });
   doc.body.querySelectorAll('*').forEach((el) => {
+    const tag = el.tagName.toLowerCase();
     const colorStyle = extractColorStyle(el.getAttribute('style'));
+    const tableStyle = extractTableGridStyle(tag, el.getAttribute('style'));
     el.removeAttribute('class');
     el.removeAttribute('bgcolor');
     const legacyColor = el.getAttribute('color');
     el.removeAttribute('color');
-    if (colorStyle) {
-      el.setAttribute('style', colorStyle);
+    const parts = [tableStyle, colorStyle].filter(Boolean) as string[];
+    if (parts.length) {
+      el.setAttribute('style', parts.join('; '));
     } else if (legacyColor && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(legacyColor.trim())) {
       el.setAttribute('style', `color: ${legacyColor.trim()}`);
     } else {
