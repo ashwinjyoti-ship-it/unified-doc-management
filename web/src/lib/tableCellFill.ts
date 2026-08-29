@@ -4,8 +4,8 @@
  */
 import type { Editor } from '@tiptap/react';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import type { Selection, Transaction } from '@tiptap/pm/state';
 import { CellSelection, isInTable, selectionCell } from '@tiptap/pm/tables';
-import { TextSelection } from '@tiptap/pm/state';
 
 const CELL_TYPES = new Set(['tableCell', 'tableHeader']);
 
@@ -13,8 +13,15 @@ function normalizeFill(color: string | null | undefined): string | null {
   if (!color) return null;
   const trimmed = color.trim();
   if (!trimmed) return null;
-  // Accept hex; rgb() from DOM parse is kept as-is for round-trip via data-background-color
   return trimmed;
+}
+
+/** Duck-type CellSelection — avoids fragile instanceof across package copies. */
+function isCellSelection(sel: Selection): sel is CellSelection {
+  return (
+    typeof (sel as CellSelection).forEachCell === 'function'
+    && !!(sel as CellSelection).$anchorCell
+  );
 }
 
 /** Collect table cell positions intersecting [from, to]. */
@@ -50,6 +57,47 @@ function cellAtCursor(editor: Editor): { pos: number; node: PMNode } | null {
   }
 }
 
+function collectFillTargets(editor: Editor): Array<{ pos: number; node: PMNode }> {
+  const { state } = editor;
+  const { selection } = state;
+
+  if (isCellSelection(selection)) {
+    const cells: Array<{ pos: number; node: PMNode }> = [];
+    selection.forEachCell((node, pos) => {
+      cells.push({ pos, node });
+    });
+    return cells;
+  }
+
+  const { from, to, empty } = selection;
+  if (!empty && from !== to) {
+    const ranged = collectCellsInRange(state.doc, from, to);
+    if (ranged.length > 0) return ranged;
+  }
+
+  const cell = cellAtCursor(editor);
+  return cell ? [cell] : [];
+}
+
+function applyFillToTargets(
+  tr: Transaction,
+  targets: Array<{ pos: number; node: PMNode }>,
+  value: string | null,
+): boolean {
+  let changed = false;
+  for (const { pos } of targets) {
+    const current = tr.doc.nodeAt(pos);
+    if (!current || !CELL_TYPES.has(current.type.name)) continue;
+    if (current.attrs.backgroundColor === value) continue;
+    tr.setNodeMarkup(pos, undefined, {
+      ...current.attrs,
+      backgroundColor: value,
+    });
+    changed = true;
+  }
+  return changed;
+}
+
 /** True when the selection is inside (or is) a table. */
 export function selectionInTable(editor: Editor): boolean {
   return isInTable(editor.state) || editor.isActive('table');
@@ -63,7 +111,7 @@ export function getActiveCellFill(editor: Editor): string {
   const { state } = editor;
   const { selection } = state;
 
-  if (selection instanceof CellSelection) {
+  if (isCellSelection(selection)) {
     let shared: string | null | undefined;
     let first = true;
     selection.forEachCell((node) => {
@@ -95,81 +143,65 @@ export function getActiveCellFill(editor: Editor): string {
   return '';
 }
 
-/** Apply (or clear) fill on every cell covered by the current selection. */
+/**
+ * Apply (or clear) fill on every cell covered by the current selection.
+ * Captures targets before any focus/dispatch so CellSelection is not lost.
+ */
 export function applyCellFill(editor: Editor, color: string): boolean {
   const value = normalizeFill(color);
-  const { state } = editor;
-  const { selection } = state;
-
-  if (selection instanceof CellSelection) {
-    return editor.chain().focus().setCellAttribute('backgroundColor', value).run();
-  }
-
-  const { from, to, empty } = selection;
-  let targets = !empty && from !== to
-    ? collectCellsInRange(state.doc, from, to)
-    : [];
-
-  if (targets.length === 0) {
-    const cell = cellAtCursor(editor);
-    if (cell) targets = [cell];
-  }
-
+  const targets = collectFillTargets(editor);
   if (targets.length === 0) return false;
 
-  return editor
-    .chain()
-    .focus()
-    .command(({ tr, dispatch }) => {
-      let changed = false;
-      for (const { pos, node } of targets) {
-        if (node.attrs.backgroundColor === value) continue;
-        tr.setNodeMarkup(pos, undefined, {
-          ...node.attrs,
-          backgroundColor: value,
-        });
-        changed = true;
-      }
-      if (changed && dispatch) dispatch(tr);
-      return changed;
-    })
-    .run();
+  const { state } = editor;
+  const hadCellSelection = isCellSelection(state.selection);
+  const tr = state.tr;
+  if (!applyFillToTargets(tr, targets, value)) return false;
+
+  // Keep row/column CellSelection so the bubble toolbar stays useful.
+  if (hadCellSelection) {
+    try {
+      tr.setSelection(state.selection.map(tr.doc, tr.mapping));
+    } catch {
+      /* selection map can fail after structural edits — attrs-only is fine */
+    }
+  }
+
+  editor.view.dispatch(tr);
+  return true;
 }
 
 /** Select the entire table row containing the caret / selection. */
 export function selectTableRow(editor: Editor): boolean {
   if (!isInTable(editor.state)) return false;
-  try {
-    const $cell = selectionCell(editor.state);
-    const rowSel = CellSelection.rowSelection($cell);
-    return editor
-      .chain()
-      .focus()
-      .command(({ tr, dispatch }) => {
+  return editor
+    .chain()
+    .command(({ state, tr, dispatch }) => {
+      try {
+        const $cell = selectionCell(state);
+        const rowSel = CellSelection.rowSelection($cell);
         if (dispatch) tr.setSelection(rowSel);
         return true;
-      })
-      .run();
-  } catch {
-    return false;
-  }
+      } catch {
+        return false;
+      }
+    })
+    .run();
 }
 
 /** Select the entire table column containing the caret / selection. */
 export function selectTableColumn(editor: Editor): boolean {
   if (!isInTable(editor.state)) return false;
-  try {
-    const $cell = selectionCell(editor.state);
-    const colSel = CellSelection.colSelection($cell);
-    return editor
-      .chain()
-      .focus()
-      .command(({ tr, dispatch }) => {
+  return editor
+    .chain()
+    .command(({ state, tr, dispatch }) => {
+      try {
+        const $cell = selectionCell(state);
+        const colSel = CellSelection.colSelection($cell);
         if (dispatch) tr.setSelection(colSel);
         return true;
-      })
-      .run();
-  } catch {
-    return false;
-  }
+      } catch {
+        return false;
+      }
+    })
+    .run();
 }

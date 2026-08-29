@@ -140,8 +140,8 @@ function FillSwatches({
               if (!enabled) return;
               applyCellFill(editor, c.value);
             }}
-            className={`h-5 w-5 rounded-md border transition-transform hover:scale-110 ${
-              isActive ? 'ring-2 ring-forest ring-offset-1' : 'border-green-mist/80'
+            className={`h-5 w-5 rounded-md border-2 transition-transform hover:scale-110 shadow-sm ${
+              isActive ? 'ring-2 ring-forest ring-offset-1 border-forest' : 'border-mid-gray/50'
             }`}
             style={{
               backgroundColor: c.value || '#FCF9F7',
