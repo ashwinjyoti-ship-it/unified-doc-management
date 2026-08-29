@@ -70,11 +70,13 @@ function styleTablesForExternalPaste(root: ParentNode) {
   root.querySelectorAll('th, td').forEach((cell) => {
     const htmlCell = cell as HTMLElement;
     const isHeader = htmlCell.tagName === 'TH';
+    const existingStyle = htmlCell.getAttribute('style') || '';
+    const hasBg = /background(-color)?\s*:/i.test(existingStyle);
     appendStyle(
       htmlCell,
       `border:${TABLE_BORDER};padding:6px 8px;vertical-align:top;${
-        isHeader ? `background:${TABLE_HEADER_BG};font-weight:600;` : ''
-      }`,
+        isHeader ? 'font-weight:600;' : ''
+      }${isHeader && !hasBg ? `background:${TABLE_HEADER_BG};` : ''}`,
     );
   });
 }

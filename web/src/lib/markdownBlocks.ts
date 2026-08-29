@@ -154,12 +154,23 @@ export function blocksToTiptapHtml(
         parts.push('<hr>');
         break;
       case 'table': {
-        const rows: string[][] = content.rows || [];
+        const rows: Array<Array<string | { text: string; backgroundColor?: string }>> = content.rows || [];
         if (rows.length === 0) break;
         const [header, ...body] = rows;
-        const headerHtml = `<tr>${header.map((cell) => `<th>${inline(cell)}</th>`).join('')}</tr>`;
+        const renderCell = (
+          cell: string | { text: string; backgroundColor?: string },
+          tag: 'th' | 'td',
+        ) => {
+          const text = typeof cell === 'string' ? cell : (cell?.text ?? '');
+          const bg = typeof cell === 'string' ? '' : (cell?.backgroundColor || '');
+          const style = bg
+            ? ` style="background-color: ${escapeAttr(bg)}" data-background-color="${escapeAttr(bg)}"`
+            : '';
+          return `<${tag}${style}>${inline(text)}</${tag}>`;
+        };
+        const headerHtml = `<tr>${header.map((cell) => renderCell(cell, 'th')).join('')}</tr>`;
         const bodyHtml = body
-          .map((row) => `<tr>${row.map((cell) => `<td>${inline(cell)}</td>`).join('')}</tr>`)
+          .map((row) => `<tr>${row.map((cell) => renderCell(cell, 'td')).join('')}</tr>`)
           .join('');
         parts.push(`<table><tbody>${headerHtml}${bodyHtml}</tbody></table>`);
         break;
