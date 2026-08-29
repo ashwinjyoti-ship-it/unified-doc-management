@@ -1,6 +1,9 @@
 /**
  * Apply / clear table cell fill colours, and select whole rows or columns.
  * Works with CellSelection, multi-cell text selections, or a caret inside a cell.
+ *
+ * Select row/column stashes target positions so Fill still works if the
+ * CellSelection is collapsed by focus/toolbar interaction before the swatch click.
  */
 import type { Editor } from '@tiptap/react';
 import type { Node as PMNode } from '@tiptap/pm/model';
@@ -8,6 +11,9 @@ import type { Selection, Transaction } from '@tiptap/pm/state';
 import { CellSelection, isInTable, selectionCell } from '@tiptap/pm/tables';
 
 const CELL_TYPES = new Set(['tableCell', 'tableHeader']);
+
+/** Positions from the last Select row / Select column (survives selection collapse). */
+let stashedFillPositions: number[] | null = null;
 
 function normalizeFill(color: string | null | undefined): string | null {
   if (!color) return null;
@@ -57,16 +63,30 @@ function cellAtCursor(editor: Editor): { pos: number; node: PMNode } | null {
   }
 }
 
+function cellsFromCellSelection(selection: CellSelection): Array<{ pos: number; node: PMNode }> {
+  const cells: Array<{ pos: number; node: PMNode }> = [];
+  selection.forEachCell((node, pos) => {
+    cells.push({ pos, node });
+  });
+  return cells;
+}
+
+function resolveStashedTargets(doc: PMNode): Array<{ pos: number; node: PMNode }> {
+  if (!stashedFillPositions?.length) return [];
+  const cells: Array<{ pos: number; node: PMNode }> = [];
+  for (const pos of stashedFillPositions) {
+    const node = doc.nodeAt(pos);
+    if (node && CELL_TYPES.has(node.type.name)) cells.push({ pos, node });
+  }
+  return cells;
+}
+
 function collectFillTargets(editor: Editor): Array<{ pos: number; node: PMNode }> {
   const { state } = editor;
   const { selection } = state;
 
   if (isCellSelection(selection)) {
-    const cells: Array<{ pos: number; node: PMNode }> = [];
-    selection.forEachCell((node, pos) => {
-      cells.push({ pos, node });
-    });
-    return cells;
+    return cellsFromCellSelection(selection);
   }
 
   const { from, to, empty } = selection;
@@ -75,8 +95,13 @@ function collectFillTargets(editor: Editor): Array<{ pos: number; node: PMNode }
     if (ranged.length > 0) return ranged;
   }
 
+  // Prefer a prior Select row/column stash over a collapsed single-cell caret.
+  const stashed = resolveStashedTargets(state.doc);
+  if (stashed.length > 1) return stashed;
+
   const cell = cellAtCursor(editor);
-  return cell ? [cell] : [];
+  if (cell) return [cell];
+  return stashed;
 }
 
 function applyFillToTargets(
@@ -98,6 +123,14 @@ function applyFillToTargets(
   return changed;
 }
 
+function stashFromCellSelection(selection: CellSelection) {
+  const positions: number[] = [];
+  selection.forEachCell((_node, pos) => {
+    positions.push(pos);
+  });
+  stashedFillPositions = positions.length ? positions : null;
+}
+
 /** True when the selection is inside (or is) a table. */
 export function selectionInTable(editor: Editor): boolean {
   return isInTable(editor.state) || editor.isActive('table');
@@ -108,44 +141,18 @@ export function selectionInTable(editor: Editor): boolean {
  * Empty string means no fill / mixed → show "None" as inactive unless all clear.
  */
 export function getActiveCellFill(editor: Editor): string {
-  const { state } = editor;
-  const { selection } = state;
-
-  if (isCellSelection(selection)) {
-    let shared: string | null | undefined;
-    let first = true;
-    selection.forEachCell((node) => {
-      const bg = (node.attrs.backgroundColor as string | null) || null;
-      if (first) {
-        shared = bg;
-        first = false;
-      } else if (shared !== bg) {
-        shared = undefined;
-      }
-    });
-    return shared || '';
-  }
-
-  const { from, to, empty } = selection;
-  if (!empty && from !== to) {
-    const cells = collectCellsInRange(state.doc, from, to);
-    if (cells.length > 0) {
-      const firstBg = (cells[0].node.attrs.backgroundColor as string | null) || null;
-      const allSame = cells.every(
-        (c) => ((c.node.attrs.backgroundColor as string | null) || null) === firstBg,
-      );
-      return allSame ? firstBg || '' : '';
-    }
-  }
-
-  const cell = cellAtCursor(editor);
-  if (cell) return (cell.node.attrs.backgroundColor as string | null) || '';
-  return '';
+  const targets = collectFillTargets(editor);
+  if (targets.length === 0) return '';
+  const firstBg = (targets[0].node.attrs.backgroundColor as string | null) || null;
+  const allSame = targets.every(
+    (c) => ((c.node.attrs.backgroundColor as string | null) || null) === firstBg,
+  );
+  return allSame ? firstBg || '' : '';
 }
 
 /**
- * Apply (or clear) fill on every cell covered by the current selection.
- * Captures targets before any focus/dispatch so CellSelection is not lost.
+ * Apply (or clear) fill on every cell covered by the current selection
+ * (or the last Select row / Select column stash).
  */
 export function applyCellFill(editor: Editor, color: string): boolean {
   const value = normalizeFill(color);
@@ -155,53 +162,53 @@ export function applyCellFill(editor: Editor, color: string): boolean {
   const { state } = editor;
   const hadCellSelection = isCellSelection(state.selection);
   const tr = state.tr;
-  if (!applyFillToTargets(tr, targets, value)) return false;
+  if (!applyFillToTargets(tr, targets, value)) {
+    stashedFillPositions = null;
+    return false;
+  }
 
-  // Keep row/column CellSelection so the bubble toolbar stays useful.
   if (hadCellSelection) {
     try {
       tr.setSelection(state.selection.map(tr.doc, tr.mapping));
     } catch {
-      /* selection map can fail after structural edits — attrs-only is fine */
+      /* attrs-only edits keep positions stable */
     }
   }
 
   editor.view.dispatch(tr);
+  stashedFillPositions = null;
   return true;
 }
 
 /** Select the entire table row containing the caret / selection. */
 export function selectTableRow(editor: Editor): boolean {
   if (!isInTable(editor.state)) return false;
-  return editor
-    .chain()
-    .command(({ state, tr, dispatch }) => {
-      try {
-        const $cell = selectionCell(state);
-        const rowSel = CellSelection.rowSelection($cell);
-        if (dispatch) tr.setSelection(rowSel);
-        return true;
-      } catch {
-        return false;
-      }
-    })
-    .run();
+  try {
+    const $cell = selectionCell(editor.state);
+    const rowSel = CellSelection.rowSelection($cell);
+    stashFromCellSelection(rowSel);
+    editor.view.dispatch(editor.state.tr.setSelection(rowSel));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Select the entire table column containing the caret / selection. */
 export function selectTableColumn(editor: Editor): boolean {
   if (!isInTable(editor.state)) return false;
-  return editor
-    .chain()
-    .command(({ state, tr, dispatch }) => {
-      try {
-        const $cell = selectionCell(state);
-        const colSel = CellSelection.colSelection($cell);
-        if (dispatch) tr.setSelection(colSel);
-        return true;
-      } catch {
-        return false;
-      }
-    })
-    .run();
+  try {
+    const $cell = selectionCell(editor.state);
+    const colSel = CellSelection.colSelection($cell);
+    stashFromCellSelection(colSel);
+    editor.view.dispatch(editor.state.tr.setSelection(colSel));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Test helper — clear stashed row/column targets. */
+export function clearStashedFillTargets() {
+  stashedFillPositions = null;
 }
