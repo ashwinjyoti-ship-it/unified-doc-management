@@ -5,6 +5,7 @@ import { useEditorState } from '@tiptap/react';
 import {
   Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Baseline, Copy,
+  SquareMousePointer,
 } from 'lucide-react';
 import { TEXT_COLORS } from '../lib/pageLinks';
 
@@ -58,8 +59,9 @@ function ColorPicker({
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
+    // pointerdown (not mousedown) so we still preventDefault on swatches first.
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
   }, [open]);
 
   const swatch = activeColor || 'currentColor';
@@ -69,7 +71,7 @@ function ColorPicker({
       <ToolbarButton
         bubble
         title="Text colour"
-        active={Boolean(activeColor)}
+        active={Boolean(activeColor) || open}
         onClick={() => setOpen((v) => !v)}
       >
         <span className="relative inline-flex flex-col items-center">
@@ -87,6 +89,10 @@ function ColorPicker({
           style={{ width: 148 }}
           role="listbox"
           aria-label="Text colour"
+          onMouseDown={(e) => {
+            // Keep editor selection while picking a colour.
+            e.preventDefault();
+          }}
         >
           {TEXT_COLORS.map((c) => {
             const isActive = (c.value || '') === (activeColor || '');
@@ -130,6 +136,8 @@ interface EditorToolbarProps {
   onAddImage: () => void;
   onUploadClick: () => void;
   onAddLink: () => void;
+  /** Select the whole document (including tables + content below). */
+  onSelectAll?: () => void;
   /** Copy current selection as compact HTML (email / Word friendly). */
   onCopySelection?: () => void;
   /** Light floating bar shown on text selection */
@@ -141,6 +149,7 @@ function EditorToolbar({
   onAddImage,
   onUploadClick,
   onAddLink,
+  onSelectAll,
   onCopySelection,
 }: EditorToolbarProps) {
   const active = useEditorState({
@@ -239,16 +248,27 @@ function EditorToolbar({
       <ToolbarButton bubble title="Insert hyperlink" active={active.link} onClick={onAddLink}>
         <Link2 className="w-4 h-4" />
       </ToolbarButton>
-      {onCopySelection && (
+      {(onSelectAll || onCopySelection) && (
         <>
           <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
-          <ToolbarButton
-            bubble
-            title="Copy selection (keeps colour & formatting for email / Word)"
-            onClick={onCopySelection}
-          >
-            <Copy className="w-4 h-4" />
-          </ToolbarButton>
+          {onSelectAll && (
+            <ToolbarButton
+              bubble
+              title="Select all (includes tables and text below)"
+              onClick={onSelectAll}
+            >
+              <SquareMousePointer className="w-4 h-4" />
+            </ToolbarButton>
+          )}
+          {onCopySelection && (
+            <ToolbarButton
+              bubble
+              title="Copy selection (keeps colour & formatting for email / Word)"
+              onClick={onCopySelection}
+            >
+              <Copy className="w-4 h-4" />
+            </ToolbarButton>
+          )}
         </>
       )}
     </div>

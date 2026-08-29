@@ -4,7 +4,6 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
@@ -20,6 +19,7 @@ import { MessageSquarePlus, Slash } from 'lucide-react';
 import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
 import { PageLink } from '../extensions/PageLink';
 import { Callout } from '../extensions/Callout';
+import { DocumentTable } from '../extensions/DocumentTable';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
@@ -136,7 +136,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       Placeholder.configure({ placeholder: 'Type / for commands, or start writing...' }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: true }),
+      DocumentTable.configure({ resizable: true, allowTableNodeSelection: true }),
       TableRow,
       TableHeader,
       TableCell,
@@ -522,7 +522,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
             plugins: [sticky],
             sticky: true,
             offset: [0, 12],
-            // Clicks on empty tippy chrome pass through to the selection (right-click Copy).
+            // Keep the menu open while clicking toolbar controls (colour swatches, Copy).
+            hideOnClick: false,
             popperOptions: {
               modifiers: [
                 {
@@ -548,6 +549,9 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
               onAddImage={addImage}
               onUploadClick={() => fileInputRef.current?.click()}
               onAddLink={addLink}
+              onSelectAll={() => {
+                editor.chain().focus().selectAll().run();
+              }}
               onCopySelection={() => {
                 void copyEditorSelection(editor);
               }}
