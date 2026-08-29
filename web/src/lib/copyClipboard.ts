@@ -108,6 +108,7 @@ export const CompactClipboard = Extension.create({
 /**
  * Copy the current editor selection as compact HTML + plain text.
  * Prefer this from the bubble toolbar so focus/right-click races don't clear the action.
+ * If the selection is empty, copies the whole document (so tables + text below are included).
  */
 export async function copyEditorSelection(editor: {
   state: {
@@ -118,14 +119,16 @@ export async function copyEditorSelection(editor: {
 }): Promise<boolean> {
   const { state } = editor;
   const { from, to, empty } = state.selection;
-  if (empty) return false;
+  const sliceFrom = empty ? 0 : from;
+  const sliceTo = empty ? state.doc.content.size : to;
+  if (sliceFrom === sliceTo) return false;
 
-  const slice = state.doc.cut(from, to);
+  const slice = state.doc.cut(sliceFrom, sliceTo);
   const serializer = createCompactClipboardSerializer(state.schema);
   const wrap = document.createElement('div');
   wrap.appendChild(serializer.serializeFragment(slice.content, { document }));
   const html = wrap.innerHTML;
-  const plain = state.doc.textBetween(from, to, '\n');
+  const plain = state.doc.textBetween(sliceFrom, sliceTo, '\n');
 
   try {
     if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
