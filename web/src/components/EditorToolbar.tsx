@@ -121,8 +121,8 @@ function FillSwatches({
       aria-disabled={!enabled}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-mid-gray pr-0.5" title="Cell fill colour">
-        Fill
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-mid-gray pr-0.5 shrink-0" title="Cell background fill">
+        Cell fill
       </span>
       {FILL_COLORS.map((c) => {
         const isActive = enabled && (c.value || '') === (activeFill || '');

@@ -1,6 +1,7 @@
 /**
  * Stash survives CellSelection collapse after Select row/column.
  * Run: npx tsx web/src/lib/tableCellFill.stash.selftest.ts
+ * Requires jsdom (npm i -D jsdom).
  */
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,7 +9,6 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
-import { JSDOM } from 'jsdom';
 import {
   applyCellFill,
   selectTableColumn,
@@ -16,6 +16,13 @@ import {
   clearStashedFillTargets,
 } from './tableCellFill';
 
+let JSDOM: typeof import('jsdom').JSDOM;
+try {
+  ({ JSDOM } = await import('jsdom'));
+} catch {
+  console.log('tableCellFill.stash.selftest: skipped (jsdom not installed)');
+  process.exit(0);
+}
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(msg);
 }
