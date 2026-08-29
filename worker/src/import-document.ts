@@ -92,9 +92,16 @@ function inlineText(node: HTMLElement): string {
     const inner = inlineText(el);
     if (tag === 'strong' || tag === 'b') parts.push(`**${inner}**`);
     else if (tag === 'em' || tag === 'i') parts.push(`*${inner}*`);
+    else if (tag === 's' || tag === 'strike' || tag === 'del') parts.push(`~~${inner}~~`);
+    else if (tag === 'code') parts.push(`\`${inner}\``);
     else if (tag === 'br') parts.push('\n');
     else if (tag === 'a') parts.push(inner);
-    else parts.push(inner);
+    else if (tag === 'span') {
+      const style = el.getAttribute?.('style') || '';
+      const colorMatch = style.match(/color\s*:\s*(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})/i);
+      if (colorMatch) parts.push(`<span style="color: ${colorMatch[1].toLowerCase()}">${inner}</span>`);
+      else parts.push(inner);
+    } else parts.push(inner);
   }
   return parts.join('').replace(/\s+/g, ' ').trim();
 }
