@@ -38,10 +38,10 @@ Returns machine-readable list of all endpoints, property types, and example work
 | Concept | API representation |
 |---------|---------------------|
 | Workspace | `GET /api/workspaces` → use first workspace `id` |
-| Page | `type: "page"` — rich document with blocks (quotes, emails, prose) |
+| Page | `type: "page"` — rich document with blocks |
 | Folder | `type: "folder"` — container in sidebar tree |
 | Database | `type: "database"` — table with columns (properties) and rows |
-| Canvas | `type: "canvas"` — infinite design canvas with components and tokens (**UI wireframes / design-to-code only — not for document quotes**) |
+| Canvas | `type: "canvas"` — infinite design canvas (UI / design-to-code; not for normal documents) |
 | Row | Database row; each row has a linked **page** with full editor content |
 | Property / Column | `database_properties` — typed columns on a database |
 | Block | Structured content unit inside a page |
@@ -316,7 +316,7 @@ Response includes `imagesUploaded` (count) and `hint`. Word flowcharts are store
 
 ## Canvas / Design workflow
 
-**Do not use canvas for quotes, emails, proposals, or other prose.** Create a `type: "page"` document and `PUT /markdown` instead so the user can select and copy rich text. Canvas is for UI wireframes / design-to-code only.
+Use canvas for Design / UI layouts only. Normal documents use `type: "page"` and markdown/blocks.
 
 ### 12. Read a canvas and generate UI code
 

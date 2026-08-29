@@ -130,21 +130,9 @@ Inline markdown in page bodies is rendered as rich text in the editor:
 - Links: `[label](url)`, wiki `[[Title|page-id]]`
 - Text colour (optional): `<span style="color: #C0392B">coloured</span>`
 
-Prefer these markers when writing **formatted page copy** (quotes, emails, proposals) so the UI shows real formatting (not literal `**asterisks**`). Colour spans survive save/reload and copy/paste into email or Word.
+Prefer these markers so the UI shows real formatting (not literal `**asterisks**`). Colour spans survive save/reload and copy/paste into email or Word.
 
-**Routing rule:** textual quotes / emails / proposals → create `type: "page"` and `PUT /markdown`. Use `type: "canvas"` only for UI wireframes / design-to-code — canvas text is not copy-friendly.
-
-### Create a document page for a quote
-
-```http
-POST /api/workspaces/{workspaceId}/pages
-{ "title": "Client Quote", "type": "page" }
-
-PUT /api/pages/{pageId}/markdown
-{
-  "markdown": "Dear **Acme Corp**,\n\n<span style=\"color: #C0392B\">**Total: $12,400**</span>"
-}
-```
+**Document vs Design:** `type: "page"` for documents (rich text, copy-friendly). `type: "canvas"` for UI design / design-to-code only.
 
 ### Example `agent_prompt`
 
@@ -207,7 +195,7 @@ POST /api/import-document
 
 UDM includes an **Infinite Canvas** for designing UI layouts. Agents can read the final canvas, then generate real frontend code from it.
 
-**Do not use canvas for quotes, emails, proposals, or other prose.** Those belong on a normal `type: "page"` document (see section 3) so the user can select and copy rich text. Canvas is for UI wireframes / design-to-code only.
+Use canvas for Design only. Normal documents belong on `type: "page"` (see section 3).
 
 ### Canvas page lifecycle
 
