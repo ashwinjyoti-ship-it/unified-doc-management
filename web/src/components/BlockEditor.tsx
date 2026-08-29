@@ -5,13 +5,12 @@ import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
 import Image from '@tiptap/extension-image';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model';
+import { CellSelection } from '@tiptap/pm/tables';
 import { common, createLowlight } from 'lowlight';
 import { useEffect, useCallback, useRef, useState, memo, forwardRef, useImperativeHandle } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,6 +19,7 @@ import { DatabaseEmbed } from '../extensions/DatabaseEmbed';
 import { PageLink } from '../extensions/PageLink';
 import { Callout } from '../extensions/Callout';
 import { DocumentTable } from '../extensions/DocumentTable';
+import { TableCellWithFill, TableHeaderWithFill } from '../extensions/TableCellsWithFill';
 import { SlashCommands } from './SlashCommands';
 import { slashCommands, type SlashCommandItem } from './SlashCommandList';
 import PageLinkModal from './PageLinkModal';
@@ -138,8 +138,8 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       TaskItem.configure({ nested: true }),
       DocumentTable.configure({ resizable: true, allowTableNodeSelection: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeaderWithFill,
+      TableCellWithFill,
       Image.configure({ inline: false }),
       PageLink.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
       TextStyle,
@@ -482,6 +482,9 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
     const focusInMenu = Boolean(active?.closest?.('[data-bubble-menu]'));
     if (!ed.isFocused && !focusInMenu && !(view?.hasFocus?.())) return false;
     const { from, to, empty } = state.selection;
+    if (state.selection instanceof CellSelection) return true;
+    // Caret in a table: show fill / select-row tools without needing a text selection.
+    if (empty && ed.isActive('table')) return true;
     return !empty && from !== to;
   }, []);
 
@@ -780,7 +783,12 @@ function extractContent(node: Record<string, unknown>): object {
 
   if (type === 'table') {
     const rows = ((node.content as Array<Record<string, unknown>>) || []).map((row) =>
-      ((row.content as Array<Record<string, unknown>>) || []).map((cell) => getTextContent(cell)),
+      ((row.content as Array<Record<string, unknown>>) || []).map((cell) => {
+        const text = getTextContent(cell);
+        const bg = (cell.attrs as { backgroundColor?: string | null } | undefined)?.backgroundColor;
+        if (bg) return { text, backgroundColor: bg };
+        return text;
+      }),
     );
     return { rows };
   }

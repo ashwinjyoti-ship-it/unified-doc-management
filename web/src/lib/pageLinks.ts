@@ -15,6 +15,19 @@ export const TEXT_COLORS = [
   { name: 'Purple', value: '#7D3C98' },
 ] as const;
 
+/** Pastel cell fill colours (table background). Empty value clears the fill. */
+export const FILL_COLORS = [
+  { name: 'None', value: '' },
+  { name: 'Forest', value: '#D5E6DB' },
+  { name: 'Sage', value: '#E4EFE8' },
+  { name: 'Linen', value: '#F4F1ED' },
+  { name: 'Red', value: '#F8D7D3' },
+  { name: 'Orange', value: '#FCE0CC' },
+  { name: 'Gold', value: '#F7F0C8' },
+  { name: 'Blue', value: '#D6EAF8' },
+  { name: 'Purple', value: '#E8DAEF' },
+] as const;
+
 const COLOR_HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export function extractPageIdFromHref(href: string): string | null {

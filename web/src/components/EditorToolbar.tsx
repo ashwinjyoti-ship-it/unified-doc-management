@@ -5,9 +5,16 @@ import { useEditorState } from '@tiptap/react';
 import {
   Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
   List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Copy,
-  SquareMousePointer,
+  SquareMousePointer, Rows3, Columns3,
 } from 'lucide-react';
-import { TEXT_COLORS } from '../lib/pageLinks';
+import { TEXT_COLORS, FILL_COLORS } from '../lib/pageLinks';
+import {
+  applyCellFill,
+  getActiveCellFill,
+  selectTableColumn,
+  selectTableRow,
+  selectionInTable,
+} from '../lib/tableCellFill';
 
 function ToolbarButton({
   onClick,
@@ -96,6 +103,59 @@ function ColorSwatches({
   );
 }
 
+/** Cell background fill — applies to selected cells, or the cell under the caret. */
+function FillSwatches({
+  editor,
+  activeFill,
+  enabled,
+}: {
+  editor: Editor;
+  activeFill: string;
+  enabled: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-1 px-1 ${enabled ? '' : 'opacity-40 pointer-events-none'}`}
+      role="listbox"
+      aria-label="Cell fill colour"
+      aria-disabled={!enabled}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-mid-gray pr-0.5" title="Cell fill colour">
+        Fill
+      </span>
+      {FILL_COLORS.map((c) => {
+        const isActive = enabled && (c.value || '') === (activeFill || '');
+        return (
+          <button
+            key={c.name}
+            type="button"
+            title={enabled ? `Fill: ${c.name}` : 'Select a table cell, row, or column first'}
+            aria-label={`Cell fill: ${c.name}`}
+            role="option"
+            aria-selected={isActive}
+            disabled={!enabled}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              if (!enabled) return;
+              applyCellFill(editor, c.value);
+            }}
+            className={`h-5 w-5 rounded-md border-2 transition-transform hover:scale-110 shadow-sm ${
+              isActive ? 'ring-2 ring-forest ring-offset-1 border-forest' : 'border-mid-gray/50'
+            }`}
+            style={{
+              backgroundColor: c.value || '#FCF9F7',
+              backgroundImage: c.value
+                ? undefined
+                : 'linear-gradient(to bottom right, transparent 46%, #9ca3af 46%, #9ca3af 54%, transparent 54%)',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 interface EditorToolbarProps {
   editor: Editor;
   onAddImage: () => void;
@@ -137,6 +197,8 @@ function EditorToolbar({
       link: ed.isActive('link'),
       image: ed.isActive('image'),
       color: (ed.getAttributes('textStyle').color as string | undefined) || '',
+      inTable: selectionInTable(ed),
+      fill: getActiveCellFill(ed),
     }),
   });
 
@@ -213,7 +275,7 @@ function EditorToolbar({
         <ToolbarButton bubble title="Insert hyperlink" active={active.link} onClick={onAddLink}>
           <Link2 className="w-4 h-4" />
         </ToolbarButton>
-        {(onSelectAll || onCopySelection) && (
+        {(onSelectAll || onCopySelection || active.inTable) && (
           <>
             <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
             {onSelectAll && (
@@ -224,6 +286,24 @@ function EditorToolbar({
               >
                 <SquareMousePointer className="w-4 h-4" />
               </ToolbarButton>
+            )}
+            {active.inTable && (
+              <>
+                <ToolbarButton
+                  bubble
+                  title="Select table row"
+                  onClick={() => selectTableRow(editor)}
+                >
+                  <Rows3 className="w-4 h-4" />
+                </ToolbarButton>
+                <ToolbarButton
+                  bubble
+                  title="Select table column"
+                  onClick={() => selectTableColumn(editor)}
+                >
+                  <Columns3 className="w-4 h-4" />
+                </ToolbarButton>
+              </>
             )}
             {onCopySelection && (
               <ToolbarButton
@@ -237,8 +317,9 @@ function EditorToolbar({
           </>
         )}
       </div>
-      <div className="border-t border-green-mist/60 pt-1">
+      <div className="border-t border-green-mist/60 pt-1 flex flex-col gap-1">
         <ColorSwatches editor={editor} activeColor={active.color} />
+        <FillSwatches editor={editor} activeFill={active.fill} enabled={active.inTable} />
       </div>
     </div>
   );

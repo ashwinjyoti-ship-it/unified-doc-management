@@ -108,12 +108,18 @@ export function blocksToMarkdown(blocks: Array<{ type: string; content: string }
           return `> ${content.text || ''}`;
         case 'divider':
           return '---';
-        case 'table':
+        case 'table': {
           if (!content.rows?.length) return '';
-          const header = content.rows[0]?.join(' | ') || '';
+          const cellText = (c: unknown) =>
+            typeof c === 'string' ? c : String((c as { text?: string } | null)?.text ?? '');
+          const header = content.rows[0]?.map(cellText).join(' | ') || '';
           const sep = content.rows[0]?.map(() => '---').join(' | ') || '';
-          const body = content.rows.slice(1).map((r: string[]) => r.join(' | ')).join('\n');
+          const body = content.rows
+            .slice(1)
+            .map((r: unknown[]) => r.map(cellText).join(' | '))
+            .join('\n');
           return `${header}\n${sep}\n${body}`;
+        }
         case 'image':
           return `![${content.alt || ''}](${content.url || ''})`;
         case 'database_embed':
