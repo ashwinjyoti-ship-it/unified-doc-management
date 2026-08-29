@@ -1,10 +1,10 @@
-import { memo, useState, useRef, useEffect } from 'react';
+import { memo } from 'react';
 import type { ReactNode } from 'react';
 import type { Editor } from '@tiptap/react';
 import { useEditorState } from '@tiptap/react';
 import {
   Bold, Italic, Strikethrough, Code, Pilcrow, Heading1, Heading2, Heading3, Heading4,
-  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Baseline, Copy,
+  List, ListOrdered, CheckSquare, Quote, Minus, ImageIcon, Link2, Upload, Copy,
   SquareMousePointer,
 } from 'lucide-react';
 import { TEXT_COLORS } from '../lib/pageLinks';
@@ -44,89 +44,54 @@ function ToolbarButton({
   );
 }
 
-function ColorPicker({
+/** Always-visible colour swatches — no hidden dropdown. */
+function ColorSwatches({
   editor,
   activeColor,
 }: {
   editor: Editor;
   activeColor: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    // pointerdown (not mousedown) so we still preventDefault on swatches first.
-    document.addEventListener('pointerdown', onPointerDown, true);
-    return () => document.removeEventListener('pointerdown', onPointerDown, true);
-  }, [open]);
-
-  const swatch = activeColor || 'currentColor';
-
   return (
-    <div className="relative" ref={rootRef}>
-      <ToolbarButton
-        bubble
-        title="Text colour"
-        active={Boolean(activeColor) || open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="relative inline-flex flex-col items-center">
-          <Baseline className="w-4 h-4" />
-          <span
-            className="absolute -bottom-0.5 left-0.5 right-0.5 h-0.5 rounded-sm"
-            style={{ backgroundColor: swatch }}
-            aria-hidden
+    <div
+      className="flex items-center gap-1 px-1"
+      role="listbox"
+      aria-label="Text colour"
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-mid-gray pr-0.5" title="Text colour">
+        Color
+      </span>
+      {TEXT_COLORS.map((c) => {
+        const isActive = (c.value || '') === (activeColor || '');
+        return (
+          <button
+            key={c.name}
+            type="button"
+            title={c.name}
+            aria-label={`Text colour: ${c.name}`}
+            role="option"
+            aria-selected={isActive}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              if (!c.value) {
+                editor.chain().focus().unsetColor().run();
+              } else {
+                editor.chain().focus().setColor(c.value).run();
+              }
+            }}
+            className={`h-5 w-5 rounded-full border transition-transform hover:scale-110 ${
+              isActive ? 'ring-2 ring-forest ring-offset-1' : 'border-green-mist/80'
+            }`}
+            style={{
+              backgroundColor: c.value || '#FCF9F7',
+              backgroundImage: c.value
+                ? undefined
+                : 'linear-gradient(to bottom right, transparent 46%, #9ca3af 46%, #9ca3af 54%, transparent 54%)',
+            }}
           />
-        </span>
-      </ToolbarButton>
-      {open && (
-        <div
-          className="absolute left-0 top-full z-50 mt-1 flex flex-wrap gap-1 rounded-lg border border-green-mist bg-warm-white p-2 shadow-lg"
-          style={{ width: 148 }}
-          role="listbox"
-          aria-label="Text colour"
-          onMouseDown={(e) => {
-            // Keep editor selection while picking a colour.
-            e.preventDefault();
-          }}
-        >
-          {TEXT_COLORS.map((c) => {
-            const isActive = (c.value || '') === (activeColor || '');
-            return (
-              <button
-                key={c.name}
-                type="button"
-                title={c.name}
-                aria-label={c.name}
-                role="option"
-                aria-selected={isActive}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  if (!c.value) {
-                    editor.chain().focus().unsetColor().run();
-                  } else {
-                    editor.chain().focus().setColor(c.value).run();
-                  }
-                  setOpen(false);
-                }}
-                className={`h-6 w-6 rounded-md border transition-transform hover:scale-110 ${
-                  isActive ? 'ring-2 ring-forest ring-offset-1' : 'border-green-mist/80'
-                }`}
-                style={{
-                  backgroundColor: c.value || '#FCF9F7',
-                  backgroundImage: c.value
-                    ? undefined
-                    : 'linear-gradient(to bottom right, transparent 46%, #c0392b 46%, #c0392b 54%, transparent 54%)',
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -180,97 +145,101 @@ function EditorToolbar({
   };
 
   return (
-    <div className="flex flex-wrap gap-0.5 items-center bg-warm-white rounded-xl shadow-lg border border-green-mist p-1.5 max-w-[min(100vw-2rem,640px)]">
-      <ToolbarButton bubble title="Bold (Ctrl+B)" active={active.bold} onClick={() => run(() => editor.chain().focus().toggleBold().run())}>
-        <Bold className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Italic (Ctrl+I)" active={active.italic} onClick={() => run(() => editor.chain().focus().toggleItalic().run())}>
-        <Italic className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Strikethrough" active={active.strike} onClick={() => run(() => editor.chain().focus().toggleStrike().run())}>
-        <Strikethrough className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Inline code" active={active.code} onClick={() => run(() => editor.chain().focus().toggleCode().run())}>
-        <Code className="w-4 h-4" />
-      </ToolbarButton>
-      <ColorPicker editor={editor} activeColor={active.color} />
-      <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
-      <ToolbarButton bubble title="Normal text — clears heading/quote formatting" active={active.paragraph} onClick={() => run(() => editor.chain().focus().setParagraph().run())}>
-        <Pilcrow className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Heading 1" active={active.h1} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}>
-        <Heading1 className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Heading 2" active={active.h2} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}>
-        <Heading2 className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Heading 3" active={active.h3} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}>
-        <Heading3 className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Heading 4" active={active.h4} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 4 }).run())}>
-        <Heading4 className="w-4 h-4" />
-      </ToolbarButton>
-      <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
-      <ToolbarButton bubble title="Bullet list" active={active.bulletList} onClick={() => run(() => editor.chain().focus().toggleBulletList().run())}>
-        <List className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Numbered list" active={active.orderedList} onClick={() => run(() => editor.chain().focus().toggleOrderedList().run())}>
-        <ListOrdered className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="To-do checklist" active={active.taskList} onClick={() => run(() => editor.chain().focus().toggleTaskList().run())}>
-        <CheckSquare className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton
-        bubble
-        title="Block quote"
-        active={active.blockquote}
-        onClick={() => run(() => (
-          active.blockquote
-            ? editor.chain().focus().lift('blockquote').run()
-            : editor.chain().focus().setBlockquote().run()
-        ))}
-      >
-        <Quote className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Horizontal divider" onClick={() => run(() => editor.chain().focus().setHorizontalRule().run())}>
-        <Minus className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Code block" active={active.codeBlock} onClick={() => run(() => editor.chain().focus().toggleCodeBlock().run())}>
-        <Code className="w-4 h-4" />
-      </ToolbarButton>
-      <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
-      <ToolbarButton bubble title="Insert image" active={active.image} onClick={onAddImage}>
-        <ImageIcon className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Upload file" onClick={onUploadClick}>
-        <Upload className="w-4 h-4" />
-      </ToolbarButton>
-      <ToolbarButton bubble title="Insert hyperlink" active={active.link} onClick={onAddLink}>
-        <Link2 className="w-4 h-4" />
-      </ToolbarButton>
-      {(onSelectAll || onCopySelection) && (
-        <>
-          <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
-          {onSelectAll && (
-            <ToolbarButton
-              bubble
-              title="Select all (includes tables and text below)"
-              onClick={onSelectAll}
-            >
-              <SquareMousePointer className="w-4 h-4" />
-            </ToolbarButton>
-          )}
-          {onCopySelection && (
-            <ToolbarButton
-              bubble
-              title="Copy selection (keeps colour & formatting for email / Word)"
-              onClick={onCopySelection}
-            >
-              <Copy className="w-4 h-4" />
-            </ToolbarButton>
-          )}
-        </>
-      )}
+    <div className="flex flex-col gap-1 bg-warm-white rounded-xl shadow-lg border border-green-mist p-1.5 max-w-[min(100vw-2rem,720px)]">
+      <div className="flex flex-wrap gap-0.5 items-center">
+        <ToolbarButton bubble title="Bold (Ctrl+B)" active={active.bold} onClick={() => run(() => editor.chain().focus().toggleBold().run())}>
+          <Bold className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Italic (Ctrl+I)" active={active.italic} onClick={() => run(() => editor.chain().focus().toggleItalic().run())}>
+          <Italic className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Strikethrough" active={active.strike} onClick={() => run(() => editor.chain().focus().toggleStrike().run())}>
+          <Strikethrough className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Inline code" active={active.code} onClick={() => run(() => editor.chain().focus().toggleCode().run())}>
+          <Code className="w-4 h-4" />
+        </ToolbarButton>
+        <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+        <ToolbarButton bubble title="Normal text — clears heading/quote formatting" active={active.paragraph} onClick={() => run(() => editor.chain().focus().setParagraph().run())}>
+          <Pilcrow className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Heading 1" active={active.h1} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}>
+          <Heading1 className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Heading 2" active={active.h2} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}>
+          <Heading2 className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Heading 3" active={active.h3} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}>
+          <Heading3 className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Heading 4" active={active.h4} onClick={() => run(() => editor.chain().focus().toggleHeading({ level: 4 }).run())}>
+          <Heading4 className="w-4 h-4" />
+        </ToolbarButton>
+        <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+        <ToolbarButton bubble title="Bullet list" active={active.bulletList} onClick={() => run(() => editor.chain().focus().toggleBulletList().run())}>
+          <List className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Numbered list" active={active.orderedList} onClick={() => run(() => editor.chain().focus().toggleOrderedList().run())}>
+          <ListOrdered className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="To-do checklist" active={active.taskList} onClick={() => run(() => editor.chain().focus().toggleTaskList().run())}>
+          <CheckSquare className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          bubble
+          title="Block quote"
+          active={active.blockquote}
+          onClick={() => run(() => (
+            active.blockquote
+              ? editor.chain().focus().lift('blockquote').run()
+              : editor.chain().focus().setBlockquote().run()
+          ))}
+        >
+          <Quote className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Horizontal divider" onClick={() => run(() => editor.chain().focus().setHorizontalRule().run())}>
+          <Minus className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Code block" active={active.codeBlock} onClick={() => run(() => editor.chain().focus().toggleCodeBlock().run())}>
+          <Code className="w-4 h-4" />
+        </ToolbarButton>
+        <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+        <ToolbarButton bubble title="Insert image" active={active.image} onClick={onAddImage}>
+          <ImageIcon className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Upload file" onClick={onUploadClick}>
+          <Upload className="w-4 h-4" />
+        </ToolbarButton>
+        <ToolbarButton bubble title="Insert hyperlink" active={active.link} onClick={onAddLink}>
+          <Link2 className="w-4 h-4" />
+        </ToolbarButton>
+        {(onSelectAll || onCopySelection) && (
+          <>
+            <div className="w-px h-5 bg-green-mist/60 mx-0.5" />
+            {onSelectAll && (
+              <ToolbarButton
+                bubble
+                title="Select all (includes tables and text below)"
+                onClick={onSelectAll}
+              >
+                <SquareMousePointer className="w-4 h-4" />
+              </ToolbarButton>
+            )}
+            {onCopySelection && (
+              <ToolbarButton
+                bubble
+                title="Copy selection (keeps table grid, colour & formatting for email / Word)"
+                onClick={onCopySelection}
+              >
+                <Copy className="w-4 h-4" />
+              </ToolbarButton>
+            )}
+          </>
+        )}
+      </div>
+      <div className="border-t border-green-mist/60 pt-1">
+        <ColorSwatches editor={editor} activeColor={active.color} />
+      </div>
     </div>
   );
 }

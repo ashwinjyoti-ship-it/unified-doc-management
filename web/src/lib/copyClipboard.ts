@@ -11,6 +11,8 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DOMSerializer, type Fragment, type Node as PMNode, type Schema } from '@tiptap/pm/model';
 
 const COMPACT_BLOCK_MARGIN = 'margin:0 0 0.4em 0';
+const TABLE_BORDER = '1px solid #c5d0c8';
+const TABLE_HEADER_BG = '#f4f1ed';
 
 function isEmptyParagraph(el: Element): boolean {
   if (el.tagName !== 'P') return false;
@@ -45,6 +47,38 @@ function applyCompactMargins(root: ParentNode) {
   });
 }
 
+function appendStyle(el: HTMLElement, css: string) {
+  const existing = el.getAttribute('style') || '';
+  el.setAttribute('style', existing ? `${existing};${css}` : css);
+}
+
+/**
+ * Editor table borders live in CSS (`.ProseMirror td`), which destinations drop.
+ * Inline borders/padding so Word, Gmail, Docs paste a real grid — not bare text.
+ */
+function styleTablesForExternalPaste(root: ParentNode) {
+  root.querySelectorAll('table').forEach((table) => {
+    const htmlTable = table as HTMLTableElement;
+    htmlTable.setAttribute('border', '1');
+    htmlTable.setAttribute('cellpadding', '6');
+    htmlTable.setAttribute('cellspacing', '0');
+    appendStyle(
+      htmlTable,
+      `border-collapse:collapse;width:100%;border:${TABLE_BORDER}`,
+    );
+  });
+  root.querySelectorAll('th, td').forEach((cell) => {
+    const htmlCell = cell as HTMLElement;
+    const isHeader = htmlCell.tagName === 'TH';
+    appendStyle(
+      htmlCell,
+      `border:${TABLE_BORDER};padding:6px 8px;vertical-align:top;${
+        isHeader ? `background:${TABLE_HEADER_BG};font-weight:600;` : ''
+      }`,
+    );
+  });
+}
+
 function stripEditorArtifacts(root: ParentNode) {
   root.querySelectorAll('br.ProseMirror-trailingBreak').forEach((br) => br.remove());
 }
@@ -61,6 +95,7 @@ export function sanitizeCopiedHtml(html: string): string {
   unwrapParagraphsInListItems(root);
   removeEmptyParagraphs(root);
   applyCompactMargins(root);
+  styleTablesForExternalPaste(root);
   return root.innerHTML;
 }
 
