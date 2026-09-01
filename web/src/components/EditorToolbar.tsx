@@ -61,7 +61,7 @@ function ColorSwatches({
 }) {
   return (
     <div
-      className="flex items-center gap-1 px-1"
+      className="flex flex-wrap items-center gap-1 px-1"
       role="listbox"
       aria-label="Text colour"
       onMouseDown={(e) => e.preventDefault()}
@@ -115,7 +115,7 @@ function FillSwatches({
 }) {
   return (
     <div
-      className={`flex items-center gap-1 px-1 ${enabled ? '' : 'opacity-40 pointer-events-none'}`}
+      className={`flex flex-wrap items-center gap-1 px-1 ${enabled ? '' : 'opacity-40 pointer-events-none'}`}
       role="listbox"
       aria-label="Cell fill colour"
       aria-disabled={!enabled}

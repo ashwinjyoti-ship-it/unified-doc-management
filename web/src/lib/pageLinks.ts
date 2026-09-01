@@ -8,24 +8,45 @@ export const TEXT_COLORS = [
   { name: 'Forest', value: '#004228' },
   { name: 'Sage', value: '#5B8A6E' },
   { name: 'Charcoal', value: '#1D3325' },
+  { name: 'Navy', value: '#1B3A6B' },
+  { name: 'Gray', value: '#5D6D7E' },
   { name: 'Red', value: '#C0392B' },
+  { name: 'Pink', value: '#C2185B' },
+  { name: 'Magenta', value: '#AD1457' },
   { name: 'Orange', value: '#D35400' },
   { name: 'Gold', value: '#B7950B' },
+  { name: 'Yellow', value: '#C9A000' },
+  { name: 'Green', value: '#1E8449' },
+  { name: 'Teal', value: '#0E7C6B' },
   { name: 'Blue', value: '#2471A3' },
+  { name: 'Sky', value: '#1A8CD4' },
   { name: 'Purple', value: '#7D3C98' },
+  { name: 'Brown', value: '#6D4C41' },
 ] as const;
 
-/** Pastel cell fill colours (table background). Empty value clears the fill. */
+/**
+ * Cell fill colours (table background). Empty value clears the fill.
+ * Mid-chroma so they read as colour, not a washed-out wash, while charcoal body text stays readable.
+ */
 export const FILL_COLORS = [
   { name: 'None', value: '' },
-  { name: 'Forest', value: '#D5E6DB' },
-  { name: 'Sage', value: '#E4EFE8' },
-  { name: 'Linen', value: '#F4F1ED' },
-  { name: 'Red', value: '#F8D7D3' },
-  { name: 'Orange', value: '#FCE0CC' },
-  { name: 'Gold', value: '#F7F0C8' },
-  { name: 'Blue', value: '#D6EAF8' },
-  { name: 'Purple', value: '#E8DAEF' },
+  { name: 'Forest', value: '#7BC99A' },
+  { name: 'Sage', value: '#A3D4B0' },
+  { name: 'Sand', value: '#D4B896' },
+  { name: 'Gray', value: '#B0B8C1' },
+  { name: 'Red', value: '#F08080' },
+  { name: 'Pink', value: '#F48FB1' },
+  { name: 'Magenta', value: '#E891C4' },
+  { name: 'Orange', value: '#F0B27A' },
+  { name: 'Gold', value: '#F4D03F' },
+  { name: 'Yellow', value: '#F7DC6F' },
+  { name: 'Green', value: '#82C785' },
+  { name: 'Teal', value: '#48C9B0' },
+  { name: 'Blue', value: '#5DADE2' },
+  { name: 'Sky', value: '#85C1E9' },
+  { name: 'Navy', value: '#8599C8' },
+  { name: 'Purple', value: '#C39BD3' },
+  { name: 'Brown', value: '#C9A882' },
 ] as const;
 
 const COLOR_HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
